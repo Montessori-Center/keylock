@@ -1,0 +1,144 @@
+# app.py - исправленная версия
+from flask import Flask
+from flask_cors import CORS
+from flask_sqlalchemy import SQLAlchemy
+from config import Config
+from sqlalchemy import text
+import pymysql
+import sys
+
+db = SQLAlchemy()
+
+def check_and_create_database():
+    """Проверка и создание БД если нужно"""
+    try:
+        connection = pymysql.connect(
+            host=Config.DB_HOST,
+            port=Config.DB_PORT,
+            user=Config.DB_USER,
+            password=Config.DB_PASSWORD
+        )
+        cursor = connection.cursor()
+        
+        cursor.execute(f"SHOW DATABASES LIKE '{Config.DB_NAME}'")
+        result = cursor.fetchone()
+        
+        if not result:
+            print(f"📦 Creating database {Config.DB_NAME}...")
+            cursor.execute(f"CREATE DATABASE {Config.DB_NAME} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
+            print(f"✅ Database {Config.DB_NAME} created")
+        
+        cursor.close()
+        connection.close()
+        return True
+    except Exception as e:
+        print(f"❌ Database connection error: {e}")
+        return False
+
+def create_app():
+    app = Flask(__name__)
+    app.config.from_object(Config)
+    
+    # Initialize extensions with app
+    db.init_app(app)
+    
+    # CORS setup
+    CORS(app, 
+         resources={r"/api/*": {
+             "origins": Config.CORS_ORIGINS,
+             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+             "allow_headers": ["Content-Type", "Authorization"],
+             "supports_credentials": True
+         }})
+    
+    # Import models BEFORE registering blueprints
+    with app.app_context():
+        # Импортируем модели
+        from models.keyword import Campaign, AdGroup, Keyword, AppSetting
+    
+    # Register blueprints
+    from api.keywords import keywords_bp
+    from api.dataforseo import dataforseo_bp
+    from api.settings import settings_bp
+    
+    app.register_blueprint(keywords_bp, url_prefix='/api/keywords')
+    app.register_blueprint(dataforseo_bp, url_prefix='/api/dataforseo')
+    app.register_blueprint(settings_bp, url_prefix='/api/settings')
+    
+    # Create tables within app context
+    with app.app_context():
+        try:
+            db.create_all()
+            inspector = db.inspect(db.engine)
+            tables = inspector.get_table_names()
+            
+            if tables:
+                print(f"✅ Database ready. Tables: {', '.join(tables)}")
+            else:
+                print("⚠️ No tables found. Run: python3 init_db.py")
+                
+        except Exception as e:
+            print(f"⚠️ Database initialization issue: {e}")
+    
+    @app.route('/api/health')
+    def health_check():
+        db_status = "disconnected"
+        tables_count = 0
+        
+        try:
+            # Используем text() для SQL выражений в новых версиях SQLAlchemy
+            result = db.session.execute(text("SELECT 1"))
+            db_status = "connected"
+            
+            # Считаем таблицы
+            inspector = db.inspect(db.engine)
+            tables = inspector.get_table_names()
+            tables_count = len(tables)
+            
+        except Exception as e:
+            db_status = f"error: {str(e)[:50]}"
+        
+        return {
+            'status': 'ok',
+            'database': db_status,
+            'tables_count': tables_count,
+            'cors_origins': Config.CORS_ORIGINS
+        }
+    
+    @app.route('/')
+    def index():
+        try:
+            inspector = db.inspect(db.engine)
+            tables = inspector.get_table_names()
+            db_info = f"✅ Connected. Tables: {len(tables)}"
+        except:
+            db_info = "❌ Not connected"
+        
+        return f'''
+        <h1>Keyword Lock Backend</h1>
+        <p>Database: {db_info}</p>
+        <p>Allowed CORS origins: {Config.CORS_ORIGINS}</p>
+        <ul>
+            <li><a href="/api/health">/api/health</a> - Health check</li>
+            <li><a href="/api/keywords/list/1">/api/keywords/list/1</a> - Test keywords</li>
+        </ul>
+        '''
+    
+    return app
+
+if __name__ == '__main__':
+    if not check_and_create_database():
+        print("\n⚠️ Could not connect to MySQL")
+        response = input("\nContinue anyway? (y/n): ")
+        if response.lower() != 'y':
+            sys.exit(1)
+    
+    app = create_app()
+    
+    print("=" * 50)
+    print("🚀 Starting Keyword Lock Backend")
+    print(f"📍 Server: http://0.0.0.0:5000")
+    print(f"🌐 CORS Origins: {Config.CORS_ORIGINS}")
+    print("=" * 50)
+    
+    app.run(debug=True, host='0.0.0.0', port=5000)
