@@ -1,7 +1,7 @@
-// src/components/KeywordsTable.jsx
+// frontend/src/components/KeywordsTable.jsx
 import React, { useRef, useEffect, useState } from 'react';
 import { HotTable } from '@handsontable/react';
-import Handsontable from 'handsontable';  // ⬅️ ДОБАВЬ ЭТУ СТРОКУ!
+import Handsontable from 'handsontable';
 import { registerAllModules } from 'handsontable/registry';
 import 'handsontable/dist/handsontable.full.css';
 
@@ -73,6 +73,11 @@ const KeywordsTable = ({ keywords, loading, selectedIds, onSelectionChange, onDa
       max_top_of_page_bid: keyword.max_top_of_page_bid
     }));
     setTableData(data);
+    
+    // Обновляем таблицу принудительно если изменились selectedIds
+    if (hotTableRef.current && hotTableRef.current.hotInstance) {
+      hotTableRef.current.hotInstance.loadData(data);
+    }
   }, [keywords, selectedIds]);
 
   // Обработка изменений в таблице

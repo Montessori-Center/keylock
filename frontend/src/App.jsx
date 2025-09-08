@@ -1,4 +1,4 @@
-// src/App.jsx
+// frontend/src/App.jsx
 import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
@@ -32,14 +32,91 @@ function App() {
   const [showApplyFilters, setShowApplyFilters] = useState(false);
   const [showChangeField, setShowChangeField] = useState(false);
 
+  // Максимально совместимая функция копирования
+  const copyToClipboard = (text) => {
+    return new Promise((resolve) => {
+      // Создаем input вместо textarea (лучше работает)
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.value = text;
+      
+      // Стили для скрытия но сохранения функциональности
+      input.style.position = 'fixed';
+      input.style.top = '10px';
+      input.style.left = '10px';
+      input.style.width = '1px';
+      input.style.height = '1px';
+      input.style.padding = '0';
+      input.style.border = 'none';
+      input.style.outline = 'none';
+      input.style.boxShadow = 'none';
+      input.style.background = 'transparent';
+      input.style.fontSize = '16px'; // Предотвращает зум на iOS
+      
+      document.body.appendChild(input);
+      
+      // Даем браузеру время добавить элемент
+      setTimeout(() => {
+        try {
+          // Фокусируемся на элементе
+          input.focus();
+          input.select();
+          
+          // Дополнительный способ выделения для мобильных
+          if (input.setSelectionRange) {
+            input.setSelectionRange(0, text.length);
+          }
+          
+          // Выполняем копирование
+          const successful = document.execCommand('copy');
+          
+          // Убираем элемент
+          document.body.removeChild(input);
+          
+          console.log('Copy attempt result:', successful);
+          resolve(successful);
+          
+        } catch (err) {
+          console.error('Copy error:', err);
+          document.body.removeChild(input);
+          resolve(false);
+        }
+      }, 100); // Небольшая задержка
+    });
+  };
+
   // Load campaigns on mount
   useEffect(() => {
     loadCampaigns();
   }, []);
 
+  // Restore selected ad group from localStorage on mount
+  useEffect(() => {
+    const savedAdGroupId = localStorage.getItem('selectedAdGroupId');
+    if (savedAdGroupId && campaigns.length > 0) {
+      // Находим сохраненную группу среди всех кампаний
+      for (const campaign of campaigns) {
+        const adGroup = campaign.adGroups.find(ag => ag.id === parseInt(savedAdGroupId));
+        if (adGroup) {
+          setSelectedAdGroup(adGroup);
+          break;
+        }
+      }
+    }
+  }, [campaigns]);
+
+  // Save selected ad group to localStorage when it changes
+  useEffect(() => {
+    if (selectedAdGroup) {
+      localStorage.setItem('selectedAdGroupId', selectedAdGroup.id.toString());
+    }
+  }, [selectedAdGroup]);
+
   // Load keywords when ad group changes
   useEffect(() => {
     if (selectedAdGroup) {
+      // Сбрасываем выбор ключевых слов при смене группы
+      setSelectedKeywordIds([]);
       loadKeywords(selectedAdGroup.id);
     }
   }, [selectedAdGroup]);
@@ -113,20 +190,125 @@ function App() {
       if (action === 'copy' || action === 'copy_data') {
         const response = await api.bulkAction(action, selectedKeywordIds);
         if (response.success) {
+          // Сохраняем для внутренней вставки
           setCopiedData({
             type: action === 'copy' ? 'keywords' : 'full_data',
             data: action === 'copy' ? response.copied : response.copied_data
           });
-          toast.success('Данные скопированы');
+          
+          // Подготавливаем текст для копирования
+          let textToCopy = '';
+          let successMessage = '';
+          
+          if (action === 'copy') {
+            // Копируем только ключевые слова через запятую
+            textToCopy = response.copied.join(', ');
+            successMessage = `Скопировано ${response.copied.length} ключевых слов в буфер обмена`;
+          } else {
+            // Копируем ВСЕ данные из БД, каждое слово - отдельная строка
+            // Формат: поля через пробел, слова через запятую
+            const rows = response.copied_data.map(item => [
+              item.keyword || 'None',
+              item.criterion_type || 'None',
+              item.max_cpc || 'None',
+              item.max_cpm || 'None',
+              item.status || 'None',
+              item.comment || 'None',
+              item.has_ads ? 'true' : 'false',
+              item.has_school_sites ? 'true' : 'false', 
+              item.has_google_maps ? 'true' : 'false',
+              item.has_our_site ? 'true' : 'false',
+              item.intent_type || 'None',
+              item.recommendation || 'None',
+              item.avg_monthly_searches || 'None',
+              item.three_month_change || 'None',
+              item.yearly_change || 'None',
+              item.competition || 'None',
+              item.competition_percent || 'None',
+              item.min_top_of_page_bid || 'None',
+              item.max_top_of_page_bid || 'None',
+              item.ad_impression_share || 'None',
+              item.organic_average_position || 'None',
+              item.organic_impression_share || 'None',
+              item.labels || 'None'
+            ].join(' '));
+            
+            // Слова через запятую
+            textToCopy = rows.join(', ');
+            successMessage = `Скопированы данные ${response.copied_data.length} ключевых слов в буфер обмена`;
+          }
+          
+          // Копируем в буфер обмена асинхронно
+          const copySuccess = await copyToClipboard(textToCopy);
+          
+          if (copySuccess) {
+            toast.success(successMessage);
+          } else {
+            // Показываем текст для ручного копирования
+            toast.warning('Копирование не удалось. Данные в консоли для ручного копирования.');
+            console.log('=== ДАННЫЕ ДЛЯ КОПИРОВАНИЯ ===');
+            console.log(textToCopy);
+            console.log('=== КОНЕЦ ДАННЫХ ===');
+            
+            // Пробуем показать prompt с данными
+            if (textToCopy.length < 2000) { // Только для небольших данных
+              setTimeout(() => {
+                window.prompt('Скопируйте данные:', textToCopy);
+              }, 100);
+            }
+          }
         }
       } else if (action === 'paste') {
         if (!copiedData) {
           toast.warning('Нет скопированных данных');
           return;
         }
+        
+        console.log('=== PASTE DEBUG ===');
+        console.log('copiedData:', copiedData);
+        
+        let pasteDataArray;
+        if (copiedData.type === 'keywords') {
+          // Для простых ключевых слов - уже массив строк
+          pasteDataArray = copiedData.data;
+          console.log('Keywords paste data:', pasteDataArray);
+        } else if (copiedData.type === 'full_data') {
+          // Для полных данных - преобразуем массив объектов в массив строк
+          pasteDataArray = copiedData.data.map(item => [
+            item.keyword || 'None',
+            item.criterion_type || 'None',
+            item.max_cpc || 'None',
+            item.max_cpm || 'None',
+            item.status || 'None',
+            item.comment || 'None',
+            item.has_ads ? 'true' : 'false',
+            item.has_school_sites ? 'true' : 'false', 
+            item.has_google_maps ? 'true' : 'false',
+            item.has_our_site ? 'true' : 'false',
+            item.intent_type || 'None',
+            item.recommendation || 'None',
+            item.avg_monthly_searches || 'None',
+            item.three_month_change || 'None',
+            item.yearly_change || 'None',
+            item.competition || 'None',
+            item.competition_percent || 'None',
+            item.min_top_of_page_bid || 'None',
+            item.max_top_of_page_bid || 'None',
+            item.ad_impression_share || 'None',
+            item.organic_average_position || 'None',
+            item.organic_impression_share || 'None',
+            item.labels || 'None'
+          ].join(' '));
+          console.log('Full data paste array:', pasteDataArray);
+        }
+        
+        console.log('Final paste data array:', pasteDataArray);
+        console.log('Array length:', pasteDataArray?.length);
+        console.log('=== END PASTE DEBUG ===');
+        
         const response = await api.pasteKeywords(
           selectedAdGroup.id,
-          copiedData.data,
+          pasteDataArray,
           copiedData.type
         );
         if (response.success) {
@@ -143,7 +325,8 @@ function App() {
         }
       }
     } catch (error) {
-      toast.error('Ошибка выполнения действия');
+      console.error('Bulk action error:', error);
+      toast.error(`Ошибка выполнения действия: ${error.message || 'Неизвестная ошибка'}`);
     }
   };
 

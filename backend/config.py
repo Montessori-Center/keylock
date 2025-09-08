@@ -1,4 +1,4 @@
-# config.py
+# backend/config.py
 import os
 from dotenv import load_dotenv
 from urllib.parse import quote_plus
@@ -30,15 +30,19 @@ class Config:
     # Encryption key for sensitive data
     ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY') or 'generate-strong-key-for-production'
     
-    # CORS - правильный парсинг списка доменов
+    # CORS - обновленный для HTTPS
     cors_origins = os.environ.get('CORS_ORIGINS', 'http://localhost:3000').split(',')
     CORS_ORIGINS = [origin.strip() for origin in cors_origins]
     
-    # Добавляем все возможные варианты домена
-    if 'keylock.interschool.online' in os.environ.get('CORS_ORIGINS', ''):
-        CORS_ORIGINS.extend([
-            'http://keylock.interschool.online',
-            'http://keylock.interschool.online:3000',
-            'https://keylock.interschool.online',
-            'https://keylock.interschool.online:3000'
-        ])
+    # Добавляем все варианты домена для HTTPS
+    CORS_ORIGINS.extend([
+        'https://keylock.interschool.online',
+        'https://www.keylock.interschool.online',
+        'http://keylock.interschool.online',
+        'http://www.keylock.interschool.online',
+        'http://127.0.0.1:3000',
+        'http://localhost:3000'
+    ])
+    
+    # Убираем дубли
+    CORS_ORIGINS = list(set(CORS_ORIGINS))

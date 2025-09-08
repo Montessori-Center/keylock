@@ -1,0 +1,14 @@
+{
+  "name": "keylock-app",
+  "version": "1.0.0",
+  "description": "Keylock keyword management application",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {},
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

@@ -1,8 +1,8 @@
-// src/services/api.js
+// frontend/src/services/api.js
 import axios from 'axios';
 
-// Используем переменную окружения или fallback на текущий домен
-const API_BASE_URL = process.env.REACT_APP_API_URL || `http://${window.location.hostname}:5000/api`;
+// Используем относительный путь - все запросы пойдут через прокси
+const API_BASE_URL = '/api';
 
 console.log('API Base URL:', API_BASE_URL);
 

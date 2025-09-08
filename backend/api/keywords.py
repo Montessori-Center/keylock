@@ -124,28 +124,33 @@ def bulk_action():
         action = data.get('action')
         keyword_ids = data.get('keyword_ids', [])
         
-        if not keyword_ids and action not in ['paste']:
-            return jsonify({'success': False, 'error': 'No keywords selected'}), 400
-        
         connection = get_db_connection()
         cursor = connection.cursor()
         
         if action == 'delete':
+            if not keyword_ids:
+                return jsonify({'success': False, 'error': 'No keywords selected'}), 400
             placeholders = ','.join(['%s'] * len(keyword_ids))
             cursor.execute(f"UPDATE keywords SET status = 'Removed' WHERE id IN ({placeholders})", keyword_ids)
             connection.commit()
         
         elif action == 'pause':
+            if not keyword_ids:
+                return jsonify({'success': False, 'error': 'No keywords selected'}), 400
             placeholders = ','.join(['%s'] * len(keyword_ids))
             cursor.execute(f"UPDATE keywords SET status = 'Paused' WHERE id IN ({placeholders})", keyword_ids)
             connection.commit()
         
         elif action == 'activate':
+            if not keyword_ids:
+                return jsonify({'success': False, 'error': 'No keywords selected'}), 400
             placeholders = ','.join(['%s'] * len(keyword_ids))
             cursor.execute(f"UPDATE keywords SET status = 'Enabled' WHERE id IN ({placeholders})", keyword_ids)
             connection.commit()
         
         elif action == 'update_field':
+            if not keyword_ids:
+                return jsonify({'success': False, 'error': 'No keywords selected'}), 400
             field = data.get('field')
             value = data.get('value')
             
@@ -159,31 +164,34 @@ def bulk_action():
             connection.commit()
         
         elif action == 'copy':
+            if not keyword_ids:
+                return jsonify({'success': False, 'error': 'No keywords selected'}), 400
             placeholders = ','.join(['%s'] * len(keyword_ids))
             cursor.execute(f"SELECT keyword FROM keywords WHERE id IN ({placeholders})", keyword_ids)
             copied_keywords = [row['keyword'] for row in cursor.fetchall()]
             cursor.close()
-            # НЕ закрываем connection здесь - он закроется в finally
             return jsonify({
                 'success': True,
                 'copied': copied_keywords
             })
         
         elif action == 'copy_data':
+            if not keyword_ids:
+                return jsonify({'success': False, 'error': 'No keywords selected'}), 400
             placeholders = ','.join(['%s'] * len(keyword_ids))
             cursor.execute(f"""
                 SELECT keyword, criterion_type, max_cpc, max_cpm, status, comment,
                        has_ads, has_school_sites, has_google_maps, has_our_site,
                        intent_type, recommendation, avg_monthly_searches,
                        three_month_change, yearly_change, competition, competition_percent,
-                       min_top_of_page_bid, max_top_of_page_bid
+                       min_top_of_page_bid, max_top_of_page_bid, ad_impression_share,
+                       organic_average_position, organic_impression_share, labels
                 FROM keywords 
                 WHERE id IN ({placeholders})
             """, keyword_ids)
             
             copied_data = []
             for row in cursor.fetchall():
-                # Преобразуем Decimal в float для JSON сериализации
                 data_dict = {
                     'keyword': row['keyword'],
                     'criterion_type': row['criterion_type'],
@@ -203,7 +211,11 @@ def bulk_action():
                     'competition': row['competition'],
                     'competition_percent': float(row['competition_percent']) if row['competition_percent'] else None,
                     'min_top_of_page_bid': float(row['min_top_of_page_bid']) if row['min_top_of_page_bid'] else None,
-                    'max_top_of_page_bid': float(row['max_top_of_page_bid']) if row['max_top_of_page_bid'] else None
+                    'max_top_of_page_bid': float(row['max_top_of_page_bid']) if row['max_top_of_page_bid'] else None,
+                    'ad_impression_share': float(row['ad_impression_share']) if row['ad_impression_share'] else None,
+                    'organic_average_position': float(row['organic_average_position']) if row['organic_average_position'] else None,
+                    'organic_impression_share': float(row['organic_impression_share']) if row['organic_impression_share'] else None,
+                    'labels': row['labels']
                 }
                 copied_data.append(data_dict)
             
@@ -235,7 +247,7 @@ def bulk_action():
             try:
                 connection.close()
             except:
-                pass  # Игнорируем если уже закрыто
+                pass
 
 @keywords_bp.route('/paste', methods=['POST'])
 def paste_keywords():
@@ -246,6 +258,14 @@ def paste_keywords():
         ad_group_id = data.get('ad_group_id')
         paste_data = data.get('paste_data', [])
         paste_type = data.get('paste_type', 'keywords')
+        
+        print(f"Paste request: ad_group_id={ad_group_id}, paste_type={paste_type}, data_count={len(paste_data)}")
+        
+        if not ad_group_id:
+            return jsonify({'success': False, 'error': 'No ad_group_id provided'}), 400
+        
+        if not paste_data:
+            return jsonify({'success': False, 'error': 'No paste_data provided'}), 400
         
         connection = get_db_connection()
         cursor = connection.cursor()
@@ -261,7 +281,12 @@ def paste_keywords():
         added_count = 0
         
         if paste_type == 'keywords':
+            # Простое копирование ключевых слов
             for keyword_text in paste_data:
+                keyword_text = keyword_text.strip()
+                if not keyword_text:
+                    continue
+                    
                 cursor.execute(
                     "SELECT id FROM keywords WHERE ad_group_id = %s AND keyword = %s",
                     (ad_group_id, keyword_text)
@@ -274,18 +299,113 @@ def paste_keywords():
                         ) VALUES (%s, %s, %s, 'Phrase', 'Enabled', 3.61)
                     """, (campaign_id, ad_group_id, keyword_text))
                     added_count += 1
+                    print(f"Added keyword: {keyword_text}")
+                    
+        elif paste_type == 'full_data':
+            # Вставка полных данных в новом формате
+            for data_string in paste_data:
+                try:
+                    data_string = data_string.strip()
+                    if not data_string:
+                        continue
+                        
+                    print(f"Processing data string: {data_string[:100]}...")  # Логируем первые 100 символов
+                    
+                    # Разбираем строку: "слово тип цена ... None None" 
+                    fields = data_string.split(' ')
+                    
+                    if len(fields) < 23:  # Проверяем что все поля есть
+                        print(f"Not enough fields: {len(fields)}, expected 23")
+                        continue
+                        
+                    keyword_text = fields[0]
+                    
+                    # Проверяем что такого ключевого слова нет
+                    cursor.execute(
+                        "SELECT id FROM keywords WHERE ad_group_id = %s AND keyword = %s",
+                        (ad_group_id, keyword_text)
+                    )
+                    if cursor.fetchone():
+                        print(f"Keyword already exists: {keyword_text}")
+                        continue  # Пропускаем дубли
+                    
+                    # Преобразуем данные
+                    def convert_value(val):
+                        if val == 'None' or val == '':
+                            return None
+                        if val == 'true':
+                            return True
+                        if val == 'false':
+                            return False
+                        # Пытаемся преобразовать в число
+                        try:
+                            if '.' in val:
+                                return float(val)
+                            else:
+                                return int(val)
+                        except ValueError:
+                            return val
+                    
+                    # Вставляем со всеми полями
+                    cursor.execute("""
+                        INSERT INTO keywords (
+                            campaign_id, ad_group_id, keyword, criterion_type, max_cpc, max_cpm,
+                            status, comment, has_ads, has_school_sites, has_google_maps, has_our_site,
+                            intent_type, recommendation, avg_monthly_searches, three_month_change, 
+                            yearly_change, competition, competition_percent, min_top_of_page_bid, 
+                            max_top_of_page_bid, ad_impression_share, organic_average_position, 
+                            organic_impression_share, labels
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (
+                        campaign_id,
+                        ad_group_id,
+                        convert_value(fields[0]),   # keyword
+                        convert_value(fields[1]),   # criterion_type
+                        convert_value(fields[2]),   # max_cpc
+                        convert_value(fields[3]),   # max_cpm
+                        convert_value(fields[4]),   # status
+                        convert_value(fields[5]),   # comment
+                        convert_value(fields[6]),   # has_ads
+                        convert_value(fields[7]),   # has_school_sites
+                        convert_value(fields[8]),   # has_google_maps
+                        convert_value(fields[9]),   # has_our_site
+                        convert_value(fields[10]),  # intent_type
+                        convert_value(fields[11]),  # recommendation
+                        convert_value(fields[12]),  # avg_monthly_searches
+                        convert_value(fields[13]),  # three_month_change
+                        convert_value(fields[14]),  # yearly_change
+                        convert_value(fields[15]),  # competition
+                        convert_value(fields[16]),  # competition_percent
+                        convert_value(fields[17]),  # min_top_of_page_bid
+                        convert_value(fields[18]),  # max_top_of_page_bid
+                        convert_value(fields[19]),  # ad_impression_share
+                        convert_value(fields[20]),  # organic_average_position
+                        convert_value(fields[21]),  # organic_impression_share
+                        convert_value(fields[22])   # labels
+                    ))
+                    added_count += 1
+                    print(f"Added full data for keyword: {keyword_text}")
+                    
+                except Exception as e:
+                    print(f"Error parsing data: {data_string}, error: {str(e)}")
+                    continue
         
         connection.commit()
         cursor.close()
+        
+        print(f"Paste completed: added {added_count} keywords")
         
         return jsonify({
             'success': True,
             'message': f'Pasted {added_count} keywords'
         })
+        
     except Exception as e:
         if connection:
             connection.rollback()
         print(f"Error in paste_keywords: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         if connection:

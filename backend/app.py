@@ -125,6 +125,18 @@ def create_app():
         '''
     
     return app
+    
+    @app.route('/api/test')
+    def test_endpoint():
+        return {
+            'status': 'ok',
+         'message': 'Flask API works!',
+            'timestamp': datetime.utcnow().isoformat()
+        }
+
+    @app.route('/test')  
+    def simple_test():
+        return "Flask is working!"
 
 if __name__ == '__main__':
     if not check_and_create_database():
