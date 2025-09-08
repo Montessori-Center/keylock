@@ -15,9 +15,19 @@ def get_new_keywords():
         data = request.json
         seed_keywords = data.get('seed_keywords', [])
         ad_group_id = data.get('ad_group_id')
-        location_code = data.get('location_code', 2804)  # Ukraine
+        
+        # Все параметры из frontend
+        location_name = data.get('location_name')
+        location_code = data.get('location_code', 2804)
         language_code = data.get('language_code', 'ru')
         limit = data.get('limit', 700)
+        search_partners = data.get('search_partners', False)
+        date_from = data.get('date_from')
+        date_to = data.get('date_to')
+        include_seed_keyword = data.get('include_seed_keyword', True)
+        include_clickstream_data = data.get('include_clickstream_data', False)
+        include_serp_info = data.get('include_serp_info', False)
+        sort_by = data.get('sort_by', 'relevance')
         
         if not seed_keywords:
             return jsonify({'success': False, 'error': 'No seed keywords provided'}), 400
@@ -28,16 +38,31 @@ def get_new_keywords():
             return jsonify({'success': False, 'error': 'Ad group not found'}), 404
         
         # Логирование запроса
-        print(f"DataForSeo request: {len(seed_keywords)} seed keywords, location={location_code}, lang={language_code}")
+        print(f"DataForSeo request parameters:")
+        print(f"  - Seed keywords: {len(seed_keywords)}")
+        print(f"  - Location: {location_name or f'code {location_code}'}")
+        print(f"  - Language: {language_code}")
+        print(f"  - Limit: {limit}")
+        print(f"  - Date range: {date_from} to {date_to}")
+        print(f"  - Include SERP: {include_serp_info}")
+        print(f"  - Include Clickstream: {include_clickstream_data}")
+        print(f"  - Sort by: {sort_by}")
         
         # Запрос к DataForSeo (Live режим)
         try:
             response = dataforseo_client.get_keywords_for_keywords(
                 keywords=seed_keywords,
+                location_name=location_name if location_name else None,
                 location_code=location_code,
                 language_code=language_code,
-                limit=limit,
-                include_serp_info=True
+                search_partners=search_partners,
+                date_from=date_from,
+                date_to=date_to,
+                include_seed_keyword=include_seed_keyword,
+                include_clickstream_data=include_clickstream_data,
+                include_serp_info=include_serp_info,
+                sort_by=sort_by,
+                limit=limit
             )
             
             # Проверяем статус ответа
@@ -55,6 +80,9 @@ def get_new_keywords():
                     'error': f"DataForSeo error: {task.get('status_message', 'Unknown error')}"
                 }), 500
             
+            # Получаем стоимость запроса
+            request_cost = task.get('cost', 0.05)
+            
         except Exception as e:
             print(f"DataForSeo API error: {str(e)}")
             return jsonify({
@@ -66,31 +94,54 @@ def get_new_keywords():
         keywords_data = dataforseo_client.parse_keywords_response(response)
         
         print(f"Received {len(keywords_data)} keywords from DataForSeo")
+        print(f"Request cost: ${request_cost}")
         
         # Добавляем ключевые слова в БД
         added_count = 0
         skipped_count = 0
+        updated_count = 0
         errors = []
         
         for kw_data in keywords_data:
             try:
+                keyword_text = kw_data['keyword']
+                
                 # Проверяем, не существует ли уже
                 existing = Keyword.query.filter(
                     and_(
                         Keyword.ad_group_id == ad_group_id,
-                        Keyword.keyword == kw_data['keyword']
+                        Keyword.keyword == keyword_text
                     )
                 ).first()
                 
                 if existing:
-                    skipped_count += 1
+                    # Обновляем существующее ключевое слово новыми данными
+                    existing.avg_monthly_searches = kw_data.get('avg_monthly_searches', existing.avg_monthly_searches)
+                    existing.competition = kw_data.get('competition', existing.competition)
+                    existing.competition_percent = kw_data.get('competition_percent', existing.competition_percent)
+                    existing.min_top_of_page_bid = kw_data.get('min_top_of_page_bid', existing.min_top_of_page_bid)
+                    existing.max_top_of_page_bid = kw_data.get('max_top_of_page_bid', existing.max_top_of_page_bid)
+                    existing.three_month_change = kw_data.get('three_month_change', existing.three_month_change)
+                    existing.yearly_change = kw_data.get('yearly_change', existing.yearly_change)
+                    
+                    # Обновляем CPC если есть новое значение
+                    if kw_data.get('cpc'):
+                        existing.max_cpc = kw_data.get('cpc')
+                    
+                    # Обновляем данные из SERP если включены
+                    if include_serp_info:
+                        existing.has_ads = kw_data.get('has_ads', False)
+                        existing.has_google_maps = kw_data.get('has_maps', False)
+                        existing.intent_type = determine_intent_type(kw_data)
+                    
+                    updated_count += 1
                     continue
                 
                 # Создаем новое ключевое слово
                 keyword = Keyword(
                     campaign_id=ad_group.campaign_id,
                     ad_group_id=ad_group_id,
-                    keyword=kw_data['keyword'],
+                    keyword=keyword_text,
                     criterion_type='Phrase',
                     status='Enabled',
                     
@@ -103,11 +154,15 @@ def get_new_keywords():
                     three_month_change=kw_data.get('three_month_change'),
                     yearly_change=kw_data.get('yearly_change'),
                     
-                    # CPC по умолчанию из DataForSeo или стандартное значение
+                    # CPC из DataForSeo
                     max_cpc=kw_data.get('cpc', 3.61),
                     
-                    # Определяем тип интента на основе SERP
-                    intent_type=determine_intent_type(kw_data)
+                    # Данные из SERP (если включены)
+                    has_ads=kw_data.get('has_ads', False) if include_serp_info else False,
+                    has_google_maps=kw_data.get('has_maps', False) if include_serp_info else False,
+                    
+                    # Определяем тип интента
+                    intent_type=determine_intent_type(kw_data) if include_serp_info else 'Информационный'
                 )
                 
                 db.session.add(keyword)
@@ -130,13 +185,16 @@ def get_new_keywords():
         # Формируем ответ
         result = {
             'success': True,
-            'message': f'Added {added_count} new keywords from {len(keywords_data)} results',
+            'message': f'Обработано {len(keywords_data)} ключевых слов. Добавлено: {added_count}, обновлено: {updated_count}',
             'stats': {
                 'total_results': len(keywords_data),
                 'added': added_count,
+                'updated': updated_count,
                 'skipped': skipped_count,
-                'errors': len(errors)
-            }
+                'errors': len(errors),
+                'cost': request_cost
+            },
+            'cost': request_cost
         }
         
         if errors:
@@ -181,12 +239,18 @@ def get_locations():
         country = request.args.get('country')
         locations = dataforseo_client.get_locations(country)
         
-        # Парсим популярные локации
+        # Популярные локации с переводом
         popular = [
-            {'code': 2804, 'name': 'Ukraine'},
-            {'code': 2840, 'name': 'United States'},
-            {'code': 2643, 'name': 'Russia'},
-            {'code': 2276, 'name': 'Germany'},
+            {'code': 2804, 'name': 'Ukraine', 'name_ru': 'Украина'},
+            {'code': 2840, 'name': 'United States', 'name_ru': 'США'},
+            {'code': 2643, 'name': 'Russia', 'name_ru': 'Россия'},
+            {'code': 2276, 'name': 'Germany', 'name_ru': 'Германия'},
+            {'code': 2826, 'name': 'United Kingdom', 'name_ru': 'Великобритания'},
+            {'code': 2250, 'name': 'France', 'name_ru': 'Франция'},
+            {'code': 2616, 'name': 'Poland', 'name_ru': 'Польша'},
+            {'code': 2724, 'name': 'Spain', 'name_ru': 'Испания'},
+            {'code': 2380, 'name': 'Italy', 'name_ru': 'Италия'},
+            {'code': 2124, 'name': 'Canada', 'name_ru': 'Канада'},
         ]
         
         return jsonify({
@@ -197,32 +261,90 @@ def get_locations():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@dataforseo_bp.route('/languages', methods=['GET'])
+def get_languages():
+    """Получение списка доступных языков"""
+    try:
+        languages = dataforseo_client.get_languages()
+        
+        # Основные языки с переводом
+        main_languages = [
+            {'code': 'ru', 'name': 'Русский'},
+            {'code': 'uk', 'name': 'Украинский'},
+            {'code': 'en', 'name': 'Английский'},
+            {'code': 'de', 'name': 'Немецкий'},
+            {'code': 'fr', 'name': 'Французский'},
+            {'code': 'es', 'name': 'Испанский'},
+            {'code': 'it', 'name': 'Итальянский'},
+            {'code': 'pl', 'name': 'Польский'},
+        ]
+        
+        return jsonify({
+            'success': True,
+            'main': main_languages,
+            'all': languages.get('tasks', [{}])[0].get('result', []) if languages else []
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 def determine_intent_type(keyword_data: Dict) -> str:
-    """Определение типа интента на основе данных ключевого слова"""
+    """
+    Определение типа интента на основе данных ключевого слова
+    
+    Args:
+        keyword_data: Данные ключевого слова из DataForSeo
+        
+    Returns:
+        Тип интента: Коммерческий, Информационный, Навигационный, Транзакционный
+    """
     
     keyword = keyword_data.get('keyword', '').lower()
     serp_types = keyword_data.get('serp_item_types', [])
     
+    # Анализ SERP элементов (приоритетный метод)
+    if serp_types:
+        # Коммерческие индикаторы в SERP
+        commercial_serp_types = {'shopping', 'paid', 'google_ads', 'local_pack', 'maps'}
+        if any(serp_type in commercial_serp_types for serp_type in serp_types):
+            return 'Коммерческий'
+        
+        # Информационные индикаторы в SERP
+        informational_serp_types = {'featured_snippet', 'people_also_ask', 'knowledge_graph', 'video'}
+        if any(serp_type in informational_serp_types for serp_type in serp_types):
+            return 'Информационный'
+        
+        # Навигационные индикаторы
+        if 'knowledge_panel' in serp_types:
+            return 'Навигационный'
+    
+    # Анализ ключевых слов (резервный метод)
     # Коммерческие индикаторы
-    commercial_words = ['купить', 'цена', 'стоимость', 'заказать', 'магазин', 'shop', 'buy', 'price']
+    commercial_words = [
+        'купить', 'цена', 'стоимость', 'заказать', 'магазин', 'недорого', 'дешево',
+        'акция', 'скидка', 'распродажа', 'доставка', 'оплата', 'прайс',
+        'buy', 'price', 'shop', 'store', 'cheap', 'discount', 'sale', 'order'
+    ]
     
     # Транзакционные индикаторы
-    transactional_words = ['скачать', 'download', 'регистрация', 'вход', 'login']
+    transactional_words = [
+        'скачать', 'download', 'регистрация', 'вход', 'login', 'signup',
+        'подписка', 'оформить', 'получить', 'забронировать'
+    ]
     
     # Информационные индикаторы
-    informational_words = ['как', 'что', 'почему', 'зачем', 'когда', 'какой', 'how', 'what', 'why', 'when']
+    informational_words = [
+        'как', 'что', 'почему', 'зачем', 'когда', 'какой', 'где', 'кто',
+        'инструкция', 'руководство', 'обзор', 'отзывы', 'рейтинг',
+        'how', 'what', 'why', 'when', 'where', 'who', 'guide', 'tutorial'
+    ]
     
     # Навигационные индикаторы (бренды, сайты)
-    navigational_words = ['сайт', 'официальный', 'website', 'official', '.com', '.ua']
+    navigational_words = [
+        'сайт', 'официальный', 'website', 'official', '.com', '.ua', '.ru',
+        'facebook', 'instagram', 'youtube', 'google', 'вконтакте'
+    ]
     
-    # Проверка SERP типов
-    if 'shopping' in serp_types or 'paid' in serp_types:
-        return 'Коммерческий'
-    
-    if 'local_pack' in serp_types or 'maps' in serp_types:
-        return 'Коммерческий'
-    
-    # Проверка ключевых слов
+    # Проверка по ключевым словам
     if any(word in keyword for word in commercial_words):
         return 'Коммерческий'
     
@@ -235,5 +357,22 @@ def determine_intent_type(keyword_data: Dict) -> str:
     if any(word in keyword for word in informational_words):
         return 'Информационный'
     
-    # По умолчанию
+    # По умолчанию - информационный
     return 'Информационный'
+
+@dataforseo_bp.route('/estimate-cost', methods=['POST'])
+def estimate_cost():
+    """Оценка стоимости запроса"""
+    try:
+        data = request.json
+        include_serp = data.get('include_serp_info', False)
+        include_clickstream = data.get('include_clickstream_data', False)
+        
+        cost = dataforseo_client.estimate_cost(include_serp, include_clickstream)
+        
+        return jsonify({
+            'success': True,
+            'estimated_cost': cost
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500

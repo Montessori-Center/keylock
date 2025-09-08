@@ -279,6 +279,7 @@ def paste_keywords():
         
         campaign_id = result['campaign_id']
         added_count = 0
+        skipped_count = 0
         
         if paste_type == 'keywords':
             # Простое копирование ключевых слов
@@ -300,25 +301,50 @@ def paste_keywords():
                     """, (campaign_id, ad_group_id, keyword_text))
                     added_count += 1
                     print(f"Added keyword: {keyword_text}")
+                else:
+                    skipped_count += 1
+                    print(f"Skipped duplicate: {keyword_text}")
                     
         elif paste_type == 'full_data':
-            # Вставка полных данных в новом формате
+            # Вставка полных данных - ИСПРАВЛЕННАЯ ВЕРСИЯ
             for data_string in paste_data:
                 try:
                     data_string = data_string.strip()
                     if not data_string:
                         continue
-                        
-                    print(f"Processing data string: {data_string[:100]}...")  # Логируем первые 100 символов
                     
-                    # Разбираем строку: "слово тип цена ... None None" 
-                    fields = data_string.split(' ')
+                    print(f"Processing data string: {data_string[:100]}...")
                     
-                    if len(fields) < 23:  # Проверяем что все поля есть
-                        print(f"Not enough fields: {len(fields)}, expected 23")
+                    # ИСПРАВЛЕНИЕ: Парсим строку более умным способом
+                    # Ищем известные значения criterion_type
+                    criterion_types = ['Phrase', 'Broad', 'Exact']
+                    keyword_end_pos = -1
+                    criterion_type = None
+                    
+                    for ct in criterion_types:
+                        pos = data_string.find(f' {ct} ')
+                        if pos > 0:
+                            keyword_end_pos = pos
+                            criterion_type = ct
+                            break
+                    
+                    if keyword_end_pos == -1:
+                        print(f"Could not parse data string - no criterion type found: {data_string}")
                         continue
-                        
-                    keyword_text = fields[0]
+                    
+                    # Извлекаем ключевое слово
+                    keyword_text = data_string[:keyword_end_pos].strip()
+                    
+                    # Остальная часть строки после ключевого слова и criterion_type
+                    remaining_data = data_string[keyword_end_pos + len(criterion_type) + 2:].strip()
+                    
+                    # Разбираем оставшиеся поля
+                    fields = remaining_data.split(' ')
+                    
+                    # Проверяем что ключевое слово не пустое
+                    if not keyword_text:
+                        print(f"Empty keyword, skipping")
+                        continue
                     
                     # Проверяем что такого ключевого слова нет
                     cursor.execute(
@@ -327,7 +353,8 @@ def paste_keywords():
                     )
                     if cursor.fetchone():
                         print(f"Keyword already exists: {keyword_text}")
-                        continue  # Пропускаем дубли
+                        skipped_count += 1
+                        continue
                     
                     # Преобразуем данные
                     def convert_value(val):
@@ -337,7 +364,6 @@ def paste_keywords():
                             return True
                         if val == 'false':
                             return False
-                        # Пытаемся преобразовать в число
                         try:
                             if '.' in val:
                                 return float(val)
@@ -345,6 +371,13 @@ def paste_keywords():
                                 return int(val)
                         except ValueError:
                             return val
+                    
+                    # Собираем все поля (keyword + criterion_type + остальные)
+                    all_fields = [keyword_text, criterion_type] + fields
+                    
+                    # Дополняем недостающие поля значениями None
+                    while len(all_fields) < 23:
+                        all_fields.append('None')
                     
                     # Вставляем со всеми полями
                     cursor.execute("""
@@ -359,45 +392,47 @@ def paste_keywords():
                     """, (
                         campaign_id,
                         ad_group_id,
-                        convert_value(fields[0]),   # keyword
-                        convert_value(fields[1]),   # criterion_type
-                        convert_value(fields[2]),   # max_cpc
-                        convert_value(fields[3]),   # max_cpm
-                        convert_value(fields[4]),   # status
-                        convert_value(fields[5]),   # comment
-                        convert_value(fields[6]),   # has_ads
-                        convert_value(fields[7]),   # has_school_sites
-                        convert_value(fields[8]),   # has_google_maps
-                        convert_value(fields[9]),   # has_our_site
-                        convert_value(fields[10]),  # intent_type
-                        convert_value(fields[11]),  # recommendation
-                        convert_value(fields[12]),  # avg_monthly_searches
-                        convert_value(fields[13]),  # three_month_change
-                        convert_value(fields[14]),  # yearly_change
-                        convert_value(fields[15]),  # competition
-                        convert_value(fields[16]),  # competition_percent
-                        convert_value(fields[17]),  # min_top_of_page_bid
-                        convert_value(fields[18]),  # max_top_of_page_bid
-                        convert_value(fields[19]),  # ad_impression_share
-                        convert_value(fields[20]),  # organic_average_position
-                        convert_value(fields[21]),  # organic_impression_share
-                        convert_value(fields[22])   # labels
+                        keyword_text,                    # keyword (уже извлечено)
+                        criterion_type,                  # criterion_type (уже извлечено)
+                        convert_value(all_fields[2]),   # max_cpc
+                        convert_value(all_fields[3]),   # max_cpm
+                        convert_value(all_fields[4]),   # status
+                        convert_value(all_fields[5]),   # comment
+                        convert_value(all_fields[6]),   # has_ads
+                        convert_value(all_fields[7]),   # has_school_sites
+                        convert_value(all_fields[8]),   # has_google_maps
+                        convert_value(all_fields[9]),   # has_our_site
+                        convert_value(all_fields[10]),  # intent_type
+                        convert_value(all_fields[11]),  # recommendation
+                        convert_value(all_fields[12]),  # avg_monthly_searches
+                        convert_value(all_fields[13]),  # three_month_change
+                        convert_value(all_fields[14]),  # yearly_change
+                        convert_value(all_fields[15]),  # competition
+                        convert_value(all_fields[16]),  # competition_percent
+                        convert_value(all_fields[17]),  # min_top_of_page_bid
+                        convert_value(all_fields[18]),  # max_top_of_page_bid
+                        convert_value(all_fields[19]),  # ad_impression_share
+                        convert_value(all_fields[20]),  # organic_average_position
+                        convert_value(all_fields[21]),  # organic_impression_share
+                        convert_value(all_fields[22]) if len(all_fields) > 22 else None  # labels
                     ))
                     added_count += 1
                     print(f"Added full data for keyword: {keyword_text}")
                     
                 except Exception as e:
-                    print(f"Error parsing data: {data_string}, error: {str(e)}")
+                    print(f"Error parsing data: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
                     continue
         
         connection.commit()
         cursor.close()
         
-        print(f"Paste completed: added {added_count} keywords")
+        print(f"Paste completed: added {added_count} keywords, skipped {skipped_count} duplicates")
         
         return jsonify({
             'success': True,
-            'message': f'Pasted {added_count} keywords'
+            'message': f'Добавлено {added_count} ключевых слов{f", пропущено дублей: {skipped_count}" if skipped_count > 0 else ""}'
         })
         
     except Exception as e:
@@ -406,6 +441,75 @@ def paste_keywords():
         print(f"Error in paste_keywords: {str(e)}")
         import traceback
         traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if connection:
+            connection.close()
+
+@keywords_bp.route('/add', methods=['POST'])
+def add_keywords():
+    """Добавление новых ключевых слов"""
+    connection = None
+    try:
+        data = request.json
+        ad_group_id = data.get('ad_group_id')
+        keywords_text = data.get('keywords', '')
+        
+        if not ad_group_id:
+            return jsonify({'success': False, 'error': 'No ad_group_id provided'}), 400
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # Получаем campaign_id
+        cursor.execute("SELECT campaign_id FROM ad_groups WHERE id = %s", (ad_group_id,))
+        result = cursor.fetchone()
+        
+        if not result:
+            return jsonify({'success': False, 'error': 'Ad group not found'}), 404
+        
+        campaign_id = result['campaign_id']
+        
+        # Разбираем ключевые слова (через запятую или новую строку)
+        keywords = [k.strip() for k in keywords_text.replace('\n', ',').split(',') if k.strip()]
+        
+        added_count = 0
+        skipped_count = 0
+        
+        for keyword in keywords:
+            # Проверяем существование
+            cursor.execute(
+                "SELECT id FROM keywords WHERE ad_group_id = %s AND keyword = %s",
+                (ad_group_id, keyword)
+            )
+            
+            if not cursor.fetchone():
+                cursor.execute("""
+                    INSERT INTO keywords (
+                        campaign_id, ad_group_id, keyword, criterion_type, 
+                        status, max_cpc
+                    ) VALUES (%s, %s, %s, 'Phrase', 'Enabled', 3.61)
+                """, (campaign_id, ad_group_id, keyword))
+                added_count += 1
+            else:
+                skipped_count += 1
+        
+        connection.commit()
+        cursor.close()
+        
+        message = f'Добавлено {added_count} ключевых слов'
+        if skipped_count > 0:
+            message += f', пропущено дублей: {skipped_count}'
+        
+        return jsonify({
+            'success': True,
+            'message': message
+        })
+        
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        print(f"Error in add_keywords: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         if connection:
