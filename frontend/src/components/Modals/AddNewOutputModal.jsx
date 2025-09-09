@@ -1,7 +1,7 @@
 // src/components/Modals/AddNewOutputModal.jsx
 import React, { useState, useEffect } from 'react';
 import { Modal, Button, Form, Row, Col, Alert } from 'react-bootstrap';
-import api from '../../services/api';
+// import api from '../../services/api'; // Временно закомментируем если не используется
 
 const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
   // Дата по умолчанию - 6 месяцев назад

@@ -1,46 +1,65 @@
+#!/usr/bin/env node
 // /www/wwwroot/keylock.interschool.online/www/server.js
+
 const { spawn } = require('child_process');
 const path = require('path');
 
 console.log('🚀 Starting Keylock application...');
+console.log('Working directory:', __dirname);
 
-// Запуск backend (Flask) с активацией venv
+// Функция для запуска процесса с логированием
+function startProcess(name, command, cwd) {
+    console.log(`Starting ${name}...`);
+    const proc = spawn('bash', ['-c', command], {
+        cwd: cwd,
+        stdio: 'inherit',
+        detached: false
+    });
+    
+    proc.on('error', (err) => {
+        console.error(`❌ ${name} error:`, err);
+    });
+    
+    proc.on('exit', (code) => {
+        console.log(`${name} exited with code ${code}`);
+    });
+    
+    return proc;
+}
+
+// Запуск Backend (Flask)
 const backendPath = path.join(__dirname, 'backend');
-const venvPath = path.join(backendPath, 'venv', 'bin', 'activate');
+const backendCommand = `
+    if [ -f venv/bin/activate ]; then
+        source venv/bin/activate
+    fi
+    python3 app.py
+`;
+const backend = startProcess('Backend', backendCommand, backendPath);
 
-// Команда для запуска Flask с venv
-const backendCommand = `source ${venvPath} && python3 app.py`;
-
-const backend = spawn('bash', ['-c', backendCommand], {
-  cwd: backendPath,
-  stdio: 'inherit'
-});
-
-// Запуск frontend (React)
-const frontend = spawn('npm', ['start'], {
-  cwd: path.join(__dirname, 'frontend'),
-  stdio: 'inherit'
-});
-
-backend.on('error', (err) => {
-  console.error('❌ Backend error:', err);
-});
-
-frontend.on('error', (err) => {
-  console.error('❌ Frontend error:', err);
-});
-
-// Graceful shutdown
-process.on('SIGINT', () => {
-  console.log('🛑 Stopping processes...');
-  backend.kill();
-  frontend.kill();
-  process.exit(0);
-});
-
-process.on('SIGTERM', () => {
-  console.log('🛑 Stopping processes...');
-  backend.kill();
-  frontend.kill();
-  process.exit(0);
-});
+// Небольшая задержка перед запуском frontend
+setTimeout(() => {
+    // Запуск Frontend (React)
+    const frontendPath = path.join(__dirname, 'frontend');
+    const frontendCommand = 'npm start';
+    const frontend = startProcess('Frontend', frontendCommand, frontendPath);
+    
+    // Обработка завершения процессов
+    process.on('SIGINT', () => {
+        console.log('\n🛑 Received SIGINT, stopping processes...');
+        backend.kill('SIGTERM');
+        frontend.kill('SIGTERM');
+        setTimeout(() => {
+            process.exit(0);
+        }, 1000);
+    });
+    
+    process.on('SIGTERM', () => {
+        console.log('\n🛑 Received SIGTERM, stopping processes...');
+        backend.kill('SIGTERM');
+        frontend.kill('SIGTERM');
+        setTimeout(() => {
+            process.exit(0);
+        }, 1000);
+    });
+}, 3000);
