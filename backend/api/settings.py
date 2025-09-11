@@ -138,28 +138,76 @@ def test_dataforseo_connection():
     """Тест подключения к DataForSeo API"""
     try:
         data = request.json
-        print(f"🧪 Тестирование DataForSeo API: {data['login']}")
+        login = data.get('login', '').strip()
+        password = data.get('password', '').strip()
+        
+        if not login or not password:
+            return jsonify({
+                'success': False, 
+                'message': 'Логин и пароль обязательны для тестирования'
+            })
+        
+        print(f"🧪 Тестирование DataForSeo API: {login}")
         
         # Создаем временный клиент с переданными данными
         from services.dataforseo_client import DataForSeoClient
-        temp_client = DataForSeoClient(data['login'], data['password'])
-        status = temp_client.get_status()
         
-        if status.get('tasks') and status['tasks'][0].get('result'):
-            result = status['tasks'][0]['result'][0]
-            balance = result.get('money', {}).get('balance', 0)
-            print(f"✅ DataForSeo API работает, баланс: ${balance}")
-            return jsonify({
-                'success': True, 
-                'message': f'API работает! Баланс: ${balance:.2f}'
-            })
-        else:
-            print("❌ Неверные учетные данные DataForSeo")
-            return jsonify({'success': False, 'message': 'Неверные учетные данные'})
+        try:
+            temp_client = DataForSeoClient(login, password)
+        except ValueError as e:
+            return jsonify({'success': False, 'message': f'Ошибка инициализации: {str(e)}'})
+        
+        # Проверяем статус аккаунта
+        try:
+            status = temp_client.get_status()
+        except Exception as e:
+            return jsonify({'success': False, 'message': f'Ошибка запроса к API: {str(e)}'})
+        
+        # Проверяем структуру ответа
+        if not status.get('tasks') or len(status['tasks']) == 0:
+            return jsonify({'success': False, 'message': 'Пустой ответ от API'})
+        
+        task = status['tasks'][0]
+        
+        # Проверяем код статуса
+        if task.get('status_code') != 20000:
+            error_msg = task.get('status_message', 'Unknown API error')
+            print(f"❌ DataForSeo API error: {error_msg}")
+            return jsonify({'success': False, 'message': f'API Error: {error_msg}'})
+        
+        # Извлекаем данные аккаунта
+        if not task.get('result') or len(task['result']) == 0:
+            return jsonify({'success': False, 'message': 'Нет данных в ответе API'})
+        
+        result = task['result'][0]
+        money_info = result.get('money', {})
+        balance = money_info.get('balance', 0)
+        currency = money_info.get('currency', 'USD')
+        
+        # Получаем информацию о тарифах (опционально)
+        rates_info = result.get('rates', {})
+        keywords_rate = rates_info.get('keywords_data', {}).get('google_ads', {}).get('keywords_for_keywords', {}).get('live', 'N/A')
+        
+        print(f"✅ DataForSeo API работает, баланс: {balance} {currency}")
+        
+        return jsonify({
+            'success': True, 
+            'message': f'✅ API работает!\nБаланс: {balance:.2f} {currency}\nТариф Keywords for Keywords: ${keywords_rate}',
+            'balance': balance,
+            'currency': currency,
+            'rates': {
+                'keywords_for_keywords': keywords_rate
+            }
+        })
             
     except Exception as e:
-        print(f"❌ Ошибка DataForSeo API: {str(e)}")
-        return jsonify({'success': False, 'message': f'Ошибка API: {str(e)}'})
+        print(f"❌ Неожиданная ошибка DataForSeo API: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False, 
+            'message': f'Неожиданная ошибка: {str(e)}'
+        })
 
 @settings_bp.route('/current-db', methods=['GET'])
 def get_current_db_info():

@@ -5,16 +5,56 @@ from typing import List, Dict, Any, Optional
 from config import Config
 
 class DataForSeoClient:
-    """Клиент для работы с DataForSeo API"""
     
     BASE_URL = "https://api.dataforseo.com/v3"
     
     def __init__(self, login: str = None, password: str = None):
-        self.login = login or Config.DATAFORSEO_LOGIN
-        self.password = password or Config.DATAFORSEO_PASSWORD
+        if login and password:
+            # Используем переданные явно (для тестов)
+            self.login = login
+            self.password = password
+            print(f"🔧 DataForSeo: используются переданные credentials: {login}")
+        else:
+            # Загружаем из настроек приложения
+            try:
+                from services.config_manager import config_manager
+                settings = config_manager.load_settings()
+                
+                self.login = settings.get('dataforseo_login', '').strip()
+                self.password = settings.get('dataforseo_password', '').strip()
+                
+                # Если в файле настроек пусто, пробуем переменные окружения
+                if not self.login:
+                    import os
+                    self.login = os.environ.get('DATAFORSEO_LOGIN', '').strip()
+                if not self.password:
+                    import os
+                    self.password = os.environ.get('DATAFORSEO_PASSWORD', '').strip()
+                
+                if self.login and self.password:
+                    print(f"✅ DataForSeo: загружены настройки из файла: {self.login}")
+                else:
+                    print(f"⚠️ DataForSeo: настройки не найдены в файле, пробуем fallback")
+                    
+            except Exception as e:
+                print(f"❌ Ошибка загрузки DataForSeo credentials: {e}")
+                # Последний fallback - переменные окружения
+                import os
+                self.login = os.environ.get('DATAFORSEO_LOGIN', '').strip()
+                self.password = os.environ.get('DATAFORSEO_PASSWORD', '').strip()
+        
+        # Проверяем что credentials заполнены
+        if not self.login or not self.password:
+            raise ValueError(
+                "DataForSeo API credentials are required. "
+                "Set them in Settings or environment variables DATAFORSEO_LOGIN/DATAFORSEO_PASSWORD"
+            )
+        
         self.auth_string = base64.b64encode(
             f"{self.login}:{self.password}".encode()
         ).decode()
+        
+        print(f"🔑 DataForSeo client initialized with login: {self.login}")
     
     def _make_request(self, method: str, endpoint: str, data: Any = None) -> Dict:
         """Базовый метод для выполнения запросов к API"""
@@ -41,50 +81,50 @@ class DataForSeoClient:
             raise
     
     def get_keywords_for_keywords(
-        self,
-        keywords: List[str],
-        location_code: int = 2804,  # Ukraine
-        language_code: str = "ru",
-        search_partners: bool = False,
-        sort_by: str = "search_volume",
-        limit: int = 700,
-        include_seed_keyword: bool = True,
-        include_clickstream_data: bool = False,
-        include_serp_info: bool = True  # Включаем информацию о SERP
-    ) -> Dict:
-        """
-        Получение списка ключевых слов по seed keywords (LIVE режим)
-        Документация: https://docs.dataforseo.com/v3/keywords_data/google_ads/keywords_for_keywords/live/
-        
-        Args:
-            keywords: Список исходных ключевых слов (макс. 1000)
-            location_code: Код локации (2804 для Украины)
-            language_code: Код языка
-            search_partners: Включать ли партнеров поиска
-            sort_by: Поле для сортировки результатов
-            limit: Максимальное количество результатов (макс. 700 для live)
-            include_seed_keyword: Включать ли исходные ключевые слова в результаты
-            include_clickstream_data: Включать ли данные Clickstream
-            include_serp_info: Включать ли информацию о SERP
-        """
-        
-        endpoint = "/keywords_data/google_ads/keywords_for_keywords/live"
-        
-        # Структура запроса по документации
-        data = [{
-            "keywords": keywords[:1000],  # Ограничение API - макс 1000 ключевых слов
-            "location_code": location_code,
-            "language_code": language_code,
-            "search_partners": search_partners,
-            "sort_by": sort_by,
-            "limit": limit,
-            "include_seed_keyword": include_seed_keyword,
-            "include_clickstream_data": include_clickstream_data,
-            "include_serp_info": include_serp_info,
-            "date_from": "2024-01-01",  # Для получения исторических данных
-        }]
-        
-        return self._make_request("POST", endpoint, data)
+    self,
+    keywords: List[str],
+    location_code: int = 2804,  # Ukraine
+    language_code: str = "ru",
+    search_partners: bool = False,
+    sort_by: str = "search_volume",
+    limit: int = 700,
+    include_seed_keyword: bool = True,
+    include_clickstream_data: bool = False,
+    include_serp_info: bool = True  # Включаем информацию о SERP
+) -> Dict:
+    """
+    Получение списка ключевых слов по seed keywords (LIVE режим)
+    Документация: https://docs.dataforseo.com/v3/keywords_data/google_ads/keywords_for_keywords/live/
+    
+    Args:
+        keywords: Список исходных ключевых слов (макс. 700)
+        location_code: Код локации (2804 для Украины)
+        language_code: Код языка
+        search_partners: Включать ли партнеров поиска
+        sort_by: Поле для сортировки результатов
+        limit: Максимальное количество результатов (макс. 700 для live)
+        include_seed_keyword: Включать ли исходные ключевые слова в результаты
+        include_clickstream_data: Включать ли данные Clickstream
+        include_serp_info: Включать ли информацию о SERP
+    """
+    
+    endpoint = "/keywords_data/google_ads/keywords_for_keywords/live"
+    
+    # Структура запроса по документации
+    data = [{
+        "keywords": keywords[:700],  # Ограничение API - макс 700 ключевых слов
+        "location_code": location_code,
+        "language_code": language_code,
+        "search_partners": search_partners,
+        "sort_by": sort_by,
+        "limit": limit,
+        "include_seed_keyword": include_seed_keyword,
+        "include_clickstream_data": include_clickstream_data,
+        "include_serp_info": include_serp_info,
+        "date_from": "2024-01-01",  # Для получения исторических данных
+    }]
+    
+    return self._make_request("POST", endpoint, data)
     
     def parse_keywords_response(self, response: Dict) -> List[Dict]:
         """
@@ -213,4 +253,38 @@ class DataForSeoClient:
         return self._make_request("GET", endpoint)
 
 # Создаем глобальный экземпляр клиента
-dataforseo_client = DataForSeoClient()
+def get_dataforseo_client(login: str = None, password: str = None) -> DataForSeoClient:
+    """
+    Получает экземпляр DataForSeoClient с ленивой инициализацией
+    
+    Args:
+        login: Логин (опционально, для тестов)
+        password: Пароль (опционально, для тестов)
+    
+    Returns:
+        Экземпляр DataForSeoClient
+        
+    Raises:
+        ValueError: Если не удалось получить credentials
+    """
+    try:
+        return DataForSeoClient(login, password)
+    except ValueError as e:
+        print(f"❌ Ошибка инициализации DataForSeo client: {e}")
+        print("💡 Настройте API ключи в разделе Settings")
+        raise e
+
+# Глобальная переменная для кэширования (опционально)
+_cached_client = None
+
+def get_cached_dataforseo_client() -> DataForSeoClient:
+    """Получает кэшированный экземпляр клиента"""
+    global _cached_client
+    if _cached_client is None:
+        _cached_client = get_dataforseo_client()
+    return _cached_client
+
+def clear_client_cache():
+    """Очищает кэш клиента (для обновления настроек)"""
+    global _cached_client
+    _cached_client = None

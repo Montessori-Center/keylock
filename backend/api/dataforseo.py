@@ -3,7 +3,7 @@ from flask import Blueprint, request, jsonify
 from app import db
 from models.keyword import Keyword, AdGroup
 from typing import Dict
-from services.dataforseo_client import dataforseo_client
+from services.dataforseo_client import get_dataforseo_client, DataForSeoClient
 from sqlalchemy import and_
 
 dataforseo_bp = Blueprint('dataforseo', __name__)
@@ -50,19 +50,19 @@ def get_new_keywords():
         
         # Запрос к DataForSeo (Live режим)
         try:
+            # Получаем клиент с проверкой настроек
+            dataforseo_client = get_dataforseo_client()
+            
             response = dataforseo_client.get_keywords_for_keywords(
                 keywords=seed_keywords,
-                location_name=location_name if location_name else None,
                 location_code=location_code,
                 language_code=language_code,
                 search_partners=search_partners,
-                date_from=date_from,
-                date_to=date_to,
+                sort_by=sort_by,
+                limit=limit,
                 include_seed_keyword=include_seed_keyword,
                 include_clickstream_data=include_clickstream_data,
-                include_serp_info=include_serp_info,
-                sort_by=sort_by,
-                limit=limit
+                include_serp_info=include_serp_info
             )
             
             # Проверяем статус ответа
@@ -83,6 +83,11 @@ def get_new_keywords():
             # Получаем стоимость запроса
             request_cost = task.get('cost', 0.05)
             
+        except ValueError as credentials_error:
+            return jsonify({
+                'success': False,
+                'error': f'DataForSeo API не настроен: {str(credentials_error)}'
+            }), 400
         except Exception as e:
             print(f"DataForSeo API error: {str(e)}")
             return jsonify({
@@ -98,109 +103,124 @@ def get_new_keywords():
         
         # Добавляем ключевые слова в БД
         added_count = 0
-        skipped_count = 0
-        updated_count = 0
-        errors = []
+updated_count = 0
+errors = []
+
+for kw_data in keywords_data:
+    try:
+        keyword_text = kw_data['keyword']
         
-        for kw_data in keywords_data:
-            try:
-                keyword_text = kw_data['keyword']
-                
-                # Проверяем, не существует ли уже
-                existing = Keyword.query.filter(
-                    and_(
-                        Keyword.ad_group_id == ad_group_id,
-                        Keyword.keyword == keyword_text
-                    )
-                ).first()
-                
-                if existing:
-                    # Обновляем существующее ключевое слово новыми данными
-                    existing.avg_monthly_searches = kw_data.get('avg_monthly_searches', existing.avg_monthly_searches)
-                    existing.competition = kw_data.get('competition', existing.competition)
-                    existing.competition_percent = kw_data.get('competition_percent', existing.competition_percent)
-                    existing.min_top_of_page_bid = kw_data.get('min_top_of_page_bid', existing.min_top_of_page_bid)
-                    existing.max_top_of_page_bid = kw_data.get('max_top_of_page_bid', existing.max_top_of_page_bid)
-                    existing.three_month_change = kw_data.get('three_month_change', existing.three_month_change)
-                    existing.yearly_change = kw_data.get('yearly_change', existing.yearly_change)
-                    
-                    # Обновляем CPC если есть новое значение
-                    if kw_data.get('cpc'):
-                        existing.max_cpc = kw_data.get('cpc')
-                    
-                    # Обновляем данные из SERP если включены
-                    if include_serp_info:
-                        existing.has_ads = kw_data.get('has_ads', False)
-                        existing.has_google_maps = kw_data.get('has_maps', False)
-                        existing.intent_type = determine_intent_type(kw_data)
-                    
-                    updated_count += 1
-                    continue
-                
-                # Создаем новое ключевое слово
-                keyword = Keyword(
-                    campaign_id=ad_group.campaign_id,
-                    ad_group_id=ad_group_id,
-                    keyword=keyword_text,
-                    criterion_type='Phrase',
-                    status='Enabled',
-                    
-                    # Метрики из DataForSeo
-                    avg_monthly_searches=kw_data.get('avg_monthly_searches', 0),
-                    competition=kw_data.get('competition', 'Неизвестно'),
-                    competition_percent=kw_data.get('competition_percent', 0),
-                    min_top_of_page_bid=kw_data.get('min_top_of_page_bid', 0),
-                    max_top_of_page_bid=kw_data.get('max_top_of_page_bid', 0),
-                    three_month_change=kw_data.get('three_month_change'),
-                    yearly_change=kw_data.get('yearly_change'),
-                    
-                    # CPC из DataForSeo
-                    max_cpc=kw_data.get('cpc', 3.61),
-                    
-                    # Данные из SERP (если включены)
-                    has_ads=kw_data.get('has_ads', False) if include_serp_info else False,
-                    has_google_maps=kw_data.get('has_maps', False) if include_serp_info else False,
-                    
-                    # Определяем тип интента
-                    intent_type=determine_intent_type(kw_data) if include_serp_info else 'Информационный'
-                )
-                
-                db.session.add(keyword)
-                added_count += 1
-                
-            except Exception as e:
-                errors.append(f"Error adding '{kw_data.get('keyword', 'unknown')}': {str(e)}")
-                print(f"Error adding keyword: {e}")
+        # Проверяем, не существует ли уже
+        existing = Keyword.query.filter(
+            and_(
+                Keyword.ad_group_id == ad_group_id,
+                Keyword.keyword == keyword_text
+            )
+        ).first()
         
-        # Сохраняем в БД
-        try:
-            db.session.commit()
-        except Exception as e:
-            db.session.rollback()
-            return jsonify({
-                'success': False,
-                'error': f'Database error: {str(e)}'
-            }), 500
+        if existing:
+            # ОБНОВЛЯЕМ существующее ключевое слово ВСЕМИ свежими данными
+            print(f"🔄 Обновляем существующее ключевое слово: {keyword_text}")
+            
+            # Основные метрики (заменяем на свежие)
+            existing.avg_monthly_searches = kw_data.get('avg_monthly_searches', 0)
+            existing.competition = kw_data.get('competition', 'Неизвестно')
+            existing.competition_percent = kw_data.get('competition_percent', 0)
+            existing.min_top_of_page_bid = kw_data.get('min_top_of_page_bid', 0)
+            existing.max_top_of_page_bid = kw_data.get('max_top_of_page_bid', 0)
+            existing.three_month_change = kw_data.get('three_month_change')
+            existing.yearly_change = kw_data.get('yearly_change')
+            
+            # CPC - обновляем если есть свежее значение
+            new_cpc = kw_data.get('cpc')
+            if new_cpc and new_cpc > 0:
+                existing.max_cpc = new_cpc
+                print(f"  📊 Обновлен CPC: {existing.max_cpc}")
+            
+            # SERP данные - обновляем если включены в запросе
+            if include_serp_info:
+                existing.has_ads = kw_data.get('has_ads', False)
+                existing.has_google_maps = kw_data.get('has_maps', False)
+                
+                # Определяем свежий тип интента
+                new_intent = determine_intent_type(kw_data)
+                existing.intent_type = new_intent
+                print(f"  🎯 Обновлен тип интента: {new_intent}")
+            
+            # Обновляем временные метки
+            from datetime import datetime
+            existing.updated_at = datetime.utcnow()
+            
+            updated_count += 1
+            continue
         
-        # Формируем ответ
-        result = {
-            'success': True,
-            'message': f'Обработано {len(keywords_data)} ключевых слов. Добавлено: {added_count}, обновлено: {updated_count}',
-            'stats': {
-                'total_results': len(keywords_data),
-                'added': added_count,
-                'updated': updated_count,
-                'skipped': skipped_count,
-                'errors': len(errors),
-                'cost': request_cost
-            },
-            'cost': request_cost
-        }
+        # Создаем новое ключевое слово
+        print(f"➕ Добавляем новое ключевое слово: {keyword_text}")
         
-        if errors:
-            result['errors'] = errors[:10]  # Показываем первые 10 ошибок
+        keyword = Keyword(
+            campaign_id=ad_group.campaign_id,
+            ad_group_id=ad_group_id,
+            keyword=keyword_text,
+            criterion_type='Phrase',
+            status='Enabled',
+            
+            # Метрики из DataForSeo
+            avg_monthly_searches=kw_data.get('avg_monthly_searches', 0),
+            competition=kw_data.get('competition', 'Неизвестно'),
+            competition_percent=kw_data.get('competition_percent', 0),
+            min_top_of_page_bid=kw_data.get('min_top_of_page_bid', 0),
+            max_top_of_page_bid=kw_data.get('max_top_of_page_bid', 0),
+            three_month_change=kw_data.get('three_month_change'),
+            yearly_change=kw_data.get('yearly_change'),
+            
+            # CPC из DataForSeo
+            max_cpc=kw_data.get('cpc', 3.61),
+            
+            # Данные из SERP (если включены)
+            has_ads=kw_data.get('has_ads', False) if include_serp_info else False,
+            has_google_maps=kw_data.get('has_maps', False) if include_serp_info else False,
+            
+            # Определяем тип интента
+            intent_type=determine_intent_type(kw_data) if include_serp_info else 'Информационный'
+        )
         
-        return jsonify(result)
+        db.session.add(keyword)
+        added_count += 1
+        
+    except Exception as e:
+        errors.append(f"Error processing '{kw_data.get('keyword', 'unknown')}': {str(e)}")
+        print(f"❌ Error processing keyword: {e}")
+
+# Сохраняем в БД
+try:
+    db.session.commit()
+    print(f"✅ Сохранено в БД: добавлено {added_count}, обновлено {updated_count}")
+except Exception as e:
+    db.session.rollback()
+    print(f"❌ Ошибка сохранения в БД: {str(e)}")
+    return jsonify({
+        'success': False,
+        'error': f'Database error: {str(e)}'
+    }), 500
+
+# Формируем ответ
+result = {
+    'success': True,
+    'message': f'Обработано {len(keywords_data)} ключевых слов. Добавлено: {added_count}, обновлено свежими данными: {updated_count}',
+    'stats': {
+        'total_results': len(keywords_data),
+        'added': added_count,
+        'updated': updated_count,
+        'errors': len(errors),
+        'cost': request_cost
+    },
+    'cost': request_cost
+}
+
+if errors:
+    result['errors'] = errors[:10]  # Показываем первые 10 ошибок
+
+return jsonify(result)
         
     except Exception as e:
         print(f"Unexpected error: {str(e)}")
@@ -231,6 +251,7 @@ def test_dataforseo_connection():
 def check_balance():
     """Проверка баланса и статуса аккаунта DataForSeo"""
     try:
+        dataforseo_client = get_dataforseo_client()
         status = dataforseo_client.get_status()
         
         if status.get('tasks') and status['tasks'][0].get('result'):
@@ -246,6 +267,11 @@ def check_balance():
                     'serp': result.get('rates', {}).get('serp', {}).get('live', {}).get('regular', 0.01)
                 }
             })
+    except ValueError as e:
+        return jsonify({
+            'success': False,
+            'error': f'DataForSeo API не настроен: {str(e)}'
+        }), 400
     except Exception as e:
         return jsonify({
             'success': False,
@@ -257,6 +283,7 @@ def get_locations():
     """Получение списка доступных локаций"""
     try:
         country = request.args.get('country')
+        dataforseo_client = get_dataforseo_client()
         locations = dataforseo_client.get_locations(country)
         
         # Популярные локации с переводом
@@ -278,6 +305,8 @@ def get_locations():
             'popular': popular,
             'all': locations.get('tasks', [{}])[0].get('result', []) if locations else []
         })
+    except ValueError as e:
+        return jsonify({'success': False, 'error': f'DataForSeo API не настроен: {str(e)}'}), 400
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -285,6 +314,7 @@ def get_locations():
 def get_languages():
     """Получение списка доступных языков"""
     try:
+        dataforseo_client = get_dataforseo_client()
         languages = dataforseo_client.get_languages()
         
         # Основные языки с переводом
@@ -304,6 +334,8 @@ def get_languages():
             'main': main_languages,
             'all': languages.get('tasks', [{}])[0].get('result', []) if languages else []
         })
+    except ValueError as e:
+        return jsonify({'success': False, 'error': f'DataForSeo API не настроен: {str(e)}'}), 400
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -388,7 +420,12 @@ def estimate_cost():
         include_serp = data.get('include_serp_info', False)
         include_clickstream = data.get('include_clickstream_data', False)
         
-        cost = dataforseo_client.estimate_cost(include_serp, include_clickstream)
+        # Базовая стоимость
+        cost = 0.05
+        if include_serp:
+            cost += 0.02
+        if include_clickstream:
+            cost += 0.03
         
         return jsonify({
             'success': True,

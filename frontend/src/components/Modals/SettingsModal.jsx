@@ -349,56 +349,102 @@ const testConnection = async (type) => {
 
             {/* Вкладка DataForSeo API */}
             <Tab eventKey="dataforseo" title="DataForSeo API">
-              <Form>
-                <Alert variant="info">
-                  <strong>DataForSeo API</strong><br />
-                  Для получения данных о ключевых словах и SERP анализа
-                </Alert>
-                
-                <Form.Group className="mb-3">
-                  <Form.Label>Логин (email):</Form.Label>
-                  <Form.Control
-                    type="email"
-                    value={settings.dataforseo_login}
-                    onChange={(e) => setSettings(prev => ({ ...prev, dataforseo_login: e.target.value }))}
-                    placeholder="your-email@example.com"
-                  />
-                </Form.Group>
-                
-                <Form.Group className="mb-3">
-                  <Form.Label>Пароль:</Form.Label>
-                  <Form.Control
-                    type="password"
-                    value={settings.dataforseo_password}
-                    onChange={(e) => setSettings(prev => ({ ...prev, dataforseo_password: e.target.value }))}
-                    placeholder="API пароль"
-                  />
-                  <Form.Text className="text-muted">
-                    Пароль из личного кабинета DataForSeo
-                  </Form.Text>
-                </Form.Group>
-                
-                <Button 
-                  variant="outline-primary" 
-                  onClick={() => testConnection('dataforseo')}
-                  disabled={testingConnection || !settings.dataforseo_login || !settings.dataforseo_password}
-                >
-                  {testingConnection ? 'Проверка...' : 'Проверить API и баланс'}
-                </Button>
-                
-                {connectionStatus.dataforseo && (
-                  <Alert 
-                    variant={connectionStatus.dataforseo === 'success' ? 'success' : 'danger'} 
-                    className="mt-2"
-                  >
-                    {connectionStatus.dataforseo === 'success' 
-                      ? 'API работает, аккаунт активен' 
-                      : 'Ошибка подключения к API'
-                    }
-                  </Alert>
-                )}
-              </Form>
-            </Tab>
+  <Form>
+    <Alert variant="info">
+      <strong>DataForSeo API</strong><br />
+      Для получения данных о ключевых словах и SERP анализа.
+      <br />
+      <small>
+        API документация: <a href="https://docs.dataforseo.com/" target="_blank" rel="noopener noreferrer">
+          https://docs.dataforseo.com/
+        </a>
+      </small>
+    </Alert>
+    
+    <Form.Group className="mb-3">
+      <Form.Label>Логин (email):</Form.Label>
+      <Form.Control
+        type="email"
+        value={settings.dataforseo_login}
+        onChange={(e) => setSettings(prev => ({ ...prev, dataforseo_login: e.target.value }))}
+        placeholder="your-email@example.com"
+      />
+      <Form.Text className="text-muted">
+        Email от аккаунта DataForSeo
+      </Form.Text>
+    </Form.Group>
+    
+    <Form.Group className="mb-3">
+      <Form.Label>Пароль API:</Form.Label>
+      <Form.Control
+        type="password"
+        value={settings.dataforseo_password}
+        onChange={(e) => setSettings(prev => ({ ...prev, dataforseo_password: e.target.value }))}
+        placeholder="API пароль"
+        autoComplete="new-password"
+      />
+      <Form.Text className="text-muted">
+        API пароль из личного кабинета DataForSeo (не пароль от аккаунта!)
+      </Form.Text>
+    </Form.Group>
+    
+    <div className="d-flex gap-2 mb-3">
+      <Button 
+        variant="outline-primary" 
+        onClick={() => testConnection('dataforseo')}
+        disabled={testingConnection || !settings.dataforseo_login || !settings.dataforseo_password}
+      >
+        {testingConnection ? (
+          <>
+            <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+            Проверка...
+          </>
+        ) : 'Проверить API и баланс'}
+      </Button>
+      
+      {connectionStatus.dataforseo === 'success' && (
+        <Button 
+          variant="outline-success" 
+          size="sm"
+          onClick={() => window.open('https://app.dataforseo.com/', '_blank')}
+        >
+          Открыть кабинет DataForSeo
+        </Button>
+      )}
+    </div>
+    
+    {connectionStatus.dataforseo && (
+      <Alert 
+        variant={connectionStatus.dataforseo === 'success' ? 'success' : 'danger'} 
+        className="mb-3"
+      >
+        <strong>
+          {connectionStatus.dataforseo === 'success' ? '✅ Подключение успешно' : '❌ Ошибка подключения'}
+        </strong>
+        <br />
+        {connectionStatus.dataforseMessage || 'Неизвестная ошибка'}
+        
+        {connectionStatus.dataforseo === 'success' && (
+          <div className="mt-2">
+            <small>
+              💡 <strong>Совет:</strong> Проверяйте баланс перед выполнением платных запросов
+            </small>
+          </div>
+        )}
+      </Alert>
+    )}
+    
+    <Alert variant="warning">
+      <strong>💰 Внимание:</strong> DataForSeo API - платный сервис
+      <br />
+      <small>
+        • Keywords for Keywords Live: ~$0.05 за запрос<br />
+        • SERP анализ: ~$0.01 за ключевое слово<br />
+        • Проверяйте баланс перед массовыми операциями
+      </small>
+    </Alert>
+  </Form>
+</Tab>
 
             {/* Вкладка Google Ads API */}
             <Tab eventKey="googleads" title="Google Ads API">

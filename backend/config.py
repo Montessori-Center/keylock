@@ -75,25 +75,74 @@ class Config:
     SQLALCHEMY_DATABASE_URI = f'mysql+pymysql://{DB_USER}:{DB_PASSWORD_ENCODED}@{DB_HOST}:{DB_PORT}/{DB_NAME}?charset=utf8mb4'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
-    # DataForSeo API - тоже можем сделать динамическими
-    if USE_SAVED_SETTINGS:
-        try:
-            # Используем те же настройки что загрузили выше
-            if 'settings' in locals():
-                DATAFORSEO_LOGIN = settings.get('dataforseo_login', 'developer@montessori.ua')
-                DATAFORSEO_PASSWORD = settings.get('dataforseo_password', 'dcd79673da5095cb')
-                print(f"✅ Используются сохраненные настройки DataForSeo: {DATAFORSEO_LOGIN}")
-            else:
-                raise Exception("Настройки не загружены")
-        except:
-            # Fallback на стандартные значения
-            DATAFORSEO_LOGIN = 'developer@montessori.ua'
-            DATAFORSEO_PASSWORD = 'dcd79673da5095cb'
-            print("📋 Используются стандартные настройки DataForSeo")
-    else:
-        # Используем стандартные значения
-        DATAFORSEO_LOGIN = 'developer@montessori.ua'
-        DATAFORSEO_PASSWORD = 'dcd79673da5095cb'
+    # DataForSeo API - полностью динамические настройки
+    @property
+    def DATAFORSEO_LOGIN(self):
+        if USE_SAVED_SETTINGS:
+            try:
+                import json
+                from pathlib import Path
+                from cryptography.fernet import Fernet
+                
+                # Путь к файлам конфигурации
+                config_dir = Path(__file__).parent / 'config'
+                config_file = config_dir / 'app_config.enc'
+                key_file = config_dir / 'app.key'
+                
+                if config_file.exists() and key_file.exists():
+                    # Читаем ключ шифрования
+                    with open(key_file, 'rb') as f:
+                        key = f.read()
+                    cipher = Fernet(key)
+                    
+                    # Читаем и расшифровываем настройки
+                    with open(config_file, 'rb') as f:
+                        encrypted_data = f.read()
+                    decrypted_data = cipher.decrypt(encrypted_data)
+                    settings = json.loads(decrypted_data.decode())
+                    
+                    login = settings.get('dataforseo_login')
+                    if login:
+                        return login
+            except Exception as e:
+                print(f"⚠️ Ошибка загрузки DataForSeo login: {e}")
+        
+        # Fallback - из переменных окружения
+        return os.environ.get('DATAFORSEO_LOGIN', '')
+    
+    @property
+    def DATAFORSEO_PASSWORD(self):
+        if USE_SAVED_SETTINGS:
+            try:
+                import json
+                from pathlib import Path
+                from cryptography.fernet import Fernet
+                
+                # Путь к файлам конфигурации
+                config_dir = Path(__file__).parent / 'config'
+                config_file = config_dir / 'app_config.enc'
+                key_file = config_dir / 'app.key'
+                
+                if config_file.exists() and key_file.exists():
+                    # Читаем ключ шифрования
+                    with open(key_file, 'rb') as f:
+                        key = f.read()
+                    cipher = Fernet(key)
+                    
+                    # Читаем и расшифровываем настройки
+                    with open(config_file, 'rb') as f:
+                        encrypted_data = f.read()
+                    decrypted_data = cipher.decrypt(encrypted_data)
+                    settings = json.loads(decrypted_data.decode())
+                    
+                    password = settings.get('dataforseo_password')
+                    if password:
+                        return password
+            except Exception as e:
+                print(f"⚠️ Ошибка загрузки DataForSeo password: {e}")
+        
+        # Fallback - из переменных окружения
+        return os.environ.get('DATAFORSEO_PASSWORD', '')
     
     # Encryption key for sensitive data
     ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY') or 'generate-strong-key-for-production'
