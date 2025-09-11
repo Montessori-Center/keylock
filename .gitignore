@@ -1,2 +1,4 @@
 frontend/node_modules/.cache/
 backend/api/__pycache__/
+backend/config/app_config.enc
+backend/config/app.key

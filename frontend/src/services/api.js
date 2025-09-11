@@ -71,6 +71,11 @@ const api = {
   checkBalance: async () => {
     const response = await axios.get(`${API_BASE_URL}/dataforseo/check-balance`);
     return response.data;
+  },
+  
+  restartApp: async () => {
+    const response = await axios.post(`${API_BASE_URL}/settings/restart`);
+    return response.data;
   }
 };
 

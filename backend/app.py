@@ -139,11 +139,10 @@ def create_app():
         return "Flask is working!"
 
 if __name__ == '__main__':
+    # Проверяем подключение к БД, но не останавливаем приложение при ошибке
     if not check_and_create_database():
         print("\n⚠️ Could not connect to MySQL")
-        response = input("\nContinue anyway? (y/n): ")
-        if response.lower() != 'y':
-            sys.exit(1)
+        print("🔄 Continuing anyway - settings can be changed in UI")
     
     app = create_app()
     

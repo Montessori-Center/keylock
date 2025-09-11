@@ -14,6 +14,8 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
   const getDefaultDateTo = () => {
     return new Date().toISOString().split('T')[0];
   };
+  
+  const [keywordText, setKeywordText] = useState('');
 
   const [params, setParams] = useState({
     seed_keywords: [],
@@ -26,7 +28,7 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
     date_to: getDefaultDateTo(),
     include_seed_keyword: true,
     include_clickstream_data: false,
-    include_serp_info: false,
+    include_serp_info: true, // ИСПРАВЛЕНО: По умолчанию включено
     sort_by: 'relevance'
   });
 
@@ -45,13 +47,15 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
 
   // Если есть выбранные ключевые слова, добавляем их как seed
   useEffect(() => {
-    if (selectedKeywords && selectedKeywords.length > 0) {
-      setParams(prev => ({
-        ...prev,
-        seed_keywords: selectedKeywords.map(k => k.keyword)
-      }));
-    }
-  }, [selectedKeywords, show]);
+  if (selectedKeywords && selectedKeywords.length > 0) {
+    const text = selectedKeywords.map(k => k.keyword).join('\n');
+    setKeywordText(text);
+    setParams(prev => ({
+      ...prev,
+      seed_keywords: selectedKeywords.map(k => k.keyword)
+    }));
+  }
+}, [selectedKeywords, show]);
 
   // Расчет примерной стоимости
   useEffect(() => {
@@ -141,8 +145,9 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
       return;
     }
     
-    if (params.seed_keywords.length > 1000) {
-      alert('Максимум 1000 ключевых слов за один запрос');
+    // ИСПРАВЛЕНО: Изменен лимит с 1000 на 700
+    if (params.seed_keywords.length > 700) {
+      alert('Максимум 700 ключевых слов за один запрос');
       return;
     }
     
@@ -155,10 +160,18 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
     onHide();
   };
 
+  // ИСПРАВЛЕНО: Функция теперь корректно обрабатывает ввод запятых и переводов строк
   const handleKeywordsChange = (text) => {
-    const keywords = text.split(/[,\n]/).map(k => k.trim()).filter(k => k);
-    setParams(prev => ({ ...prev, seed_keywords: keywords }));
-  };
+      setKeywordText(text);
+      
+      // Парсим ключевые слова
+      const keywords = text
+        .split(/[,\n]+/)
+        .map(k => k.trim())
+        .filter(k => k.length > 0);
+      
+      setParams(prev => ({ ...prev, seed_keywords: keywords }));
+    };
 
   const sortByOptions = [
     { value: 'relevance', label: 'По релевантности' },
@@ -192,18 +205,21 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
             <Form.Label>
               Seed ключевые слова:
               <small className="text-muted ms-2">
-                ({params.seed_keywords.length} / 1000)
+                {/* ИСПРАВЛЕНО: Изменен лимит с 1000 на 700 */}
+                ({params.seed_keywords.length} / 700)
               </small>
             </Form.Label>
             <Form.Control
               as="textarea"
               rows={5}
-              value={params.seed_keywords.join('\n')}
+              value={keywordText}
               onChange={(e) => handleKeywordsChange(e.target.value)}
               placeholder="Введите ключевые слова для анализа (каждое с новой строки или через запятую)"
+              style={{ resize: 'vertical' }}
             />
             <Form.Text className="text-muted">
-              Введите от 1 до 1000 ключевых слов для получения релевантной выдачи
+              {/* ИСПРАВЛЕНО: Изменен текст с 1000 на 700 */}
+              Введите от 1 до 700 ключевых слов для получения релевантной выдачи. Разделители: запятая или новая строка.
             </Form.Text>
           </Form.Group>
 
@@ -363,7 +379,7 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
                   <option value="true">Да (+$0.02)</option>
                 </Form.Select>
                 <Form.Text className="text-muted">
-                  Анализ выдачи для определения интента
+                  Анализ выдачи для определения интента (рекомендуется)
                 </Form.Text>
               </Form.Group>
             </Col>

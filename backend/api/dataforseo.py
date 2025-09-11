@@ -206,6 +206,26 @@ def get_new_keywords():
         print(f"Unexpected error: {str(e)}")
         db.session.rollback()
         return jsonify({'success': False, 'error': str(e)}), 500
+        
+@dataforseo_bp.route('/test-connection', methods=['POST'])
+def test_dataforseo_connection():
+    """Тест подключения к DataForSeo API"""
+    try:
+        data = request.json
+        # Создаем временный клиент с переданными данными
+        temp_client = DataForSeoClient(data['login'], data['password'])
+        status = temp_client.get_status()
+        
+        if status.get('tasks') and status['tasks'][0].get('result'):
+            balance = status['tasks'][0]['result'][0].get('money', {}).get('balance', 0)
+            return jsonify({
+                'success': True, 
+                'message': f'API работает. Баланс: ${balance}'
+            })
+        else:
+            return jsonify({'success': False, 'message': 'Неверные учетные данные'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Ошибка API: {str(e)}'})
 
 @dataforseo_bp.route('/check-balance', methods=['GET'])
 def check_balance():
