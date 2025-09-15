@@ -3,9 +3,30 @@ from flask import Blueprint, request, jsonify
 from config import Config
 import pymysql
 from typing import Dict
+from datetime import datetime
 from services.dataforseo_client import get_dataforseo_client, DataForSeoClient
 
 dataforseo_bp = Blueprint('dataforseo', __name__)
+
+@dataforseo_bp.route('/test', methods=['GET', 'POST'])
+def test_endpoint():
+    """Простой тест endpoint"""
+    try:
+        print("🧪 TEST ENDPOINT ВЫЗВАН!")
+        print(f"   Method: {request.method}")
+        if request.method == 'POST':
+            data = request.get_json()
+            print(f"   Data: {data}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Test endpoint работает!',
+            'method': request.method,
+            'timestamp': str(datetime.utcnow())
+        })
+    except Exception as e:
+        print(f"❌ Test endpoint error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 def get_db_connection():
     """Создаёт прямое подключение к БД"""
@@ -18,11 +39,63 @@ def get_db_connection():
         cursorclass=pymysql.cursors.DictCursor
     )
 
+@dataforseo_bp.route('/get-keywords-simple', methods=['POST'])
+def get_keywords_simple():
+    """Простой тест без обращения к DataForSeo"""
+    try:
+        print("🧪 SIMPLE TEST ВЫЗВАН!")
+        data = request.get_json()
+        print(f"   Получены данные: {list(data.keys()) if data else 'None'}")
+        
+        # Имитируем работу
+        import time
+        time.sleep(1)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Простой тест прошел успешно!',
+            'received_keys': list(data.keys()) if data else [],
+            'stats': {
+                'total_results': 5,
+                'added': 3,
+                'updated': 2,
+                'errors': 0,
+                'cost': 0.00
+            }
+        })
+    except Exception as e:
+        print(f"❌ Simple test error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @dataforseo_bp.route('/get-keywords', methods=['POST'])
 def get_new_keywords():
     """Получение новой выдачи ключевых слов через DataForSeo"""
     connection = None
+    
+    # КРИТИЧЕСКОЕ ЛОГИРОВАНИЕ - ДОЛЖНО ПОЯВИТЬСЯ В ЛЮБОМ СЛУЧАЕ
+    print("!" * 50)
+    print("🚨 GET-KEYWORDS ENDPOINT ВЫЗВАН!")
+    print(f"🚨 Method: {request.method}")
+    print(f"🚨 Content-Type: {request.content_type}")
+    print(f"🚨 Headers: {dict(request.headers)}")
+    sys.stdout.flush()
+    
     try:
+        # Пробуем получить данные
+        try:
+            data = request.get_json()
+            print(f"🚨 JSON DATA: {data}")
+        except Exception as json_error:
+            print(f"🚨 JSON ERROR: {json_error}")
+            return jsonify({'success': False, 'error': f'JSON parse error: {str(json_error)}'}), 400
+        
+        if not data:
+            print("🚨 NO DATA IN REQUEST")
+            return jsonify({'success': False, 'error': 'No data in request'}), 400
+        
+        print("🚨 PROCESSING REQUEST...")
+        sys.stdout.flush()
+        
         print("=" * 50)
         print("🚀 Начало обработки запроса get-keywords")
         
@@ -143,70 +216,42 @@ def get_new_keywords():
             }), 500
         
         # Парсим ответ
-        print("🔄 Парсинг ответа DataForSeo...")
+        log_print("🔄 Парсинг ответа DataForSeo...")
         
-        # ОТЛАДКА ОТВЕТА:
-        print("🔍 ОТЛАДКА ОТВЕТА:")
-        print(f"   Response keys: {list(response.keys())}")
+        # ОТЛАДКА ОТВЕТА (можно оставить для диагностики):
+        log_print("🔍 ОТЛАДКА ОТВЕТА:")
+        log_print(f"   Response keys: {list(response.keys())}")
         if response.get('tasks'):
             task = response['tasks'][0]
-            print(f"   Task keys: {list(task.keys())}")
-            print(f"   Task status: {task.get('status_code')}")
-            print(f"   Task message: {task.get('status_message')}")
+            log_print(f"   Task keys: {list(task.keys())}")
+            log_print(f"   Task status: {task.get('status_code')}")
+            log_print(f"   Task message: {task.get('status_message')}")
             
             if task.get('result'):
-                print(f"   Result count: {len(task.get('result', []))}")
+                log_print(f"   Result count: {len(task.get('result', []))}")
                 if len(task.get('result', [])) > 0:
                     result_item = task['result'][0]
-                    print(f"   Result item keys: {list(result_item.keys())}")
-                    
-                    if result_item.get('items'):
-                        print(f"   Items count: {len(result_item.get('items', []))}")
-                        if len(result_item.get('items', [])) > 0:
-                            first_item = result_item['items'][0]
-                            print(f"   First item keys: {list(first_item.keys())}")
-                            print(f"   First item: {first_item}")
-                    else:
-                        print("   ❌ No 'items' in result")
+                    log_print(f"   First result item keys: {list(result_item.keys())}")
+                    log_print(f"   First keyword: {result_item.get('keyword', 'N/A')}")
+                    log_print(f"   Search volume: {result_item.get('search_volume', 'N/A')}")
                 else:
-                    print("   ❌ No result items")
+                    log_print("   ❌ No result items")
             else:
-                print("   ❌ No 'result' in task")
+                log_print("   ❌ No 'result' in task")
         
+        # Основной парсинг (теперь должен работать корректно)
         keywords_data = dataforseo_client.parse_keywords_response(response)
-        print(f"📈 Получено ключевых слов: {len(keywords_data)}")
+        log_print(f"📈 Получено ключевых слов: {len(keywords_data)}")
         
-        # ЕСЛИ ПАРСИНГ НЕ РАБОТАЕТ - ПРОБУЕМ ПРОСТОЙ:
-        if len(keywords_data) == 0:
-            print("❌ ПАРСИНГ НЕ РАБОТАЕТ! Попробуем простой парсинг...")
-            
-            # Простой парсинг напрямую
-            simple_keywords = []
-            if response.get('tasks') and len(response['tasks']) > 0:
-                task = response['tasks'][0]
-                if task.get('result') and len(task['result']) > 0:
-                    result_item = task['result'][0]
-                    if result_item.get('items'):
-                        for item in result_item['items']:
-                            keyword_data = item.get('keyword_data', {})
-                            keyword_info = keyword_data.get('keyword_info', {})
-                            
-                            simple_keywords.append({
-                                'keyword': keyword_data.get('keyword', 'Unknown'),
-                                'avg_monthly_searches': keyword_info.get('search_volume', 0),
-                                'competition': 'Средняя',  # Временно
-                                'competition_percent': keyword_info.get('competition_index', 0),
-                                'min_top_of_page_bid': keyword_info.get('low_top_of_page_bid', 0),
-                                'max_top_of_page_bid': keyword_info.get('high_top_of_page_bid', 0),
-                                'cpc': keyword_info.get('cpc', 0),
-                                'has_ads': False,  # Временно
-                                'has_maps': False,  # Временно
-                            })
-            
-            print(f"🔧 Простой парсинг дал: {len(simple_keywords)} ключевых слов")
-            if len(simple_keywords) > 0:
-                print(f"   Пример: {simple_keywords[0]}")
-                keywords_data = simple_keywords  # Используем простой парсинг
+        if len(keywords_data) > 0:
+            log_print(f"📝 Пример первого ключевого слова: {keywords_data[0].get('keyword', 'N/A')}")
+            log_print(f"📝 Объем поиска: {keywords_data[0].get('avg_monthly_searches', 'N/A')}")
+        else:
+            log_print("⚠️ Парсинг не дал результатов - проверьте логи выше")
+            return jsonify({
+                'success': False,
+                'error': 'No keywords parsed from DataForSeo response'
+            }), 500
         
         if len(keywords_data) > 0:
             print(f"📝 Пример первого ключевого слова: {keywords_data[0].get('keyword', 'N/A')}")

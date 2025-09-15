@@ -1,19 +1,25 @@
-# services/dataforseo_client.py
+# services/dataforseo_client.py - исправленная версия с правильными отступами
 import requests
 import base64
 from typing import List, Dict, Any, Optional
 from config import Config
+import sys
+
+def debug_print(*args, **kwargs):
+    print(*args, **kwargs)
+    sys.stdout.flush()
 
 class DataForSeoClient:
     
     BASE_URL = "https://api.dataforseo.com/v3"
     
     def __init__(self, login: str = None, password: str = None):
+        debug_print(f"🔧 DataForSeoClient.__init__ вызван")
         if login and password:
             # Используем переданные явно (для тестов)
             self.login = login
             self.password = password
-            print(f"🔧 DataForSeo: используются переданные credentials: {login}")
+            debug_print(f"🔧 DataForSeo: используются переданные credentials: {login}")
         else:
             # Загружаем из настроек приложения
             try:
@@ -22,6 +28,9 @@ class DataForSeoClient:
                 
                 self.login = settings.get('dataforseo_login', '').strip()
                 self.password = settings.get('dataforseo_password', '').strip()
+                
+                debug_print(f"📋 Логин из настроек: '{self.login}'")
+                debug_print(f"📋 Пароль из настроек: {'***' if self.password else 'ПУСТОЙ'}")
                 
                 # Если в файле настроек пусто, пробуем переменные окружения
                 if not self.login:
@@ -32,12 +41,12 @@ class DataForSeoClient:
                     self.password = os.environ.get('DATAFORSEO_PASSWORD', '').strip()
                 
                 if self.login and self.password:
-                    print(f"✅ DataForSeo: загружены настройки из файла: {self.login}")
+                    debug_print(f"✅ DataForSeo: загружены настройки из файла: {self.login}")
                 else:
-                    print(f"⚠️ DataForSeo: настройки не найдены в файле, пробуем fallback")
+                    debug_print(f"⚠️ DataForSeo: настройки не найдены в файле, пробуем fallback")
                     
             except Exception as e:
-                print(f"❌ Ошибка загрузки DataForSeo credentials: {e}")
+                debug_print(f"❌ Ошибка загрузки DataForSeo credentials: {e}")
                 # Последний fallback - переменные окружения
                 import os
                 self.login = os.environ.get('DATAFORSEO_LOGIN', '').strip()
@@ -45,6 +54,9 @@ class DataForSeoClient:
         
         # Проверяем что credentials заполнены
         if not self.login or not self.password:
+            debug_print(f"❌ Не хватает credentials:")
+            debug_print(f"   - login: '{self.login}' (пустой: {not self.login})")
+            debug_print(f"   - password: пустой: {not self.password}")
             raise ValueError(
                 "DataForSeo API credentials are required. "
                 "Set them in Settings or environment variables DATAFORSEO_LOGIN/DATAFORSEO_PASSWORD"
@@ -54,7 +66,7 @@ class DataForSeoClient:
             f"{self.login}:{self.password}".encode()
         ).decode()
         
-        print(f"🔑 DataForSeo client initialized with login: {self.login}")
+        debug_print(f"🔑 DataForSeo client initialized with login: {self.login}")
     
     def _make_request(self, method: str, endpoint: str, data: Any = None) -> Dict:
         """Базовый метод для выполнения запросов к API"""
@@ -64,6 +76,10 @@ class DataForSeoClient:
             "Content-Type": "application/json"
         }
         
+        debug_print(f"🌐 Выполняем {method} запрос к: {url}")
+        if data:
+            debug_print(f"📋 Размер данных: {len(str(data))} символов")
+        
         try:
             if method == "GET":
                 response = requests.get(url, headers=headers)
@@ -72,12 +88,16 @@ class DataForSeoClient:
             else:
                 raise ValueError(f"Unsupported method: {method}")
             
+            debug_print(f"📨 Ответ получен, статус: {response.status_code}")
+            
             response.raise_for_status()
-            return response.json()
+            json_response = response.json()
+            debug_print(f"✅ JSON распарсен успешно")
+            return json_response
         except requests.exceptions.RequestException as e:
-            print(f"Error making request to DataForSeo: {e}")
-            if hasattr(e.response, 'text'):
-                print(f"Response: {e.response.text}")
+            debug_print(f"❌ Error making request to DataForSeo: {e}")
+            if hasattr(e, 'response') and e.response is not None:
+                debug_print(f"❌ Response: {e.response.text}")
             raise
     
     def get_keywords_for_keywords(self,
@@ -91,21 +111,13 @@ class DataForSeoClient:
         include_clickstream_data: bool = False,
         include_serp_info: bool = True  # Включаем информацию о SERP
     ) -> Dict:
-        """
-        Получение списка ключевых слов по seed keywords (LIVE режим)
-        Документация: https://docs.dataforseo.com/v3/keywords_data/google_ads/keywords_for_keywords/live/
         
-        Args:
-            keywords: Список исходных ключевых слов (макс. 700)
-            location_code: Код локации (2804 для Украины)
-            language_code: Код языка
-            search_partners: Включать ли партнеров поиска
-            sort_by: Поле для сортировки результатов
-            limit: Максимальное количество результатов (макс. 700 для live)
-            include_seed_keyword: Включать ли исходные ключевые слова в результаты
-            include_clickstream_data: Включать ли данные Clickstream
-            include_serp_info: Включать ли информацию о SERP
-        """
+        debug_print(f"🔍 get_keywords_for_keywords вызван с параметрами:")
+        debug_print(f"   - keywords: {keywords[:3]}... (всего {len(keywords)})")
+        debug_print(f"   - location_code: {location_code}")
+        debug_print(f"   - language_code: {language_code}")
+        debug_print(f"   - limit: {limit}")
+        debug_print(f"   - include_serp_info: {include_serp_info}")
         
         endpoint = "/keywords_data/google_ads/keywords_for_keywords/live"
         
@@ -123,89 +135,113 @@ class DataForSeoClient:
             "date_from": "2024-01-01",  # Для получения исторических данных
         }]
         
+        debug_print(f"📋 Структура запроса создана")
         return self._make_request("POST", endpoint, data)
     
     def parse_keywords_response(self, response: Dict) -> List[Dict]:
         """
-        Парсинг ответа с ключевыми словами
-        
-        Returns:
-            Список словарей с данными ключевых слов
+        Парсинг ответа с ключевыми словами - ИСПРАВЛЕННАЯ ВЕРСИЯ
         """
+        debug_print(f"🔄 parse_keywords_response начат")
         keywords_data = []
         
         if not response.get("tasks"):
-            print("No tasks in response")
+            debug_print("❌ No tasks in response")
             return keywords_data
+        
+        debug_print(f"📊 Количество tasks: {len(response['tasks'])}")
         
         # Проходим по всем задачам
         for task in response.get("tasks", []):
             if task.get("status_code") != 20000:
-                print(f"Task error: {task.get('status_message')}")
+                debug_print(f"❌ Task error: {task.get('status_message')}")
                 continue
             
             # Получаем результаты из задачи
             if not task.get("result"):
+                debug_print("❌ No result in task")
                 continue
                 
-            for result_item in task.get("result", []):
-                items = result_item.get("items", [])
+            result_items = task.get("result", [])
+            debug_print(f"📊 Количество result items: {len(result_items)}")
+            
+            # ИСПРАВЛЕНИЕ: В Google Ads API каждый элемент result[] - это уже ключевое слово
+            # НЕ НУЖНО искать result[].items[] - данные лежат прямо в result[]
+            
+            for keyword_item in result_items:
+                debug_print(f"🔄 Обработка keyword с ключами: {list(keyword_item.keys())}")
                 
-                for item in items:
-                    # Извлекаем данные ключевого слова
-                    keyword_data = item.get("keyword_data", {})
-                    keyword_info = keyword_data.get("keyword_info", {})
-                    serp_info = keyword_data.get("serp_info", {})
-                    impressions_info = keyword_data.get("impressions_info", {})
-                    
-                    # Вычисляем изменения
-                    monthly_searches = keyword_info.get("monthly_searches", [])
-                    three_month_change = None
-                    yearly_change = None
-                    
-                    if monthly_searches and len(monthly_searches) >= 3:
-                        # Изменение за 3 месяца
+                # Извлекаем данные напрямую из элемента result[]
+                keyword_text = keyword_item.get("keyword", "")
+                search_volume = keyword_item.get("search_volume", 0)
+                competition = keyword_item.get("competition", "UNSPECIFIED")
+                competition_index = keyword_item.get("competition_index", 0)
+                low_bid = keyword_item.get("low_top_of_page_bid", 0)
+                high_bid = keyword_item.get("high_top_of_page_bid", 0)
+                cpc = keyword_item.get("cpc", 0)
+                monthly_searches = keyword_item.get("monthly_searches", [])
+                
+                debug_print(f"📝 Обрабатываем keyword: {keyword_text}")
+                debug_print(f"   - search_volume: {search_volume}")
+                debug_print(f"   - competition: {competition}")
+                debug_print(f"   - cpc: {cpc}")
+                
+                # Вычисляем изменения по месяцам
+                three_month_change = None
+                yearly_change = None
+                
+                if monthly_searches and len(monthly_searches) >= 3:
+                    try:
+                        # Изменение за 3 месяца (берем последний и предпоследний третий месяц)
                         current = monthly_searches[-1].get("search_volume", 0)
                         three_months_ago = monthly_searches[-3].get("search_volume", 0)
                         if three_months_ago > 0:
                             three_month_change = ((current - three_months_ago) / three_months_ago) * 100
-                    
-                    if monthly_searches and len(monthly_searches) >= 12:
+                    except (IndexError, ZeroDivisionError, TypeError):
+                        debug_print("⚠️ Ошибка расчета three_month_change")
+                
+                if monthly_searches and len(monthly_searches) >= 12:
+                    try:
                         # Изменение за год
                         current = monthly_searches[-1].get("search_volume", 0)
                         year_ago = monthly_searches[-12].get("search_volume", 0)
                         if year_ago > 0:
                             yearly_change = ((current - year_ago) / year_ago) * 100
+                    except (IndexError, ZeroDivisionError, TypeError):
+                        debug_print("⚠️ Ошибка расчета yearly_change")
+                
+                # Определяем тип конкуренции (переводим на русский)
+                competition_map = {
+                    "HIGH": "Высокая",
+                    "MEDIUM": "Средняя",
+                    "LOW": "Низкая",
+                    "UNSPECIFIED": "Неизвестно"
+                }
+                
+                keyword_result = {
+                    "keyword": keyword_text,
+                    "avg_monthly_searches": search_volume,
+                    "competition": competition_map.get(competition, competition),
+                    "competition_percent": competition_index,
+                    "min_top_of_page_bid": low_bid,
+                    "max_top_of_page_bid": high_bid,
+                    "three_month_change": round(three_month_change, 2) if three_month_change else None,
+                    "yearly_change": round(yearly_change, 2) if yearly_change else None,
+                    "cpc": cpc,
                     
-                    # Определяем тип конкуренции
-                    competition_level = keyword_info.get("competition", "UNSPECIFIED")
-                    competition_map = {
-                        "HIGH": "Высокая",
-                        "MEDIUM": "Средняя",
-                        "LOW": "Низкая",
-                        "UNSPECIFIED": "Неизвестно"
-                    }
-                    
-                    keywords_data.append({
-                        "keyword": keyword_data.get("keyword", ""),
-                        "avg_monthly_searches": keyword_info.get("search_volume", 0),
-                        "competition": competition_map.get(competition_level, competition_level),
-                        "competition_percent": keyword_info.get("competition_index", 0),
-                        "min_top_of_page_bid": keyword_info.get("low_top_of_page_bid", 0),
-                        "max_top_of_page_bid": keyword_info.get("high_top_of_page_bid", 0),
-                        "three_month_change": round(three_month_change, 2) if three_month_change else None,
-                        "yearly_change": round(yearly_change, 2) if yearly_change else None,
-                        
-                        # Дополнительная информация из SERP
-                        "serp_item_types": serp_info.get("serp_item_types", []),
-                        "se_results_count": serp_info.get("se_results_count", 0),
-                        
-                        # CPC из impressions_info
-                        "cpc": impressions_info.get("cpc_max", keyword_info.get("cpc", 0)),
-                        
-                        # Дополнительные метрики
-                        "keyword_difficulty": keyword_data.get("keyword_properties", {}).get("keyword_difficulty", None)
-                    })
+                    # Дополнительные поля (пока пустые, так как нет SERP данных в этом эндпоинте)
+                    "serp_item_types": [],
+                    "se_results_count": 0,
+                    "keyword_difficulty": None
+                }
+                
+                keywords_data.append(keyword_result)
+        
+        debug_print(f"✅ Парсинг завершен: {len(keywords_data)} ключевых слов")
+        if keywords_data:
+            debug_print(f"📝 Первое ключевое слово: {keywords_data[0]['keyword']}")
+            debug_print(f"📝 Объем поиска: {keywords_data[0]['avg_monthly_searches']}")
+            debug_print(f"📝 Конкуренция: {keywords_data[0]['competition']}")
         
         return keywords_data
     
@@ -248,6 +284,7 @@ class DataForSeoClient:
     
     def get_status(self) -> Dict:
         """Проверка статуса аккаунта и баланса"""
+        debug_print(f"🔍 Запрос статуса аккаунта")
         endpoint = "/appendix/user_data"
         return self._make_request("GET", endpoint)
 
@@ -266,11 +303,12 @@ def get_dataforseo_client(login: str = None, password: str = None) -> DataForSeo
     Raises:
         ValueError: Если не удалось получить credentials
     """
+    debug_print(f"🔧 get_dataforseo_client вызван")
     try:
         return DataForSeoClient(login, password)
     except ValueError as e:
-        print(f"❌ Ошибка инициализации DataForSeo client: {e}")
-        print("💡 Настройте API ключи в разделе Settings")
+        debug_print(f"❌ Ошибка инициализации DataForSeo client: {e}")
+        debug_print("💡 Настройте API ключи в разделе Settings")
         raise e
 
 # Глобальная переменная для кэширования (опционально)

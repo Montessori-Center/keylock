@@ -1,9 +1,10 @@
 # app.py - исправленная версия
-from flask import Flask
+from flask import Flask, request, make_response
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from config import Config
 from sqlalchemy import text
+from datetime import datetime
 import pymysql
 import sys
 
@@ -45,10 +46,10 @@ def create_app():
     # CORS setup
     CORS(app, 
          resources={r"/api/*": {
-             "origins": Config.CORS_ORIGINS,
+             "origins": ["*"],  # Временно разрешаем все для диагностики
              "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
              "allow_headers": ["Content-Type", "Authorization"],
-             "supports_credentials": True
+             "supports_credentials": False  # Отключаем для упрощения
          }})
     
     # Import models BEFORE registering blueprints
@@ -79,6 +80,15 @@ def create_app():
                 
         except Exception as e:
             print(f"⚠️ Database initialization issue: {e}")
+            
+    @app.before_request
+    def handle_preflight():
+        if request.method == "OPTIONS":
+            response = make_response()
+            response.headers.add("Access-Control-Allow-Origin", "*")
+            response.headers.add('Access-Control-Allow-Headers', "*")
+            response.headers.add('Access-Control-Allow-Methods', "*")
+            return response
     
     @app.route('/api/health')
     def health_check():
