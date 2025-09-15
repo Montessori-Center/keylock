@@ -80,51 +80,50 @@ class DataForSeoClient:
                 print(f"Response: {e.response.text}")
             raise
     
-    def get_keywords_for_keywords(
-    self,
-    keywords: List[str],
-    location_code: int = 2804,  # Ukraine
-    language_code: str = "ru",
-    search_partners: bool = False,
-    sort_by: str = "search_volume",
-    limit: int = 700,
-    include_seed_keyword: bool = True,
-    include_clickstream_data: bool = False,
-    include_serp_info: bool = True  # Включаем информацию о SERP
-) -> Dict:
-    """
-    Получение списка ключевых слов по seed keywords (LIVE режим)
-    Документация: https://docs.dataforseo.com/v3/keywords_data/google_ads/keywords_for_keywords/live/
-    
-    Args:
-        keywords: Список исходных ключевых слов (макс. 700)
-        location_code: Код локации (2804 для Украины)
-        language_code: Код языка
-        search_partners: Включать ли партнеров поиска
-        sort_by: Поле для сортировки результатов
-        limit: Максимальное количество результатов (макс. 700 для live)
-        include_seed_keyword: Включать ли исходные ключевые слова в результаты
-        include_clickstream_data: Включать ли данные Clickstream
-        include_serp_info: Включать ли информацию о SERP
-    """
-    
-    endpoint = "/keywords_data/google_ads/keywords_for_keywords/live"
-    
-    # Структура запроса по документации
-    data = [{
-        "keywords": keywords[:700],  # Ограничение API - макс 700 ключевых слов
-        "location_code": location_code,
-        "language_code": language_code,
-        "search_partners": search_partners,
-        "sort_by": sort_by,
-        "limit": limit,
-        "include_seed_keyword": include_seed_keyword,
-        "include_clickstream_data": include_clickstream_data,
-        "include_serp_info": include_serp_info,
-        "date_from": "2024-01-01",  # Для получения исторических данных
-    }]
-    
-    return self._make_request("POST", endpoint, data)
+    def get_keywords_for_keywords(self,
+        keywords: List[str],
+        location_code: int = 2804,  # Ukraine
+        language_code: str = "ru",
+        search_partners: bool = False,
+        sort_by: str = "search_volume",
+        limit: int = 700,
+        include_seed_keyword: bool = True,
+        include_clickstream_data: bool = False,
+        include_serp_info: bool = True  # Включаем информацию о SERP
+    ) -> Dict:
+        """
+        Получение списка ключевых слов по seed keywords (LIVE режим)
+        Документация: https://docs.dataforseo.com/v3/keywords_data/google_ads/keywords_for_keywords/live/
+        
+        Args:
+            keywords: Список исходных ключевых слов (макс. 700)
+            location_code: Код локации (2804 для Украины)
+            language_code: Код языка
+            search_partners: Включать ли партнеров поиска
+            sort_by: Поле для сортировки результатов
+            limit: Максимальное количество результатов (макс. 700 для live)
+            include_seed_keyword: Включать ли исходные ключевые слова в результаты
+            include_clickstream_data: Включать ли данные Clickstream
+            include_serp_info: Включать ли информацию о SERP
+        """
+        
+        endpoint = "/keywords_data/google_ads/keywords_for_keywords/live"
+        
+        # Структура запроса по документации
+        data = [{
+            "keywords": keywords[:700],  # Ограничение API - макс 700 ключевых слов
+            "location_code": location_code,
+            "language_code": language_code,
+            "search_partners": search_partners,
+            "sort_by": sort_by,
+            "limit": limit,
+            "include_seed_keyword": include_seed_keyword,
+            "include_clickstream_data": include_clickstream_data,
+            "include_serp_info": include_serp_info,
+            "date_from": "2024-01-01",  # Для получения исторических данных
+        }]
+        
+        return self._make_request("POST", endpoint, data)
     
     def parse_keywords_response(self, response: Dict) -> List[Dict]:
         """
