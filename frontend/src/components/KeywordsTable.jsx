@@ -1,3 +1,4 @@
+// frontend/src/components/KeywordsTable.jsx - ИСПРАВЛЕННАЯ ВЕРСИЯ
 import React, { useRef, useEffect, useState } from 'react';
 import { HotTable } from '@handsontable/react';
 import Handsontable from 'handsontable';
@@ -12,7 +13,7 @@ const KeywordsTable = ({
   selectedIds, 
   onSelectionChange, 
   onDataChange,
-  visibleColumns = [] // Новый пропс для видимых колонок
+  visibleColumns = []
 }) => {
   const hotTableRef = useRef(null);
   const [tableData, setTableData] = useState([]);
@@ -121,7 +122,7 @@ const KeywordsTable = ({
       organic_average_position: keyword.organic_average_position,
       organic_impression_share: keyword.organic_impression_share,
       labels: keyword.labels,
-      is_new: keyword.is_new // Добавляем флаг новой записи
+      is_new: keyword.is_new || false // ИСПРАВЛЕНО: добавлен флаг новой записи
     }));
     setTableData(data);
     
@@ -154,62 +155,131 @@ const KeywordsTable = ({
     
     // Передаем изменения наверх для сохранения
     const dataChanges = changes.filter(([row, prop]) => prop !== 'selected');
-    if (dataChanges.length > 0 && onDataChange) {
-      onDataChange(dataChanges);
-    }
-  };
-
-  // Генерация случайного светлого цвета для новых записей
-  const getRandomLightColor = () => {
-    const hue = Math.floor(Math.random() * 360);
-    return `hsl(${hue}, 30%, 95%)`;
-  };
-
-  // Настройка цветов для ячеек
-  const getCellRenderer = () => {
-    return function(instance, td, row, col, prop, value, cellProperties) {
-      const defaultRenderer = Handsontable.renderers.getRenderer(cellProperties.type || 'text');
-      defaultRenderer.apply(this, arguments);
-      
-      // Подсветка новых записей
-      if (tableData[row]?.is_new) {
-        td.style.backgroundColor = getRandomLightColor();
-        td.style.borderLeft = '3px solid #28a745'; // Зеленая полоска слева
-      }
-      
-      // Цветовая схема для полей
-      if (prop === 'has_ads' || prop === 'has_school_sites' || prop === 'has_google_maps' || prop === 'has_our_site') {
-        if (value === 'Да') {
-          td.style.backgroundColor = tableData[row]?.is_new ? getRandomLightColor() : '#d4edda';
-          td.style.color = '#155724';
-        } else if (value === 'Нет') {
-          td.style.backgroundColor = tableData[row]?.is_new ? getRandomLightColor() : '#f8d7da';
-          td.style.color = '#721c24';
+        if (dataChanges.length > 0 && onDataChange) {
+         onDataChange(dataChanges);
         }
-      }
-      
-      if (prop === 'intent_type') {
-        if (value === 'Коммерческий') {
-          td.style.backgroundColor = tableData[row]?.is_new ? getRandomLightColor() : '#d4edda';
-        } else if (value === 'Информационный') {
-          td.style.backgroundColor = tableData[row]?.is_new ? getRandomLightColor() : '#d1ecf1';
-        }
-      }
-      
-      if (prop === 'status') {
-        if (value === 'Enabled') {
-          td.style.backgroundColor = tableData[row]?.is_new ? getRandomLightColor() : '#d4edda';
-        } else if (value === 'Paused') {
-          td.style.backgroundColor = tableData[row]?.is_new ? getRandomLightColor() : '#fff3cd';
-        }
-      }
-      
-      // Выделение строки если она выбрана
-      if (tableData[row]?.selected) {
-        td.style.backgroundColor = '#e3f2fd';
-      }
     };
+
+  // ИСПРАВЛЕНО: более стабильная генерация цветов для новых записей
+    const getNewRecordColor = (id) => {
+      // Генерируем яркие пастельные цвета
+      const colors = [
+        '#fff2cc', // светло-желтый
+        '#e1d5e7', // светло-фиолетовый  
+        '#dae8fc', // светло-голубой
+        '#d5e8d4', // светло-зеленый
+        '#ffe6cc', // светло-оранжевый
+        '#f8cecc', // светло-красный
+        '#e1fffe', // светло-бирюзовый
+        '#fff2e6'  // светло-персиковый
+      ];
+      return colors[id % colors.length];
+    };
+
+  // ИСПРАВЛЕНО: настройка цветов для ячеек с правильной подсветкой новых записей
+  const getCellRenderer = () => {
+  return function(instance, td, row, col, prop, value, cellProperties) {
+    // Применяем базовый рендерер
+    Handsontable.renderers.TextRenderer.apply(this, arguments);
+    
+    const rowData = tableData[row];
+    if (!rowData) return;
+    
+    // Важно: сбрасываем ВСЕ стили
+    td.className = td.className.replace(/\s*(htDimmed|htInvalid|htDebug)/g, '');
+    td.style.backgroundColor = '';
+    td.style.borderLeft = '';
+    td.style.color = '';
+    td.style.fontWeight = '';
+    
+    // Удаляем старые значки
+    const existingBadge = td.querySelector('.new-badge');
+    if (existingBadge) {
+      existingBadge.remove();
+    }
+    
+    let backgroundColor = '';
+    let textColor = '';
+    let fontWeight = '';
+    
+    // ПЕРВЫЙ ПРИОРИТЕТ: Подсветка новых записей
+    if (rowData.is_new === true) {
+      console.log(`🎨 Painting NEW row ${row}: ${rowData.keyword}`);
+      backgroundColor = getNewRecordColor(rowData.id);
+      td.style.borderLeft = '4px solid #28a745';
+      
+      // Добавляем значок NEW в первую колонку
+      if (col === 0) {
+        const badge = document.createElement('div');
+        badge.className = 'new-badge';
+        badge.innerHTML = 'NEW';
+        badge.style.cssText = `
+          position: absolute;
+          top: 0px;
+          right: 0px;
+          background: #28a745;
+          color: white;
+          font-size: 7px;
+          padding: 1px 3px;
+          border-radius: 0 0 0 3px;
+          font-weight: bold;
+          z-index: 10;
+          line-height: 1;
+        `;
+        td.style.position = 'relative';
+        td.appendChild(badge);
+      }
+    }
+    
+    // ВТОРОЙ ПРИОРИТЕТ: Цвета для конкретных полей
+    if (prop === 'has_ads' || prop === 'has_school_sites' || prop === 'has_google_maps' || prop === 'has_our_site') {
+      if (value === 'Да') {
+        if (!rowData.is_new) backgroundColor = '#d4edda';
+        textColor = '#155724';
+        fontWeight = 'bold';
+      } else if (value === 'Нет') {
+        if (!rowData.is_new) backgroundColor = '#f8d7da';
+        textColor = '#721c24';
+      }
+    }
+    
+    if (prop === 'intent_type') {
+      if (value === 'Коммерческий') {
+        if (!rowData.is_new) backgroundColor = '#d4edda';
+        textColor = '#155724';
+        fontWeight = 'bold';
+      } else if (value === 'Информационный') {
+        if (!rowData.is_new) backgroundColor = '#d1ecf1';
+        textColor = '#0c5460';
+      }
+    }
+    
+    if (prop === 'status') {
+      if (value === 'Enabled') {
+        if (!rowData.is_new) backgroundColor = '#d4edda';
+        textColor = '#155724';
+        fontWeight = 'bold';
+      } else if (value === 'Paused') {
+        if (!rowData.is_new) backgroundColor = '#fff3cd';
+        textColor = '#856404';
+        fontWeight = 'bold';
+      }
+    }
+    
+    // ТРЕТИЙ ПРИОРИТЕТ: Выделение выбранной строки
+    if (rowData.selected) {
+      backgroundColor = '#e3f2fd';
+      td.style.borderColor = '#2196f3';
+      td.style.borderWidth = '1px';
+      td.style.borderStyle = 'solid';
+    }
+    
+    // Применяем все стили
+    if (backgroundColor) td.style.backgroundColor = backgroundColor;
+    if (textColor) td.style.color = textColor;
+    if (fontWeight) td.style.fontWeight = fontWeight;
   };
+};
 
   if (loading) {
     return <div className="loading">Загрузка данных...</div>;

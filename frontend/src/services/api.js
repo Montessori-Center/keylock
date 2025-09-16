@@ -27,6 +27,13 @@ const api = {
     });
     return response.data;
   },
+  
+  rejectChanges: async (adGroupId) => {
+      const response = await axios.post(`${API_BASE_URL}/keywords/reject-changes`, {
+        ad_group_id: adGroupId
+      });
+      return response.data;
+    },
 
   bulkAction: async (action, keywordIds, field = null, value = null) => {
     const data = {

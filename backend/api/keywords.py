@@ -1,4 +1,4 @@
-# api/keywords.py - версия с прямым подключением к БД
+# api/keywords.py - ИСПРАВЛЕННАЯ ВЕРСИЯ
 from flask import Blueprint, request, jsonify
 from config import Config
 import pymysql
@@ -54,6 +54,44 @@ def accept_changes():
     finally:
         if connection:
             connection.close()
+            
+@keywords_bp.route('/reject-changes', methods=['POST'])
+def reject_changes():
+    """Отклонить изменения - удалить новые ключевые слова"""
+    connection = None
+    try:
+        data = request.json
+        ad_group_id = data.get('ad_group_id')
+        
+        if not ad_group_id:
+            return jsonify({'success': False, 'error': 'No ad_group_id provided'}), 400
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # Удаляем все новые ключевые слова для данной группы
+        cursor.execute("""
+            DELETE FROM keywords 
+            WHERE ad_group_id = %s AND is_new = TRUE
+        """, (ad_group_id,))
+        
+        affected_rows = cursor.rowcount
+        connection.commit()
+        cursor.close()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Отклонено и удалено {affected_rows} новых ключевых слов'
+        })
+        
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        print(f"Error in reject_changes: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if connection:
+            connection.close()
 
 @keywords_bp.route('/list/<int:ad_group_id>', methods=['GET'])
 def get_keywords(ad_group_id):
@@ -62,11 +100,10 @@ def get_keywords(ad_group_id):
     
     connection = None
     try:
-        # Прямое подключение к БД
         connection = get_db_connection()
         cursor = connection.cursor()
         
-        # Запрос ключевых слов
+        # ИСПРАВЛЕНО: добавлено поле is_new в запрос
         query = """
             SELECT 
                 id, keyword, criterion_type, max_cpc, max_cpm, status,
@@ -74,7 +111,7 @@ def get_keywords(ad_group_id):
                 has_our_site, intent_type, recommendation,
                 avg_monthly_searches, three_month_change, yearly_change,
                 competition, competition_percent, min_top_of_page_bid,
-                max_top_of_page_bid
+                max_top_of_page_bid, is_new
             FROM keywords 
             WHERE ad_group_id = %s 
             AND status != 'Removed'
@@ -88,7 +125,6 @@ def get_keywords(ad_group_id):
         # Преобразуем данные для frontend
         keywords_data = []
         for row in keywords:
-            # Преобразуем Decimal в float и bool значения
             keyword_dict = {
                 'id': row['id'],
                 'keyword': row['keyword'],
@@ -109,16 +145,18 @@ def get_keywords(ad_group_id):
                 'competition': row['competition'],
                 'competition_percent': float(row['competition_percent']) if row['competition_percent'] else None,
                 'min_top_of_page_bid': float(row['min_top_of_page_bid']) if row['min_top_of_page_bid'] else None,
-                'max_top_of_page_bid': float(row['max_top_of_page_bid']) if row['max_top_of_page_bid'] else None
+                'max_top_of_page_bid': float(row['max_top_of_page_bid']) if row['max_top_of_page_bid'] else None,
+                'is_new': bool(row.get('is_new', False))  # ИСПРАВЛЕНО: добавлено поле is_new
             }
             keywords_data.append(keyword_dict)
-            print(f"  - {keyword_dict['id']}: {keyword_dict['keyword']}")
+            print(f"  - {keyword_dict['id']}: {keyword_dict['keyword']} (новое: {keyword_dict['is_new']})")
         
-        # Статистика
+        # ИСПРАВЛЕНО: статистика теперь включает подсчет новых изменений
         total_count = len(keywords_data)
         commercial_count = sum(1 for k in keywords_data if k.get('intent_type') == 'Коммерческий')
         keyword_texts = [k['keyword'].lower() for k in keywords_data]
         duplicates_count = len(keyword_texts) - len(set(keyword_texts))
+        new_changes_count = sum(1 for k in keywords_data if k.get('is_new', False))  # ДОБАВЛЕНО
         
         cursor.close()
         
@@ -128,11 +166,12 @@ def get_keywords(ad_group_id):
             'stats': {
                 'total': total_count,
                 'commercial': commercial_count,
-                'duplicates': duplicates_count
+                'duplicates': duplicates_count,
+                'newChanges': new_changes_count  # ДОБАВЛЕНО: количество новых изменений
             }
         }
         
-        print(f"Returning {len(keywords_data)} keywords successfully")
+        print(f"Returning {len(keywords_data)} keywords successfully (новых: {new_changes_count})")
         return jsonify(result)
         
     except Exception as e:
@@ -147,7 +186,8 @@ def get_keywords(ad_group_id):
             'stats': {
                 'total': 0,
                 'commercial': 0,
-                'duplicates': 0
+                'duplicates': 0,
+                'newChanges': 0  # ДОБАВЛЕНО
             }
         })
     finally:
@@ -332,11 +372,12 @@ def paste_keywords():
                     (ad_group_id, keyword_text)
                 )
                 if not cursor.fetchone():
+                    # ИСПРАВЛЕНО: новые слова помечаются как is_new = TRUE
                     cursor.execute("""
                         INSERT INTO keywords (
                             campaign_id, ad_group_id, keyword, criterion_type, 
-                            status, max_cpc
-                        ) VALUES (%s, %s, %s, 'Phrase', 'Enabled', 3.61)
+                            status, max_cpc, is_new
+                        ) VALUES (%s, %s, %s, 'Phrase', 'Enabled', 3.61, TRUE)
                     """, (campaign_id, ad_group_id, keyword_text))
                     added_count += 1
                     print(f"Added keyword: {keyword_text}")
@@ -345,7 +386,7 @@ def paste_keywords():
                     print(f"Skipped duplicate: {keyword_text}")
                     
         elif paste_type == 'full_data':
-            # Вставка полных данных - ИСПРАВЛЕННАЯ ВЕРСИЯ
+            # Вставка полных данных
             for data_string in paste_data:
                 try:
                     data_string = data_string.strip()
@@ -354,8 +395,7 @@ def paste_keywords():
                     
                     print(f"Processing data string: {data_string[:100]}...")
                     
-                    # ИСПРАВЛЕНИЕ: Парсим строку более умным способом
-                    # Ищем известные значения criterion_type
+                    # Парсим строку
                     criterion_types = ['Phrase', 'Broad', 'Exact']
                     keyword_end_pos = -1
                     criterion_type = None
@@ -371,16 +411,11 @@ def paste_keywords():
                         print(f"Could not parse data string - no criterion type found: {data_string}")
                         continue
                     
-                    # Извлекаем ключевое слово
                     keyword_text = data_string[:keyword_end_pos].strip()
-                    
-                    # Остальная часть строки после ключевого слова и criterion_type
                     remaining_data = data_string[keyword_end_pos + len(criterion_type) + 2:].strip()
                     
-                    # Разбираем оставшиеся поля
                     fields = remaining_data.split(' ')
                     
-                    # Проверяем что ключевое слово не пустое
                     if not keyword_text:
                         print(f"Empty keyword, skipping")
                         continue
@@ -395,7 +430,6 @@ def paste_keywords():
                         skipped_count += 1
                         continue
                     
-                    # Преобразуем данные
                     def convert_value(val):
                         if val == 'None' or val == '':
                             return None
@@ -411,14 +445,12 @@ def paste_keywords():
                         except ValueError:
                             return val
                     
-                    # Собираем все поля (keyword + criterion_type + остальные)
                     all_fields = [keyword_text, criterion_type] + fields
                     
-                    # Дополняем недостающие поля значениями None
                     while len(all_fields) < 23:
                         all_fields.append('None')
                     
-                    # Вставляем со всеми полями
+                    # ИСПРАВЛЕНО: новые слова помечаются как is_new = TRUE
                     cursor.execute("""
                         INSERT INTO keywords (
                             campaign_id, ad_group_id, keyword, criterion_type, max_cpc, max_cpm,
@@ -426,13 +458,13 @@ def paste_keywords():
                             intent_type, recommendation, avg_monthly_searches, three_month_change, 
                             yearly_change, competition, competition_percent, min_top_of_page_bid, 
                             max_top_of_page_bid, ad_impression_share, organic_average_position, 
-                            organic_impression_share, labels
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            organic_impression_share, labels, is_new
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """, (
                         campaign_id,
                         ad_group_id,
-                        keyword_text,                    # keyword (уже извлечено)
-                        criterion_type,                  # criterion_type (уже извлечено)
+                        keyword_text,
+                        criterion_type,
                         convert_value(all_fields[2]),   # max_cpc
                         convert_value(all_fields[3]),   # max_cpm
                         convert_value(all_fields[4]),   # status
@@ -453,7 +485,8 @@ def paste_keywords():
                         convert_value(all_fields[19]),  # ad_impression_share
                         convert_value(all_fields[20]),  # organic_average_position
                         convert_value(all_fields[21]),  # organic_impression_share
-                        convert_value(all_fields[22]) if len(all_fields) > 22 else None  # labels
+                        convert_value(all_fields[22]) if len(all_fields) > 22 else None,  # labels
+                        True  # is_new = TRUE
                     ))
                     added_count += 1
                     print(f"Added full data for keyword: {keyword_text}")
@@ -509,7 +542,7 @@ def add_keywords():
         
         campaign_id = result['campaign_id']
         
-        # Разбираем ключевые слова (через запятую или новую строку)
+        # Разбираем ключевые слова
         keywords = [k.strip() for k in keywords_text.replace('\n', ',').split(',') if k.strip()]
         
         added_count = 0
@@ -523,6 +556,7 @@ def add_keywords():
             )
             
             if not cursor.fetchone():
+                # ИСПРАВЛЕНО: новые слова помечаются как is_new = TRUE
                 cursor.execute("""
                     INSERT INTO keywords (
                         campaign_id, ad_group_id, keyword, criterion_type, 

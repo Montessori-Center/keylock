@@ -33,18 +33,22 @@ const Sidebar = ({ isOpen, onToggle, campaigns, selectedCampaign, selectedAdGrou
               </div>
               
               {expandedCampaigns.includes(campaign.id) && (
-                <div className="ad-groups">
-                  {campaign.adGroups.map(adGroup => (
-                    <div 
-                      key={adGroup.id}
-                      className={`ad-group-item ${selectedAdGroup?.id === adGroup.id ? 'active' : ''}`}
-                      onClick={() => onSelectAdGroup(adGroup)}
-                    >
-                      {adGroup.name}
-                    </div>
-                  ))}
-                </div>
-              )}
+                  <div className="ad-groups">
+                    {campaign.adGroups.map(adGroup => (
+                      <div 
+                        key={adGroup.id}
+                        className={`ad-group-item ${selectedAdGroup?.id === adGroup.id ? 'active' : ''} ${adGroup.newChanges > 0 ? 'has-changes' : ''}`}
+                        onClick={() => onSelectAdGroup(adGroup)}
+                        title={adGroup.newChanges > 0 ? `${adGroup.newChanges} новых изменений` : ''}
+                      >
+                        <span className="ad-group-name">{adGroup.name}</span>
+                        {adGroup.newChanges > 0 && (
+                          <span className="changes-badge">{adGroup.newChanges}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
             </div>
           ))}
         </div>

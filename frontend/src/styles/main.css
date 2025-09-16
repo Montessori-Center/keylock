@@ -1,4 +1,4 @@
-/* src/styles/main.css */
+/* src/styles/main.css - ОБНОВЛЕННАЯ ВЕРСИЯ */
 :root {
   --primary-color: #4285f4;
   --secondary-color: #34a853;
@@ -9,6 +9,7 @@
   --border-color: #dadce0;
   --sidebar-width: 300px;
   --header-height: 60px;
+  --new-record-highlight: #28a745;
 }
 
 * {
@@ -33,8 +34,8 @@ body {
 }
 
 .logo-image {
-  height: 28px;  /* Отрегулируй высоту под свой логотип */
-  width: auto;   /* Сохраняет пропорции */
+  height: 28px;
+  width: auto;
   object-fit: contain;
   cursor: pointer;
 }
@@ -213,8 +214,14 @@ body {
   transition: opacity 0.2s;
 }
 
-.btn:hover {
+.btn:hover:not(:disabled) {
   opacity: 0.9;
+}
+
+.btn:disabled {
+  background-color: grey;
+  color: white;
+  cursor: not-allowed;
 }
 
 .btn-purple {
@@ -250,6 +257,12 @@ body {
 .btn-orange {
   background-color: #fd7e14;
   color: white;
+  position: relative;
+}
+
+/* ДОБАВЛЕНО: стиль для показа количества новых изменений на кнопке */
+.btn-orange:disabled {
+  background-color: #6c757d;
 }
 
 /* Keywords Table Container */
@@ -275,6 +288,36 @@ body {
   background-color: var(--light-gray);
   font-weight: 500;
   font-size: 12px;
+}
+
+/* ДОБАВЛЕНО: стили для новых записей */
+.keywords-handsontable .new-record {
+  position: relative;
+}
+
+.keywords-handsontable .new-record::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background-color: var(--new-record-highlight);
+  z-index: 5;
+}
+
+.new-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background: var(--new-record-highlight);
+  color: white;
+  font-size: 9px;
+  padding: 1px 3px;
+  border-radius: 2px;
+  font-weight: bold;
+  z-index: 10;
+  pointer-events: none;
 }
 
 /* Bottom Actions */
@@ -323,6 +366,12 @@ body {
   color: #5f6368;
 }
 
+/* ДОБАВЛЕНО: выделение новых изменений в статистике */
+.stats .new-changes {
+  color: var(--new-record-highlight);
+  font-weight: bold;
+}
+
 /* No Selection */
 .no-selection {
   display: flex;
@@ -351,6 +400,54 @@ body {
 .modal-footer {
   background-color: var(--light-gray);
   border-top: 1px solid var(--border-color);
+}
+
+/* Стили для групп объявлений с изменениями */
+.ad-group-item.has-changes {
+  background-color: #fff3cd !important;
+  border-left: 3px solid #ffc107;
+  font-weight: 500;
+}
+
+.ad-group-item.has-changes:hover {
+  background-color: #fff3cd !important;
+}
+
+.ad-group-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.changes-badge {
+  background: #ffc107;
+  color: #856404;
+  font-size: 10px;
+  padding: 2px 5px;
+  border-radius: 10px;
+  font-weight: bold;
+  min-width: 18px;
+  text-align: center;
+}
+
+/* ДОБАВЛЕНО: анимации для новых записей */
+@keyframes newRecordPulse {
+  0% {
+    border-left-color: var(--new-record-highlight);
+    border-left-width: 3px;
+  }
+  50% {
+    border-left-color: rgba(40, 167, 69, 0.5);
+    border-left-width: 5px;
+  }
+  100% {
+    border-left-color: var(--new-record-highlight);
+    border-left-width: 3px;
+  }
+}
+
+.new-record-highlight {
+  animation: newRecordPulse 2s ease-in-out infinite;
 }
 
 /* Responsive */
