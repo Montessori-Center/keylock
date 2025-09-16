@@ -247,6 +247,11 @@ body {
   color: white;
 }
 
+.btn-orange {
+  background-color: #fd7e14;
+  color: white;
+}
+
 /* Keywords Table Container */
 .keywords-table-container {
   flex: 1;

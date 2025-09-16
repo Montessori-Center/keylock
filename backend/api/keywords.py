@@ -15,6 +15,45 @@ def get_db_connection():
         database=Config.DB_NAME,
         cursorclass=pymysql.cursors.DictCursor
     )
+    
+@keywords_bp.route('/accept-changes', methods=['POST'])
+def accept_changes():
+    """Принять изменения - убрать подсветку новых слов"""
+    connection = None
+    try:
+        data = request.json
+        ad_group_id = data.get('ad_group_id')
+        
+        if not ad_group_id:
+            return jsonify({'success': False, 'error': 'No ad_group_id provided'}), 400
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # Сбрасываем флаг is_new для всех ключевых слов группы
+        cursor.execute("""
+            UPDATE keywords 
+            SET is_new = FALSE 
+            WHERE ad_group_id = %s AND is_new = TRUE
+        """, (ad_group_id,))
+        
+        affected_rows = cursor.rowcount
+        connection.commit()
+        cursor.close()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Принято {affected_rows} новых изменений'
+        })
+        
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        print(f"Error in accept_changes: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if connection:
+            connection.close()
 
 @keywords_bp.route('/list/<int:ad_group_id>', methods=['GET'])
 def get_keywords(ad_group_id):
@@ -487,8 +526,8 @@ def add_keywords():
                 cursor.execute("""
                     INSERT INTO keywords (
                         campaign_id, ad_group_id, keyword, criterion_type, 
-                        status, max_cpc
-                    ) VALUES (%s, %s, %s, 'Phrase', 'Enabled', 3.61)
+                        status, max_cpc, is_new
+                    ) VALUES (%s, %s, %s, 'Phrase', 'Enabled', 3.61, TRUE)
                 """, (campaign_id, ad_group_id, keyword))
                 added_count += 1
             else:

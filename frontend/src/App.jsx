@@ -14,6 +14,7 @@ import { toast } from 'react-toastify';
 
 function App() {
   // State
+  const [visibleColumns, setVisibleColumns] = useState([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [campaigns, setCampaigns] = useState([]);
   const [selectedCampaign, setSelectedCampaign] = useState(null);
@@ -83,6 +84,46 @@ function App() {
         }
       }, 100); // Небольшая задержка
     });
+  };
+  
+  useEffect(() => {
+    loadColumnSettings();
+  }, []);
+
+  const loadColumnSettings = async () => {
+    try {
+      const response = await api.getSettings();
+      if (response.success && response.settings.visible_columns) {
+        setVisibleColumns(response.settings.visible_columns);
+      }
+    } catch (error) {
+      console.error('Error loading column settings:', error);
+    }
+  };
+  
+  // Обновление колонок когда меняются настройки
+  const handleSettingsChange = (newSettings) => {
+    if (newSettings.visible_columns) {
+      setVisibleColumns(newSettings.visible_columns);
+    }
+  };
+
+  // Новый обработчик для принятия изменений
+  const handleAcceptChanges = async () => {
+    if (!selectedAdGroup) {
+      toast.warning('Выберите группу объявлений');
+      return;
+    }
+
+    try {
+      const response = await api.acceptChanges(selectedAdGroup.id);
+      if (response.success) {
+        toast.success(response.message);
+        loadKeywords(selectedAdGroup.id);
+      }
+    } catch (error) {
+      toast.error('Ошибка принятия изменений');
+    }
   };
 
   // Load campaigns on mount
@@ -428,24 +469,27 @@ function App() {
             <button className="btn btn-red" onClick={handleSaveToDB}>
               Выгрузить данные в БД
             </button>
+            <button className="btn btn-orange" onClick={handleAcceptChanges}>
+              Принять изменения
+            </button>
           </div>
           
-          {selectedAdGroup ? (
+            {selectedAdGroup ? (
             <KeywordsTable 
               keywords={keywords}
               loading={loading}
               selectedIds={selectedKeywordIds}
               onSelectionChange={setSelectedKeywordIds}
               onDataChange={(changes) => {
-                // Обработка изменений в таблице
                 console.log('Data changes:', changes);
               }}
+              visibleColumns={visibleColumns} // Передаем настройки колонок
             />
-          ) : (
+            ) : (
             <div className="no-selection">
-              <h3>Выберите группу объявлений</h3>
+                <h3>Выберите группу объявлений</h3>
             </div>
-          )}
+        )}
           
           <div className="bottom-actions">
             <div className="bulk-actions">
@@ -483,11 +527,10 @@ function App() {
       </div>
 
       {/* Modals */}
-      <SettingsModal show={showSettings} onHide={() => setShowSettings(false)} />
-      <AddKeywordsModal 
-        show={showAddKeywords} 
-        onHide={() => setShowAddKeywords(false)}
-        onAdd={handleAddKeywords}
+      <SettingsModal 
+        show={showSettings} 
+        onHide={() => setShowSettings(false)}
+        onSettingsChange={handleSettingsChange} // Новый пропс
       />
       <AddNewOutputModal
         show={showAddNewOutput}

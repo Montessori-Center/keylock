@@ -140,7 +140,7 @@ class DataForSeoClient:
     
     def parse_keywords_response(self, response: Dict) -> List[Dict]:
         """
-        Парсинг ответа с ключевыми словами - ИСПРАВЛЕННАЯ ВЕРСИЯ
+        Парсинг ответа с ключевыми словами
         """
         debug_print(f"🔄 parse_keywords_response начат")
         keywords_data = []
@@ -166,8 +166,6 @@ class DataForSeoClient:
             debug_print(f"📊 Количество result items: {len(result_items)}")
             
             # ИСПРАВЛЕНИЕ: В Google Ads API каждый элемент result[] - это уже ключевое слово
-            # НЕ НУЖНО искать result[].items[] - данные лежат прямо в result[]
-            
             for keyword_item in result_items:
                 debug_print(f"🔄 Обработка keyword с ключами: {list(keyword_item.keys())}")
                 
@@ -192,7 +190,6 @@ class DataForSeoClient:
                 
                 if monthly_searches and len(monthly_searches) >= 3:
                     try:
-                        # Изменение за 3 месяца (берем последний и предпоследний третий месяц)
                         current = monthly_searches[-1].get("search_volume", 0)
                         three_months_ago = monthly_searches[-3].get("search_volume", 0)
                         if three_months_ago > 0:
@@ -202,7 +199,6 @@ class DataForSeoClient:
                 
                 if monthly_searches and len(monthly_searches) >= 12:
                     try:
-                        # Изменение за год
                         current = monthly_searches[-1].get("search_volume", 0)
                         year_ago = monthly_searches[-12].get("search_volume", 0)
                         if year_ago > 0:
@@ -210,7 +206,7 @@ class DataForSeoClient:
                     except (IndexError, ZeroDivisionError, TypeError):
                         debug_print("⚠️ Ошибка расчета yearly_change")
                 
-                # Определяем тип конкуренции (переводим на русский)
+                # Определяем тип конкуренции
                 competition_map = {
                     "HIGH": "Высокая",
                     "MEDIUM": "Средняя",
@@ -228,8 +224,6 @@ class DataForSeoClient:
                     "three_month_change": round(three_month_change, 2) if three_month_change else None,
                     "yearly_change": round(yearly_change, 2) if yearly_change else None,
                     "cpc": cpc,
-                    
-                    # Дополнительные поля (пока пустые, так как нет SERP данных в этом эндпоинте)
                     "serp_item_types": [],
                     "se_results_count": 0,
                     "keyword_difficulty": None

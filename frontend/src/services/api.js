@@ -20,6 +20,13 @@ const api = {
     });
     return response.data;
   },
+  
+  acceptChanges: async (adGroupId) => {
+    const response = await axios.post(`${API_BASE_URL}/keywords/accept-changes`, {
+      ad_group_id: adGroupId
+    });
+    return response.data;
+  },
 
   bulkAction: async (action, keywordIds, field = null, value = null) => {
     const data = {
