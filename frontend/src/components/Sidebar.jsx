@@ -1,9 +1,9 @@
-// src/components/Sidebar.jsx
+// ИСПРАВЛЕННЫЙ компонент Sidebar.jsx
 import React, { useState } from 'react';
 import { FaChevronRight, FaChevronDown, FaBars } from 'react-icons/fa';
 
 const Sidebar = ({ isOpen, onToggle, campaigns, selectedCampaign, selectedAdGroup, onSelectAdGroup }) => {
-  const [expandedCampaigns, setExpandedCampaigns] = useState([1]); // По умолчанию развернута первая кампания
+  const [expandedCampaigns, setExpandedCampaigns] = useState([1]);
 
   const toggleCampaign = (campaignId) => {
     setExpandedCampaigns(prev => 
@@ -22,7 +22,7 @@ const Sidebar = ({ isOpen, onToggle, campaigns, selectedCampaign, selectedAdGrou
       {isOpen && (
         <div className="sidebar-content">
           <h5>Кампании</h5>
-          {campaigns.map(campaign => (
+          {campaigns && campaigns.length > 0 ? campaigns.map(campaign => (
             <div key={campaign.id} className="campaign-item">
               <div 
                 className="campaign-header"
@@ -32,25 +32,27 @@ const Sidebar = ({ isOpen, onToggle, campaigns, selectedCampaign, selectedAdGrou
                 <span className="campaign-name">{campaign.name}</span>
               </div>
               
-              {expandedCampaigns.includes(campaign.id) && (
-                  <div className="ad-groups">
-                    {campaign.adGroups.map(adGroup => (
-                      <div 
-                        key={adGroup.id}
-                        className={`ad-group-item ${selectedAdGroup?.id === adGroup.id ? 'active' : ''} ${adGroup.newChanges > 0 ? 'has-changes' : ''}`}
-                        onClick={() => onSelectAdGroup(adGroup)}
-                        title={adGroup.newChanges > 0 ? `${adGroup.newChanges} новых изменений` : ''}
-                      >
-                        <span className="ad-group-name">{adGroup.name}</span>
-                        {adGroup.newChanges > 0 && (
-                          <span className="changes-badge">{adGroup.newChanges}</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
+              {expandedCampaigns.includes(campaign.id) && campaign.adGroups && (
+                <div className="ad-groups">
+                  {campaign.adGroups.map(adGroup => (
+                    <div 
+                      key={adGroup.id}
+                      className={`ad-group-item ${selectedAdGroup?.id === adGroup.id ? 'active' : ''} ${adGroup.newChanges > 0 ? 'has-changes' : ''}`}
+                      onClick={() => onSelectAdGroup(adGroup)}
+                      title={adGroup.newChanges > 0 ? `${adGroup.newChanges} новых изменений` : ''}
+                    >
+                      <span className="ad-group-name">{adGroup.name}</span>
+                      {adGroup.newChanges > 0 && (
+                        <span className="changes-badge">{adGroup.newChanges}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          ))}
+          )) : (
+            <div className="no-campaigns">Нет кампаний</div>
+          )}
         </div>
       )}
     </div>
@@ -58,4 +60,3 @@ const Sidebar = ({ isOpen, onToggle, campaigns, selectedCampaign, selectedAdGrou
 };
 
 export default Sidebar;
-

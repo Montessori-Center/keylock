@@ -260,11 +260,6 @@ body {
   position: relative;
 }
 
-/* ДОБАВЛЕНО: стиль для показа количества новых изменений на кнопке */
-.btn-orange:disabled {
-  background-color: #6c757d;
-}
-
 /* Keywords Table Container */
 .keywords-table-container {
   flex: 1;
@@ -428,6 +423,30 @@ body {
   font-weight: bold;
   min-width: 18px;
   text-align: center;
+}
+
+/* Стили для отладки сайдбара */
+.no-campaigns {
+  padding: 10px;
+  color: #999;
+  font-style: italic;
+}
+
+.campaign-item {
+  margin-bottom: 5px;
+}
+
+.campaign-header {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 4px;
+  background-color: #f8f9fa;
+}
+
+.campaign-header:hover {
+  background-color: #e9ecef;
 }
 
 /* ДОБАВЛЕНО: анимации для новых записей */

@@ -158,33 +158,39 @@ function App() {
     }
   }, [selectedAdGroup]);
 
-  const loadCampaigns = async () => {
-  try {
-    setCampaigns([
-      {
-        id: 1,
-        name: 'montessori.ua',
-        adGroups: [
-          { id: 1, name: '001 Уроки фортепиано (RU)', newChanges: 0 },
-          { id: 2, name: '002 Уроки вокала (RU)', newChanges: 0 },
-          { id: 3, name: '003 Уроки классической гитары (RU)', newChanges: 0 },
-          { id: 4, name: '004 Уроки электрогитары (RU)', newChanges: 0 },
-          { id: 5, name: '005 Уроки бас-гитары (RU)', newChanges: 0 },
-          { id: 6, name: '006 Уроки барабанов (RU)', newChanges: 0 },
-          { id: 7, name: '007 Уроки скрипки (RU)', newChanges: 0 },
-          { id: 8, name: '008 Уроки виолончели (RU)', newChanges: 0 },
-          { id: 9, name: '009 Уроки саксофона (RU)', newChanges: 0 },
-          { id: 10, name: '010 Уроки флейты (RU)', newChanges: 0 },
-        ]
+  // ИСПРАВЛЕННАЯ функция loadCampaigns
+    const loadCampaigns = async () => {
+      try {
+        console.log('🔄 Loading campaigns...');
+        const campaignData = [
+          {
+            id: 1,
+            name: 'montessori.ua',
+            adGroups: [
+              { id: 1, name: '001 Уроки фортепиано (RU)', newChanges: 0 },
+              { id: 2, name: '002 Уроки вокала (RU)', newChanges: 0 },
+              { id: 3, name: '003 Уроки классической гитары (RU)', newChanges: 0 },
+              { id: 4, name: '004 Уроки электрогитары (RU)', newChanges: 0 },
+              { id: 5, name: '005 Уроки бас-гитары (RU)', newChanges: 0 },
+              { id: 6, name: '006 Уроки барабанов (RU)', newChanges: 0 },
+              { id: 7, name: '007 Уроки скрипки (RU)', newChanges: 0 },
+              { id: 8, name: '008 Уроки виолончели (RU)', newChanges: 0 },
+              { id: 9, name: '009 Уроки саксофона (RU)', newChanges: 0 },
+              { id: 10, name: '010 Уроки флейты (RU)', newChanges: 0 },
+            ]
+          }
+        ];
+        
+        setCampaigns(campaignData);
+        setSelectedCampaign(campaignData[0]);
+        console.log('✅ Campaigns loaded:', campaignData);
+        
+        // Загружаем статистику после установки кампаний
+        setTimeout(() => loadAdGroupsStats(), 1000);
+      } catch (error) {
+        console.error('❌ Error loading campaigns:', error);
+        toast.error('Ошибка загрузки кампаний');
       }
-    ]);
-    setSelectedCampaign({ id: 1, name: 'montessori.ua' });
-    
-    // Загружаем статистику после установки кампаний
-    setTimeout(() => loadAdGroupsStats(), 500);
-    } catch (error) {
-      toast.error('Ошибка загрузки кампаний');
-    }
     };
 
   // ИСПРАВЛЕНО: loadKeywords теперь считает новые изменения
@@ -393,36 +399,51 @@ function App() {
     }
   };
   
-  const loadAdGroupsStats = async () => {
-  try {
-    // Получаем статистику новых изменений для каждой группы
-    const adGroupsWithStats = await Promise.all(
-      campaigns[0]?.adGroups.map(async (adGroup) => {
-        try {
-          const response = await api.getKeywords(adGroup.id);
-          const newChangesCount = response.success 
-            ? response.data.filter(keyword => keyword.is_new).length 
-            : 0;
-          return {
-            ...adGroup,
-            newChanges: newChangesCount
-          };
-        } catch (error) {
-          console.error(`Error loading stats for ad group ${adGroup.id}:`, error);
-          return { ...adGroup, newChanges: 0 };
+  // ИСПРАВЛЕННАЯ функция loadAdGroupsStats
+    const loadAdGroupsStats = async () => {
+      try {
+        console.log('🔄 Loading ad groups stats...');
+        
+        if (!campaigns || campaigns.length === 0) {
+          console.log('⚠️ No campaigns to load stats for');
+          return;
         }
-      }) || []
-    );
-
-    // Обновляем кампании с новой статистикой
-    setCampaigns([{
-      id: 1,
-      name: 'montessori.ua',
-      adGroups: adGroupsWithStats
-    }]);
-    } catch (error) {
-      console.error('Error loading ad groups stats:', error);
-    }
+    
+        // Получаем статистику новых изменений для каждой группы
+        const adGroupsWithStats = await Promise.all(
+          campaigns[0]?.adGroups?.map(async (adGroup) => {
+            try {
+              console.log(`🔍 Loading stats for ad group ${adGroup.id}: ${adGroup.name}`);
+              const response = await api.getKeywords(adGroup.id);
+              const newChangesCount = response.success 
+                ? response.data.filter(keyword => keyword.is_new).length 
+                : 0;
+              console.log(`📊 Ad group ${adGroup.id} has ${newChangesCount} new changes`);
+              
+              return {
+                ...adGroup,
+                newChanges: newChangesCount
+              };
+            } catch (error) {
+              console.error(`❌ Error loading stats for ad group ${adGroup.id}:`, error);
+              return { ...adGroup, newChanges: 0 };
+            }
+          }) || []
+        );
+    
+        // Обновляем кампании с новой статистикой
+        const updatedCampaigns = [{
+          id: 1,
+          name: 'montessori.ua',
+          adGroups: adGroupsWithStats
+        }];
+        
+        setCampaigns(updatedCampaigns);
+        console.log('✅ Ad groups stats updated:', adGroupsWithStats);
+        
+      } catch (error) {
+        console.error('❌ Error loading ad groups stats:', error);
+      }
     };
 
   const handleChangeField = async (field, value) => {
@@ -569,8 +590,7 @@ function App() {
           </button>
           
           <button 
-            className="btn" 
-            style={{ backgroundColor: '#dc3545', color: 'white' }}
+            className="btn btn-orange" 
             onClick={handleRejectChanges}
             disabled={!selectedAdGroup || keywordsStats.newChanges === 0}
             title={keywordsStats.newChanges > 0 
