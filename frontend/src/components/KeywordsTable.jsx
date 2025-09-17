@@ -176,110 +176,101 @@ const KeywordsTable = ({
       return colors[id % colors.length];
     };
 
-  // ИСПРАВЛЕНО: настройка цветов для ячеек с правильной подсветкой новых записей
-  const getCellRenderer = () => {
-  return function(instance, td, row, col, prop, value, cellProperties) {
-    // Применяем базовый рендерер
-    Handsontable.renderers.TextRenderer.apply(this, arguments);
-    
-    const rowData = tableData[row];
-    if (!rowData) return;
-    
-    // Важно: сбрасываем ВСЕ стили
-    td.className = td.className.replace(/\s*(htDimmed|htInvalid|htDebug)/g, '');
-    td.style.backgroundColor = '';
-    td.style.borderLeft = '';
-    td.style.color = '';
-    td.style.fontWeight = '';
-    
-    // Удаляем старые значки
-    const existingBadge = td.querySelector('.new-badge');
-    if (existingBadge) {
-      existingBadge.remove();
-    }
-    
-    let backgroundColor = '';
-    let textColor = '';
-    let fontWeight = '';
-    
-    // ПЕРВЫЙ ПРИОРИТЕТ: Подсветка новых записей
-    if (rowData.is_new === true) {
-      console.log(`🎨 Painting NEW row ${row}: ${rowData.keyword}`);
-      backgroundColor = getNewRecordColor(rowData.id);
-      td.style.borderLeft = '4px solid #28a745';
+  const cellRenderer = function(instance, td, row, col, prop, value, cellProperties) {
+  // Применяем стандартный рендерер
+      Handsontable.renderers.TextRenderer.apply(this, arguments);
       
-      // Добавляем значок NEW в первую колонку
-      if (col === 0) {
-        const badge = document.createElement('div');
-        badge.className = 'new-badge';
-        badge.innerHTML = 'NEW';
-        badge.style.cssText = `
-          position: absolute;
-          top: 0px;
-          right: 0px;
-          background: #28a745;
-          color: white;
-          font-size: 7px;
-          padding: 1px 3px;
-          border-radius: 0 0 0 3px;
-          font-weight: bold;
-          z-index: 10;
-          line-height: 1;
-        `;
-        td.style.position = 'relative';
-        td.appendChild(badge);
+      const rowData = instance.getDataAtRow(row);
+      if (!rowData) return;
+      
+      // Получаем объект данных строки
+      const rowObject = tableData[row];
+      if (!rowObject) return;
+      
+      console.log(`🎨 Rendering cell [${row},${col}] for keyword: ${rowObject.keyword}, is_new: ${rowObject.is_new}`);
+      
+      // Сброс всех стилей
+      td.style.backgroundColor = '';
+      td.style.borderLeft = '';
+      td.style.color = '';
+      td.style.fontWeight = '';
+      
+      // Удаляем старые значки
+      const oldBadge = td.querySelector('.new-badge');
+      if (oldBadge) oldBadge.remove();
+      
+      // ГЛАВНОЕ: подсветка новых записей
+      if (rowObject.is_new === true) {
+        console.log(`🆕 Applying NEW styles to row ${row}`);
+        td.style.backgroundColor = getNewRecordColor(rowObject.id);
+        td.style.borderLeft = '4px solid #28a745';
+        
+        // Добавляем значок NEW в первую колонку
+        if (col === 0) {
+          const badge = document.createElement('span');
+          badge.className = 'new-badge';
+          badge.textContent = 'NEW';
+          badge.style.cssText = `
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            background: #28a745;
+            color: white;
+            font-size: 8px;
+            padding: 1px 3px;
+            border-radius: 2px;
+            font-weight: bold;
+            z-index: 1000;
+            pointer-events: none;
+          `;
+          td.style.position = 'relative';
+          td.appendChild(badge);
+        }
       }
-    }
-    
-    // ВТОРОЙ ПРИОРИТЕТ: Цвета для конкретных полей
-    if (prop === 'has_ads' || prop === 'has_school_sites' || prop === 'has_google_maps' || prop === 'has_our_site') {
-      if (value === 'Да') {
-        if (!rowData.is_new) backgroundColor = '#d4edda';
-        textColor = '#155724';
-        fontWeight = 'bold';
-      } else if (value === 'Нет') {
-        if (!rowData.is_new) backgroundColor = '#f8d7da';
-        textColor = '#721c24';
+      
+      // Цвета для конкретных полей (только если НЕ новая запись)
+      if (!rowObject.is_new) {
+        if (prop === 'has_ads' || prop === 'has_school_sites' || prop === 'has_google_maps' || prop === 'has_our_site') {
+          if (value === 'Да') {
+            td.style.backgroundColor = '#d4edda';
+            td.style.color = '#155724';
+            td.style.fontWeight = 'bold';
+          } else if (value === 'Нет') {
+            td.style.backgroundColor = '#f8d7da';
+            td.style.color = '#721c24';
+          }
+        }
+        
+        if (prop === 'intent_type') {
+          if (value === 'Коммерческий') {
+            td.style.backgroundColor = '#d4edda';
+            td.style.color = '#155724';
+            td.style.fontWeight = 'bold';
+          } else if (value === 'Информационный') {
+            td.style.backgroundColor = '#d1ecf1';
+            td.style.color = '#0c5460';
+          }
+        }
+        
+        if (prop === 'status') {
+          if (value === 'Enabled') {
+            td.style.backgroundColor = '#d4edda';
+            td.style.color = '#155724';
+            td.style.fontWeight = 'bold';
+          } else if (value === 'Paused') {
+            td.style.backgroundColor = '#fff3cd';
+            td.style.color = '#856404';
+            td.style.fontWeight = 'bold';
+          }
+        }
       }
-    }
-    
-    if (prop === 'intent_type') {
-      if (value === 'Коммерческий') {
-        if (!rowData.is_new) backgroundColor = '#d4edda';
-        textColor = '#155724';
-        fontWeight = 'bold';
-      } else if (value === 'Информационный') {
-        if (!rowData.is_new) backgroundColor = '#d1ecf1';
-        textColor = '#0c5460';
+      
+      // Выделение выбранной строки (высший приоритет)
+      if (rowObject.selected) {
+        td.style.backgroundColor = '#e3f2fd';
+        td.style.borderColor = '#2196f3';
       }
-    }
-    
-    if (prop === 'status') {
-      if (value === 'Enabled') {
-        if (!rowData.is_new) backgroundColor = '#d4edda';
-        textColor = '#155724';
-        fontWeight = 'bold';
-      } else if (value === 'Paused') {
-        if (!rowData.is_new) backgroundColor = '#fff3cd';
-        textColor = '#856404';
-        fontWeight = 'bold';
-      }
-    }
-    
-    // ТРЕТИЙ ПРИОРИТЕТ: Выделение выбранной строки
-    if (rowData.selected) {
-      backgroundColor = '#e3f2fd';
-      td.style.borderColor = '#2196f3';
-      td.style.borderWidth = '1px';
-      td.style.borderStyle = 'solid';
-    }
-    
-    // Применяем все стили
-    if (backgroundColor) td.style.backgroundColor = backgroundColor;
-    if (textColor) td.style.color = textColor;
-    if (fontWeight) td.style.fontWeight = fontWeight;
-  };
-};
+    };
 
   if (loading) {
     return <div className="loading">Загрузка данных...</div>;
@@ -302,7 +293,7 @@ const KeywordsTable = ({
         autoWrapCol={true}
         licenseKey="non-commercial-and-evaluation"
         afterChange={handleAfterChange}
-        cells={getCellRenderer}
+        cells={cellRenderer}
         manualColumnResize={true}
         manualRowResize={true}
         contextMenu={true}
