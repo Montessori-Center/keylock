@@ -1,7 +1,6 @@
 // frontend/src/components/KeywordsTable.jsx - ИСПРАВЛЕННАЯ ВЕРСИЯ
 import React, { useRef, useEffect, useState } from 'react';
 import { HotTable } from '@handsontable/react';
-import Handsontable from 'handsontable';
 import { registerAllModules } from 'handsontable/registry';
 import 'handsontable/dist/handsontable.full.css';
 
@@ -132,7 +131,7 @@ const KeywordsTable = ({
     }
   }, [keywords, selectedIds]);
   
-  useEffect(() => {
+    useEffect(() => {
       if (!hotTableRef.current?.hotInstance) return;
       
       const instance = hotTableRef.current.hotInstance;
@@ -168,10 +167,10 @@ const KeywordsTable = ({
         });
       };
       
-      // Применяем стили сразу и после любых изменений
+      // Применяем стили сразу
       const timer = setTimeout(applyStyles, 100);
       
-      // ДОБАВЛЯЕМ: подписка на события Handsontable для повторного применения стилей
+      // ИСПРАВЛЕНО: добавлена проверка на разрушенный экземпляр
       const hooks = [
         'afterRender',
         'afterColumnResize', 
@@ -181,16 +180,26 @@ const KeywordsTable = ({
         'afterLoadData'
       ];
       
-      hooks.forEach(hookName => {
-        instance.addHook(hookName, applyStyles);
-      });
+      // Добавляем хуки только если экземпляр не разрушен
+      if (!instance.isDestroyed) {
+        hooks.forEach(hookName => {
+          instance.addHook(hookName, applyStyles);
+        });
+      }
       
       return () => {
         clearTimeout(timer);
-        // Удаляем хуки при размонтировании
-        hooks.forEach(hookName => {
-          instance.removeHook(hookName, applyStyles);
-        });
+        // ИСПРАВЛЕНО: удаляем хуки только если экземпляр не разрушен
+        if (instance && !instance.isDestroyed) {
+          hooks.forEach(hookName => {
+            try {
+              instance.removeHook(hookName, applyStyles);
+            } catch (error) {
+              // Игнорируем ошибки удаления хуков при разрушении компонента
+              console.warn('Hook removal error (ignored):', error.message);
+            }
+          });
+        }
       };
     }, [tableData]);
 
@@ -221,45 +230,6 @@ const KeywordsTable = ({
       onDataChange(dataChanges);
     }
   };
-
-  // Палитра пастельных цветов для новых партий
-    const BATCH_COLORS = [
-      '#fff2cc', // светло-желтый
-      '#e1d5e7', // светло-фиолетовый  
-      '#dae8fc', // светло-голубой
-      '#d5e8d4', // светло-зеленый
-      '#ffe6cc', // светло-оранжевый
-      '#f8cecc', // светло-красный
-      '#e1fffe', // светло-бирюзовый
-      '#fff2e6', // светло-персиковый
-      '#f0e6ff', // светло-лавандовый
-      '#e6f3ff', // светло-небесный
-      '#ffe6f2', // светло-розовый
-      '#e6ffe6', // светло-мятный
-    ];
-    
-    // Функция для получения рандомного цвета для новой партии
-    const getRandomBatchColor = () => {
-      const usedColors = new Set();
-      
-      // Проверяем какие цвета уже используются существующими новыми записями
-      keywords.forEach(keyword => {
-        if (keyword.is_new && keyword.batch_color) {
-          usedColors.add(keyword.batch_color);
-        }
-      });
-      
-      // Выбираем неиспользованный цвет или рандомный если все использованы
-      const availableColors = BATCH_COLORS.filter(color => !usedColors.has(color));
-      
-      if (availableColors.length > 0) {
-        return availableColors[Math.floor(Math.random() * availableColors.length)];
-      } else {
-        // Если все цвета использованы, берем рандомный
-        return BATCH_COLORS[Math.floor(Math.random() * BATCH_COLORS.length)];
-      }
-    }
-
 
   if (loading) {
     return <div className="loading">Загрузка данных...</div>;

@@ -129,8 +129,9 @@ function App() {
   };
 
   useEffect(() => {
-    loadCampaigns();
-  }, []);
+  loadCampaigns();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
   useEffect(() => {
     const savedAdGroupId = localStorage.getItem('selectedAdGroupId');
