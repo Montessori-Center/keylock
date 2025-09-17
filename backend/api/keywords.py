@@ -2,6 +2,7 @@
 from flask import Blueprint, request, jsonify
 from config import Config
 import pymysql
+import random
 
 keywords_bp = Blueprint('keywords', __name__)
 
@@ -15,6 +16,16 @@ def get_db_connection():
         database=Config.DB_NAME,
         cursorclass=pymysql.cursors.DictCursor
     )
+    
+# Палитра цветов (такая же как на frontend)
+BATCH_COLORS = [
+    '#fff2cc', '#e1d5e7', '#dae8fc', '#d5e8d4', '#ffe6cc', '#f8cecc',
+    '#e1fffe', '#fff2e6', '#f0e6ff', '#e6f3ff', '#ffe6f2', '#e6ffe6'
+]
+
+def get_random_batch_color():
+    """Получить рандомный цвет для новой партии"""
+    return random.choice(BATCH_COLORS)
     
 @keywords_bp.route('/accept-changes', methods=['POST'])
 def accept_changes():
@@ -103,7 +114,7 @@ def get_keywords(ad_group_id):
         connection = get_db_connection()
         cursor = connection.cursor()
         
-        # ИСПРАВЛЕНО: добавлено поле is_new в запрос
+        # ОБНОВЛЕНО: добавлено поле batch_color в запрос
         query = """
             SELECT 
                 id, keyword, criterion_type, max_cpc, max_cpm, status,
@@ -111,7 +122,7 @@ def get_keywords(ad_group_id):
                 has_our_site, intent_type, recommendation,
                 avg_monthly_searches, three_month_change, yearly_change,
                 competition, competition_percent, min_top_of_page_bid,
-                max_top_of_page_bid, is_new
+                max_top_of_page_bid, is_new, batch_color
             FROM keywords 
             WHERE ad_group_id = %s 
             AND status != 'Removed'
@@ -146,17 +157,18 @@ def get_keywords(ad_group_id):
                 'competition_percent': float(row['competition_percent']) if row['competition_percent'] else None,
                 'min_top_of_page_bid': float(row['min_top_of_page_bid']) if row['min_top_of_page_bid'] else None,
                 'max_top_of_page_bid': float(row['max_top_of_page_bid']) if row['max_top_of_page_bid'] else None,
-                'is_new': bool(row.get('is_new', False))  # ИСПРАВЛЕНО: добавлено поле is_new
+                'is_new': bool(row.get('is_new', False)),
+                'batch_color': row.get('batch_color')  # ДОБАВЛЕНО: цвет партии
             }
             keywords_data.append(keyword_dict)
-            print(f"  - {keyword_dict['id']}: {keyword_dict['keyword']} (новое: {keyword_dict['is_new']})")
+            print(f"  - {keyword_dict['id']}: {keyword_dict['keyword']} (новое: {keyword_dict['is_new']}, цвет: {keyword_dict['batch_color']})")
         
-        # ИСПРАВЛЕНО: статистика теперь включает подсчет новых изменений
+        # Статистика включает новые изменения
         total_count = len(keywords_data)
         commercial_count = sum(1 for k in keywords_data if k.get('intent_type') == 'Коммерческий')
         keyword_texts = [k['keyword'].lower() for k in keywords_data]
         duplicates_count = len(keyword_texts) - len(set(keyword_texts))
-        new_changes_count = sum(1 for k in keywords_data if k.get('is_new', False))  # ДОБАВЛЕНО
+        new_changes_count = sum(1 for k in keywords_data if k.get('is_new', False))
         
         cursor.close()
         
@@ -167,7 +179,7 @@ def get_keywords(ad_group_id):
                 'total': total_count,
                 'commercial': commercial_count,
                 'duplicates': duplicates_count,
-                'newChanges': new_changes_count  # ДОБАВЛЕНО: количество новых изменений
+                'newChanges': new_changes_count
             }
         }
         
@@ -187,7 +199,7 @@ def get_keywords(ad_group_id):
                 'total': 0,
                 'commercial': 0,
                 'duplicates': 0,
-                'newChanges': 0  # ДОБАВЛЕНО
+                'newChanges': 0
             }
         })
     finally:
@@ -357,6 +369,10 @@ def paste_keywords():
             return jsonify({'success': False, 'error': 'Ad group not found'}), 404
         
         campaign_id = result['campaign_id']
+        
+        # ДОБАВЛЕНО: генерируем один цвет для всей партии
+        batch_color = get_random_batch_color()
+        
         added_count = 0
         skipped_count = 0
         
@@ -372,13 +388,13 @@ def paste_keywords():
                     (ad_group_id, keyword_text)
                 )
                 if not cursor.fetchone():
-                    # ИСПРАВЛЕНО: новые слова помечаются как is_new = TRUE
+                    # ОБНОВЛЕНО: добавлено поле batch_color
                     cursor.execute("""
                         INSERT INTO keywords (
                             campaign_id, ad_group_id, keyword, criterion_type, 
-                            status, max_cpc, is_new
-                        ) VALUES (%s, %s, %s, 'Phrase', 'Enabled', 3.61, TRUE)
-                    """, (campaign_id, ad_group_id, keyword_text))
+                            status, max_cpc, is_new, batch_color
+                        ) VALUES (%s, %s, %s, 'Phrase', 'Enabled', 3.61, TRUE, %s)
+                    """, (campaign_id, ad_group_id, keyword_text, batch_color))
                     added_count += 1
                     print(f"Added keyword: {keyword_text}")
                 else:
@@ -450,7 +466,7 @@ def paste_keywords():
                     while len(all_fields) < 23:
                         all_fields.append('None')
                     
-                    # ИСПРАВЛЕНО: новые слова помечаются как is_new = TRUE
+                    # ОБНОВЛЕНО: добавлено поле batch_color
                     cursor.execute("""
                         INSERT INTO keywords (
                             campaign_id, ad_group_id, keyword, criterion_type, max_cpc, max_cpm,
@@ -458,8 +474,8 @@ def paste_keywords():
                             intent_type, recommendation, avg_monthly_searches, three_month_change, 
                             yearly_change, competition, competition_percent, min_top_of_page_bid, 
                             max_top_of_page_bid, ad_impression_share, organic_average_position, 
-                            organic_impression_share, labels, is_new
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            organic_impression_share, labels, is_new, batch_color
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """, (
                         campaign_id,
                         ad_group_id,
@@ -486,7 +502,8 @@ def paste_keywords():
                         convert_value(all_fields[20]),  # organic_average_position
                         convert_value(all_fields[21]),  # organic_impression_share
                         convert_value(all_fields[22]) if len(all_fields) > 22 else None,  # labels
-                        True  # is_new = TRUE
+                        True,  # is_new = TRUE
+                        batch_color  # ДОБАВЛЕНО: цвет партии
                     ))
                     added_count += 1
                     print(f"Added full data for keyword: {keyword_text}")
@@ -545,6 +562,9 @@ def add_keywords():
         # Разбираем ключевые слова
         keywords = [k.strip() for k in keywords_text.replace('\n', ',').split(',') if k.strip()]
         
+        # ДОБАВЛЕНО: генерируем один цвет для всей партии
+        batch_color = get_random_batch_color()
+        
         added_count = 0
         skipped_count = 0
         
@@ -556,13 +576,13 @@ def add_keywords():
             )
             
             if not cursor.fetchone():
-                # ИСПРАВЛЕНО: новые слова помечаются как is_new = TRUE
+                # ОБНОВЛЕНО: добавлено поле batch_color
                 cursor.execute("""
                     INSERT INTO keywords (
                         campaign_id, ad_group_id, keyword, criterion_type, 
-                        status, max_cpc, is_new
-                    ) VALUES (%s, %s, %s, 'Phrase', 'Enabled', 3.61, TRUE)
-                """, (campaign_id, ad_group_id, keyword))
+                        status, max_cpc, is_new, batch_color
+                    ) VALUES (%s, %s, %s, 'Phrase', 'Enabled', 3.61, TRUE, %s)
+                """, (campaign_id, ad_group_id, keyword, batch_color))
                 added_count += 1
             else:
                 skipped_count += 1

@@ -1,4 +1,4 @@
-// ИСПРАВЛЕННЫЙ компонент Sidebar.jsx
+// src/components/Sidebar.jsx - ПОЛНАЯ ВЕРСИЯ с индикаторами новых изменений
 import React, { useState } from 'react';
 import { FaChevronRight, FaChevronDown, FaBars } from 'react-icons/fa';
 
@@ -43,7 +43,25 @@ const Sidebar = ({ isOpen, onToggle, campaigns, selectedCampaign, selectedAdGrou
                     >
                       <span className="ad-group-name">{adGroup.name}</span>
                       {adGroup.newChanges > 0 && (
-                        <span className="changes-badge">{adGroup.newChanges}</span>
+                        <div className="changes-indicator">
+                          <span className="changes-badge">{adGroup.newChanges}</span>
+                          {/* ДОБАВЛЕНО: показываем цветные точки для разных партий */}
+                          {adGroup.batchColors && adGroup.batchColors.length > 0 && (
+                            <div className="batch-colors-indicator">
+                              {adGroup.batchColors.slice(0, 3).map((color, index) => (
+                                <span 
+                                  key={index}
+                                  className="batch-color-dot"
+                                  style={{ backgroundColor: color }}
+                                  title={`Партия ${index + 1}`}
+                                ></span>
+                              ))}
+                              {adGroup.batchColors.length > 3 && (
+                                <span className="more-colors">+{adGroup.batchColors.length - 3}</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
                   ))}

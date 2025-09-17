@@ -449,6 +449,67 @@ body {
   background-color: #e9ecef;
 }
 
+.ad-group-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 10px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+
+.changes-indicator {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.changes-badge {
+  background: #ffc107;
+  color: #856404;
+  font-size: 10px;
+  padding: 2px 5px;
+  border-radius: 10px;
+  font-weight: bold;
+  min-width: 18px;
+  text-align: center;
+}
+
+.batch-colors-indicator {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.batch-color-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid rgba(0,0,0,0.2);
+  display: inline-block;
+}
+
+.more-colors {
+  font-size: 8px;
+  color: #666;
+  margin-left: 2px;
+}
+
+/* Стили для групп с изменениями */
+.ad-group-item.has-changes {
+  background-color: #fff3cd !important;
+  border-left: 3px solid #ffc107;
+  font-weight: 500;
+}
+
+.ad-group-item.has-changes:hover {
+  background-color: #fff3cd !important;
+}
+
+
 /* ДОБАВЛЕНО: анимации для новых записей */
 @keyframes newRecordPulse {
   0% {

@@ -399,8 +399,7 @@ function App() {
     }
   };
   
-  // ИСПРАВЛЕННАЯ функция loadAdGroupsStats
-    const loadAdGroupsStats = async () => {
+  const loadAdGroupsStats = async () => {
       try {
         console.log('🔄 Loading ad groups stats...');
         
@@ -418,15 +417,24 @@ function App() {
               const newChangesCount = response.success 
                 ? response.data.filter(keyword => keyword.is_new).length 
                 : 0;
-              console.log(`📊 Ad group ${adGroup.id} has ${newChangesCount} new changes`);
+              
+              // ДОБАВЛЕНО: получаем уникальные цвета для этой группы
+              const uniqueColors = response.success
+                ? [...new Set(response.data
+                    .filter(keyword => keyword.is_new && keyword.batch_color)
+                    .map(keyword => keyword.batch_color))]
+                : [];
+              
+              console.log(`📊 Ad group ${adGroup.id} has ${newChangesCount} new changes with ${uniqueColors.length} different colors`);
               
               return {
                 ...adGroup,
-                newChanges: newChangesCount
+                newChanges: newChangesCount,
+                batchColors: uniqueColors // ДОБАВЛЕНО: массив цветов для группы
               };
             } catch (error) {
               console.error(`❌ Error loading stats for ad group ${adGroup.id}:`, error);
-              return { ...adGroup, newChanges: 0 };
+              return { ...adGroup, newChanges: 0, batchColors: [] };
             }
           }) || []
         );
