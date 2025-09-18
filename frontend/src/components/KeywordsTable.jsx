@@ -138,57 +138,37 @@ const KeywordsTable = ({
       
       const instance = hotTableRef.current.hotInstance;
       
-      // Кастомный рендерер для всех ячеек
-      const customRenderer = function(instance, td, row, col, prop, value, cellProperties) {
-        // Сначала применяем стандартный рендерер
-        if (prop === 'selected') {
-          Handsontable.renderers.CheckboxRenderer.apply(this, arguments);
-        } else if (typeof value === 'number') {
-          Handsontable.renderers.NumericRenderer.apply(this, arguments);
-        } else {
-          Handsontable.renderers.TextRenderer.apply(this, arguments);
-        }
-        
-        // Затем применяем наши стили
-        const rowData = instance.getSourceDataAtRow(row);
-        if (rowData && rowData.is_new === true && rowData.batch_color) {
-          // Применяем цвет фона для новых записей
-          td.style.backgroundColor = rowData.batch_color;
-          td.style.fontWeight = 'bold';
+      // Применяем стили через afterRenderer
+      instance.updateSettings({
+        afterRenderer: function(td, row, col, prop, value, cellProperties) {
+          const rowData = instance.getSourceDataAtRow(row);
           
-          // Добавляем левую границу для визуального выделения
-          if (col === 0) {
-            td.style.borderLeft = `3px solid ${rowData.batch_color}`;
-          }
-        }
-        
-        return td;
-      };
-      
-      // Применяем рендерер ко всем колонкам
-      const columns = instance.getSettings().columns;
-      if (columns) {
-        const updatedColumns = columns.map(col => ({
-          ...col,
-          renderer: customRenderer
-        }));
-        
-        instance.updateSettings({
-          columns: updatedColumns,
-          afterRenderer: (td, row, col, prop, value, cellProperties) => {
-            // Дополнительная проверка после рендеринга
-            const rowData = instance.getSourceDataAtRow(row);
-            if (rowData && rowData.is_new === true && rowData.batch_color) {
-              td.style.backgroundColor = rowData.batch_color;
+          if (rowData && rowData.is_new === true && rowData.batch_color) {
+            td.style.backgroundColor = rowData.batch_color;
+            td.style.fontWeight = 'bold';
+            
+            if (col === 0) {
+              td.style.borderLeft = `4px solid ${rowData.batch_color}`;
             }
           }
-        });
-      }
+        },
+        
+        cells: function(row, col) {
+          const cellProperties = {};
+          const rowData = this.instance.getSourceDataAtRow(row);
+          
+          if (rowData && rowData.is_new === true && rowData.batch_color) {
+            cellProperties.className = 'new-record-cell';
+          }
+          
+          return cellProperties;
+        }
+      });
       
       // Принудительный рендеринг
       instance.render();
       
-    }, [tableData]); // Зависимость только от tableData
+    }, [tableData]);
 
   // Обработка изменений в таблице
   const handleAfterChange = (changes, source) => {

@@ -529,6 +529,15 @@ body {
   text-shadow: 0 0 1px rgba(0,0,0,0.1);
 }
 
+/* Стили для новых записей в таблице */
+.new-record-cell {
+  font-weight: bold !important;
+}
+
+.handsontable td.new-record-cell {
+  font-weight: bold !important;
+}
+
 
 /* ДОБАВЛЕНО: анимации для новых записей */
 @keyframes newRecordPulse {
