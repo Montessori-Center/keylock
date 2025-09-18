@@ -2,6 +2,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { HotTable } from '@handsontable/react';
 import { registerAllModules } from 'handsontable/registry';
+import Handsontable from 'handsontable';
 import 'handsontable/dist/handsontable.full.css';
 
 registerAllModules();
@@ -131,77 +132,63 @@ const KeywordsTable = ({
     }
   }, [keywords, selectedIds]);
   
-    useEffect(() => {
+   useEffect(() => {
       if (!hotTableRef.current?.hotInstance) return;
+      if (tableData.length === 0) return;
       
       const instance = hotTableRef.current.hotInstance;
       
-      // Функция применения стилей
-      const applyStyles = () => {
-        const container = instance.rootElement;
-        if (!container) return;
+      // Кастомный рендерер для всех ячеек
+      const customRenderer = function(instance, td, row, col, prop, value, cellProperties) {
+        // Сначала применяем стандартный рендерер
+        if (prop === 'selected') {
+          Handsontable.renderers.CheckboxRenderer.apply(this, arguments);
+        } else if (typeof value === 'number') {
+          Handsontable.renderers.NumericRenderer.apply(this, arguments);
+        } else {
+          Handsontable.renderers.TextRenderer.apply(this, arguments);
+        }
         
-        const tbody = container.querySelector('tbody');
-        if (!tbody) return;
-        
-        const rows = tbody.querySelectorAll('tr');
-        rows.forEach((row, index) => {
-          const rowData = tableData[index];
-          const cells = row.querySelectorAll('td');
+        // Затем применяем наши стили
+        const rowData = instance.getSourceDataAtRow(row);
+        if (rowData && rowData.is_new === true && rowData.batch_color) {
+          // Применяем цвет фона для новых записей
+          td.style.backgroundColor = rowData.batch_color;
+          td.style.fontWeight = 'bold';
           
-          if (rowData?.is_new && rowData?.batch_color) {
-            // Применяем batch_color для новых записей
-            cells.forEach(cell => {
-              cell.style.backgroundColor = rowData.batch_color + ' !important';
-              cell.style.setProperty('background-color', rowData.batch_color, 'important');
-            });
-            row.setAttribute('data-new', 'true');
-          } else {
-            // Сбрасываем стили для обычных записей
-            cells.forEach(cell => {
-              cell.style.backgroundColor = '';
-              cell.style.removeProperty('background-color');
-            });
-            row.removeAttribute('data-new');
+          // Добавляем левую границу для визуального выделения
+          if (col === 0) {
+            td.style.borderLeft = `3px solid ${rowData.batch_color}`;
           }
-        });
+        }
+        
+        return td;
       };
       
-      // Применяем стили сразу
-      const timer = setTimeout(applyStyles, 100);
-      
-      // ИСПРАВЛЕНО: добавлена проверка на разрушенный экземпляр
-      const hooks = [
-        'afterRender',
-        'afterColumnResize', 
-        'afterRowResize',
-        'afterScrollHorizontally',
-        'afterScrollVertically',
-        'afterLoadData'
-      ];
-      
-      // Добавляем хуки только если экземпляр не разрушен
-      if (!instance.isDestroyed) {
-        hooks.forEach(hookName => {
-          instance.addHook(hookName, applyStyles);
+      // Применяем рендерер ко всем колонкам
+      const columns = instance.getSettings().columns;
+      if (columns) {
+        const updatedColumns = columns.map(col => ({
+          ...col,
+          renderer: customRenderer
+        }));
+        
+        instance.updateSettings({
+          columns: updatedColumns,
+          afterRenderer: (td, row, col, prop, value, cellProperties) => {
+            // Дополнительная проверка после рендеринга
+            const rowData = instance.getSourceDataAtRow(row);
+            if (rowData && rowData.is_new === true && rowData.batch_color) {
+              td.style.backgroundColor = rowData.batch_color;
+            }
+          }
         });
       }
       
-      return () => {
-        clearTimeout(timer);
-        // ИСПРАВЛЕНО: удаляем хуки только если экземпляр не разрушен
-        if (instance && !instance.isDestroyed) {
-          hooks.forEach(hookName => {
-            try {
-              instance.removeHook(hookName, applyStyles);
-            } catch (error) {
-              // Игнорируем ошибки удаления хуков при разрушении компонента
-              console.warn('Hook removal error (ignored):', error.message);
-            }
-          });
-        }
-      };
-    }, [tableData]);
+      // Принудительный рендеринг
+      instance.render();
+      
+    }, [tableData]); // Зависимость только от tableData
 
   // Обработка изменений в таблице
   const handleAfterChange = (changes, source) => {

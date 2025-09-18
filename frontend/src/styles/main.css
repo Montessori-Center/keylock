@@ -500,13 +500,33 @@ body {
 
 /* Стили для групп с изменениями */
 .ad-group-item.has-changes {
-  background-color: #fff3cd !important;
-  border-left: 3px solid #ffc107;
-  font-weight: 500;
+  background: linear-gradient(90deg, #ffeb3b 0%, #ffc107 100%) !important;
+  border-left: 5px solid #ff9800 !important;
+  padding-left: 7px !important;
+  margin-left: -2px !important;
+  font-weight: 700 !important;
+  box-shadow: 0 2px 4px rgba(255, 152, 0, 0.3);
+  position: relative;
 }
 
-.ad-group-item.has-changes:hover {
-  background-color: #fff3cd !important;
+.ad-group-item.has-changes::before {
+  content: "NEW";
+  position: absolute;
+  top: 50%;
+  right: 60px;
+  transform: translateY(-50%);
+  background: #ff5722;
+  color: white;
+  font-size: 9px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-weight: bold;
+}
+
+.ad-group-item.has-changes .ad-group-name {
+  color: #e65100 !important;
+  font-weight: bold !important;
+  text-shadow: 0 0 1px rgba(0,0,0,0.1);
 }
 
 

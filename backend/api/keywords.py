@@ -24,8 +24,41 @@ BATCH_COLORS = [
 ]
 
 def get_random_batch_color():
-    """Получить рандомный цвет для новой партии"""
-    return random.choice(BATCH_COLORS)
+    """Получить рандомный цвет для новой партии, избегая уже использованных"""
+    connection = None
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # Получаем уже использованные цвета для активных новых записей
+        cursor.execute("""
+            SELECT DISTINCT batch_color 
+            FROM keywords 
+            WHERE is_new = TRUE 
+            AND batch_color IS NOT NULL
+            AND batch_color != ''
+        """)
+        used_colors = {row['batch_color'] for row in cursor.fetchall()}
+        cursor.close()
+        
+        # Находим неиспользованные цвета
+        available_colors = [c for c in BATCH_COLORS if c not in used_colors]
+        
+        # Если все цвета использованы, берём случайный
+        if not available_colors:
+            print(f"⚠️ Все цвета использованы, выбираем случайный")
+            return random.choice(BATCH_COLORS)
+        
+        color = random.choice(available_colors)
+        print(f"🎨 Выбран цвет {color} (доступно было {len(available_colors)} цветов)")
+        return color
+        
+    except Exception as e:
+        print(f"❌ Error getting unique color: {e}")
+        return random.choice(BATCH_COLORS)
+    finally:
+        if connection:
+            connection.close()
     
 @keywords_bp.route('/accept-changes', methods=['POST'])
 def accept_changes():
