@@ -1,5 +1,6 @@
 # backend/api/settings.py
 from flask import Blueprint, request, jsonify
+from urllib.parse import urlparse
 from services.config_manager import config_manager
 import pymysql
 import os
@@ -227,3 +228,157 @@ def get_current_db_info():
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+        
+@settings_bp.route('/campaign-sites', methods=['GET'])
+def get_campaign_sites():
+    """Получение списка кампаний и их сайтов"""
+    connection = None
+    try:
+        connection = pymysql.connect(
+            host=Config.DB_HOST,
+            port=Config.DB_PORT,
+            user=Config.DB_USER,
+            password=Config.DB_PASSWORD,
+            database=Config.DB_NAME,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        cursor = connection.cursor()
+        
+        # Получаем все кампании с их сайтами
+        cursor.execute("""
+            SELECT 
+                c.id as campaign_id,
+                c.name as campaign_name,
+                cs.site_url,
+                cs.domain
+            FROM campaigns c
+            LEFT JOIN campaign_sites cs ON c.id = cs.campaign_id
+            ORDER BY c.id
+        """)
+        
+        results = cursor.fetchall()
+        cursor.close()
+        
+        campaigns = []
+        for row in results:
+            campaigns.append({
+                'id': row['campaign_id'],
+                'name': row['campaign_name'],
+                'site_url': row['site_url'] or '',
+                'domain': row['domain'] or ''
+            })
+        
+        return jsonify({
+            'success': True,
+            'campaigns': campaigns
+        })
+        
+    except Exception as e:
+        print(f"❌ Error getting campaign sites: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if connection:
+            connection.close()
+
+@settings_bp.route('/campaign-sites', methods=['POST'])
+def save_campaign_sites():
+    """Сохранение сайтов кампаний"""
+    connection = None
+    try:
+        data = request.json
+        campaigns = data.get('campaigns', [])
+        
+        connection = pymysql.connect(
+            host=Config.DB_HOST,
+            port=Config.DB_PORT,
+            user=Config.DB_USER,
+            password=Config.DB_PASSWORD,
+            database=Config.DB_NAME
+        )
+        cursor = connection.cursor()
+        
+        for campaign in campaigns:
+            campaign_id = campaign['id']
+            site_url = campaign.get('site_url', '').strip()
+            
+            # Извлекаем домен из URL
+            domain = ''
+            if site_url:
+                try:
+                    parsed = urlparse(site_url)
+                    domain = parsed.netloc or parsed.path
+                    # Убираем www. если есть
+                    if domain.startswith('www.'):
+                        domain = domain[4:]
+                except:
+                    domain = site_url
+            
+            # Обновляем или вставляем запись
+            if site_url:
+                cursor.execute("""
+                    INSERT INTO campaign_sites (campaign_id, site_url, domain)
+                    VALUES (%s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                    site_url = VALUES(site_url),
+                    domain = VALUES(domain)
+                """, (campaign_id, site_url, domain))
+            else:
+                # Если URL пустой, удаляем запись
+                cursor.execute("""
+                    DELETE FROM campaign_sites 
+                    WHERE campaign_id = %s
+                """, (campaign_id,))
+        
+        connection.commit()
+        cursor.close()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Сайты кампаний сохранены'
+        })
+        
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        print(f"❌ Error saving campaign sites: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if connection:
+            connection.close()
+
+@settings_bp.route('/campaign-site/<int:campaign_id>', methods=['GET'])
+def get_campaign_site(campaign_id):
+    """Получение сайта для конкретной кампании"""
+    connection = None
+    try:
+        connection = pymysql.connect(
+            host=Config.DB_HOST,
+            port=Config.DB_PORT,
+            user=Config.DB_USER,
+            password=Config.DB_PASSWORD,
+            database=Config.DB_NAME,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        cursor = connection.cursor()
+        
+        cursor.execute("""
+            SELECT site_url, domain
+            FROM campaign_sites
+            WHERE campaign_id = %s
+        """, (campaign_id,))
+        
+        result = cursor.fetchone()
+        cursor.close()
+        
+        return jsonify({
+            'success': True,
+            'site_url': result['site_url'] if result else '',
+            'domain': result['domain'] if result else ''
+        })
+        
+    except Exception as e:
+        print(f"❌ Error getting campaign site: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if connection:
+            connection.close()

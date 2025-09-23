@@ -1,5 +1,6 @@
 # api/keywords.py - ИСПРАВЛЕННАЯ ВЕРСИЯ
 from flask import Blueprint, request, jsonify
+from datetime import datetime, timedelta
 from config import Config
 import pymysql
 import random
@@ -191,16 +192,18 @@ def get_keywords(ad_group_id):
                 'min_top_of_page_bid': float(row['min_top_of_page_bid']) if row['min_top_of_page_bid'] else None,
                 'max_top_of_page_bid': float(row['max_top_of_page_bid']) if row['max_top_of_page_bid'] else None,
                 'is_new': bool(row.get('is_new', False)),
-                'batch_color': row.get('batch_color')  # ДОБАВЛЕНО: цвет партии
+                'batch_color': row.get('batch_color')
             }
             keywords_data.append(keyword_dict)
-            print(f"  - {keyword_dict['id']}: {keyword_dict['keyword']} (новое: {keyword_dict['is_new']}, цвет: {keyword_dict['batch_color']})")
         
-        # Статистика включает новые изменения
+        # ИСПРАВЛЕНО: Статистика считает дубли только среди активных (не removed) ключевых слов
         total_count = len(keywords_data)
         commercial_count = sum(1 for k in keywords_data if k.get('intent_type') == 'Коммерческий')
-        keyword_texts = [k['keyword'].lower() for k in keywords_data]
+        
+        # Дубли считаем только среди не удаленных слов
+        keyword_texts = [k['keyword'].lower() for k in keywords_data if k.get('status') != 'Removed']
         duplicates_count = len(keyword_texts) - len(set(keyword_texts))
+        
         new_changes_count = sum(1 for k in keywords_data if k.get('is_new', False))
         
         cursor.close()
@@ -636,6 +639,147 @@ def add_keywords():
         if connection:
             connection.rollback()
         print(f"Error in add_keywords: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if connection:
+            connection.close()
+            
+@keywords_bp.route('/trash/<int:ad_group_id>', methods=['GET'])
+def get_trash_keywords(ad_group_id):
+    """Получение удаленных ключевых слов для группы объявлений"""
+    connection = None
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # Получаем удаленные слова с расчетом дней до автоудаления
+        # Предполагаем, что автоудаление через 30 дней
+        AUTO_DELETE_DAYS = 30
+        
+        query = """
+            SELECT 
+                id, keyword, criterion_type, max_cpc, status,
+                comment, intent_type, avg_monthly_searches,
+                competition, updated_at,
+                DATEDIFF(DATE_ADD(updated_at, INTERVAL %s DAY), NOW()) as days_remaining
+            FROM keywords 
+            WHERE ad_group_id = %s 
+            AND status = 'Removed'
+            ORDER BY updated_at DESC
+        """
+        
+        cursor.execute(query, (AUTO_DELETE_DAYS, ad_group_id))
+        removed_keywords = cursor.fetchall()
+        
+        trash_data = []
+        for row in removed_keywords:
+            days_remaining = row['days_remaining'] if row['days_remaining'] > 0 else 0
+            
+            trash_data.append({
+                'id': row['id'],
+                'keyword': row['keyword'],
+                'criterion_type': row['criterion_type'],
+                'max_cpc': float(row['max_cpc']) if row['max_cpc'] else None,
+                'comment': row['comment'],
+                'intent_type': row['intent_type'],
+                'avg_monthly_searches': row['avg_monthly_searches'],
+                'competition': row['competition'],
+                'deleted_at': row['updated_at'].isoformat() if row['updated_at'] else None,
+                'days_remaining': days_remaining,
+                'auto_delete_date': (row['updated_at'] + timedelta(days=AUTO_DELETE_DAYS)).isoformat() if row['updated_at'] else None
+            })
+        
+        cursor.close()
+        
+        return jsonify({
+            'success': True,
+            'data': trash_data,
+            'auto_delete_days': AUTO_DELETE_DAYS,
+            'total': len(trash_data)
+        })
+        
+    except Exception as e:
+        print(f"Error in get_trash_keywords: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if connection:
+            connection.close()
+
+@keywords_bp.route('/restore', methods=['POST'])
+def restore_keywords():
+    """Восстановление удаленных ключевых слов"""
+    connection = None
+    try:
+        data = request.json
+        keyword_ids = data.get('keyword_ids', [])
+        
+        if not keyword_ids:
+            return jsonify({'success': False, 'error': 'No keywords selected'}), 400
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # Восстанавливаем ключевые слова
+        placeholders = ','.join(['%s'] * len(keyword_ids))
+        cursor.execute(
+            f"UPDATE keywords SET status = 'Enabled' WHERE id IN ({placeholders}) AND status = 'Removed'",
+            keyword_ids
+        )
+        
+        restored_count = cursor.rowcount
+        connection.commit()
+        cursor.close()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Восстановлено {restored_count} ключевых слов',
+            'restored': restored_count
+        })
+        
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        print(f"Error in restore_keywords: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if connection:
+            connection.close()
+
+@keywords_bp.route('/delete-permanently', methods=['POST'])
+def delete_permanently():
+    """Окончательное удаление ключевых слов"""
+    connection = None
+    try:
+        data = request.json
+        keyword_ids = data.get('keyword_ids', [])
+        
+        if not keyword_ids:
+            return jsonify({'success': False, 'error': 'No keywords selected'}), 400
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # Удаляем ключевые слова навсегда
+        placeholders = ','.join(['%s'] * len(keyword_ids))
+        cursor.execute(
+            f"DELETE FROM keywords WHERE id IN ({placeholders}) AND status = 'Removed'",
+            keyword_ids
+        )
+        
+        deleted_count = cursor.rowcount
+        connection.commit()
+        cursor.close()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Удалено навсегда {deleted_count} ключевых слов',
+            'deleted': deleted_count
+        })
+        
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        print(f"Error in delete_permanently: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         if connection:

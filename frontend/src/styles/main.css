@@ -445,6 +445,17 @@ body {
   margin-left: 2px;
 }
 
+.btn-yellow {
+  background-color: #ffc107;
+  color: #212529;
+  border: none;
+}
+
+.btn-yellow:hover {
+  background-color: #ffb300;
+  color: #212529;
+}
+
 /* Стили для ячеек таблицы с новыми записями */
 .handsontable td.htDimmed {
   color: #777 !important;
@@ -452,6 +463,59 @@ body {
 
 .handsontable td {
   transition: background-color 0.3s ease;
+}
+
+/* Всегда видимые полосы прокрутки для Handsontable */
+.keywords-handsontable .ht_master .wtHolder {
+  overflow: scroll !important; /* Изменено с auto на scroll */
+}
+
+.keywords-handsontable .ht_clone_top .wtHolder,
+.keywords-handsontable .ht_clone_left .wtHolder,
+.keywords-handsontable .ht_clone_top_left_corner .wtHolder {
+  overflow: hidden !important;
+}
+
+/* Стилизация полос прокрутки для лучшей видимости */
+.keywords-handsontable .ht_master .wtHolder::-webkit-scrollbar {
+  width: 14px;
+  height: 14px;
+  background-color: #f1f1f1;
+}
+
+.keywords-handsontable .ht_master .wtHolder::-webkit-scrollbar-track {
+  background-color: #f1f1f1;
+  border: 1px solid #d4d4d4;
+}
+
+.keywords-handsontable .ht_master .wtHolder::-webkit-scrollbar-thumb {
+  background-color: #888;
+  border-radius: 4px;
+  border: 1px solid #666;
+}
+
+.keywords-handsontable .ht_master .wtHolder::-webkit-scrollbar-thumb:hover {
+  background-color: #555;
+}
+
+.keywords-handsontable .ht_master .wtHolder::-webkit-scrollbar-corner {
+  background-color: #f1f1f1;
+}
+
+/* Для Firefox */
+.keywords-handsontable .ht_master .wtHolder {
+  scrollbar-width: auto;
+  scrollbar-color: #888 #f1f1f1;
+}
+
+/* Убедимся что контейнер таблицы имеет правильные размеры */
+.keywords-table-container {
+  flex: 1;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background-color: #fff;
+  position: relative;
 }
 
 /* Убираем конфликтующие стили */

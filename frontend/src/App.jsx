@@ -9,6 +9,7 @@ import AddNewOutputModal from './components/Modals/AddNewOutputModal';
 import ApplySerpModal from './components/Modals/ApplySerpModal';
 import ApplyFiltersModal from './components/Modals/ApplyFiltersModal';
 import ChangeFieldModal from './components/Modals/ChangeFieldModal';
+import TrashModal from './components/Modals/TrashModal';
 import api from './services/api';
 import { toast } from 'react-toastify';
 
@@ -37,6 +38,7 @@ function App() {
   const [showApplySerp, setShowApplySerp] = useState(false);
   const [showApplyFilters, setShowApplyFilters] = useState(false);
   const [showChangeField, setShowChangeField] = useState(false);
+  const [showTrash, setShowTrash] = useState(false);
 
   // Максимально совместимая функция копирования
   const copyToClipboard = (text) => {
@@ -92,7 +94,7 @@ function App() {
           const response = await api.getSettings();
           if (response.success && response.settings.visible_columns) {
             setVisibleColumns(response.settings.visible_columns);
-            console.log('✅ Column settings loaded');
+            console.log('✅ Column settings loaded:', response.settings.visible_columns.length, 'columns');
           }
         } catch (error) {
           console.error('Error loading column settings:', error);
@@ -151,10 +153,11 @@ function App() {
     }, [selectedAdGroup]);
   
   const handleSettingsChange = (newSettings) => {
-    if (newSettings.visible_columns) {
-      setVisibleColumns(newSettings.visible_columns);
-    }
-  };
+      if (newSettings.visible_columns) {
+        console.log('📊 Settings changed, updating visible columns');
+        setVisibleColumns(newSettings.visible_columns);
+      }
+    };
 
   // ИСПРАВЛЕНО: обработчик принятия изменений теперь проверяет наличие изменений
   const handleAcceptChanges = async () => {
@@ -645,6 +648,7 @@ function App() {
             className="btn btn-green" 
             onClick={handleLoadFromDB}
             disabled={!selectedAdGroup}
+            style={{ display: 'none' }}
           >
             Загрузить данные из БД
           </button>
@@ -652,12 +656,13 @@ function App() {
             className="btn btn-red" 
             onClick={handleSaveToDB}
             disabled={!selectedAdGroup}
+            style={{ display: 'none' }}
           >
             Выгрузить данные в БД
           </button>
           
           <button 
-            className="btn btn-orange" 
+            className="btn btn-green" 
             onClick={handleAcceptChanges}
             disabled={!selectedAdGroup || keywordsStats.newChanges === 0}
             title={keywordsStats.newChanges > 0 
@@ -669,7 +674,7 @@ function App() {
           </button>
           
           <button 
-            className="btn btn-orange" 
+            className="btn btn-red" 
             onClick={handleRejectChanges}
             disabled={!selectedAdGroup || keywordsStats.newChanges === 0}
             title={keywordsStats.newChanges > 0 
@@ -678,6 +683,14 @@ function App() {
             }
           >
             Отклонить изменения {keywordsStats.newChanges > 0 && `(${keywordsStats.newChanges})`}
+          </button>
+          <button 
+            className="btn btn-yellow" 
+            onClick={() => setShowTrash(true)}
+            disabled={!selectedAdGroup}
+            title="Корзина удаленных ключевых слов"
+          >
+          Корзина
           </button>
         </div>
           
@@ -737,10 +750,16 @@ function App() {
 
       {/* ИСПРАВЛЕНО: все модальные окна правильно подключены */}
       <SettingsModal 
-        show={showSettings} 
-        onHide={() => setShowSettings(false)}
-        onSettingsChange={handleSettingsChange}
-      />
+          show={showSettings} 
+          onHide={() => setShowSettings(false)}
+          onSettingsChange={(newSettings) => {
+            // Обновляем видимые колонки при изменении настроек
+            if (newSettings.visible_columns) {
+              console.log('📊 Applying new column visibility settings:', newSettings.visible_columns);
+              setVisibleColumns(newSettings.visible_columns);
+            }
+          }}
+        />
       
       {showAddKeywords && (
         <AddKeywordsModal
@@ -787,6 +806,21 @@ function App() {
           onApply={handleChangeField}
         />
       )}
+      
+      {showTrash && (
+      <TrashModal
+        show={showTrash}
+        onHide={() => setShowTrash(false)}
+        adGroupId={selectedAdGroup?.id}
+        onRestore={() => {
+          // Перезагружаем ключевые слова после восстановления
+          if (selectedAdGroup) {
+            loadKeywords(selectedAdGroup.id);
+            loadAdGroupsStats();
+          }
+        }}
+      />
+    )}
     </div>
   );
 }

@@ -90,6 +90,43 @@ const api = {
   restartApp: async () => {
     const response = await axios.post(`${API_BASE_URL}/settings/restart`);
     return response.data;
+  },
+  
+  // Trash/Корзина методы
+  getTrashKeywords: async (adGroupId) => {
+    const response = await axios.get(`${API_BASE_URL}/keywords/trash/${adGroupId}`);
+    return response.data;
+  },
+
+  restoreKeywords: async (keywordIds) => {
+    const response = await axios.post(`${API_BASE_URL}/keywords/restore`, {
+      keyword_ids: keywordIds
+    });
+    return response.data;
+  },
+
+  deleteKeywordsPermanently: async (keywordIds) => {
+    const response = await axios.post(`${API_BASE_URL}/keywords/delete-permanently`, {
+      keyword_ids: keywordIds
+    });
+    return response.data;
+  },
+  
+  getCampaignSites: async () => {
+    const response = await axios.get(`${API_BASE_URL}/settings/campaign-sites`);
+    return response.data;
+  },
+
+  saveCampaignSites: async (campaigns) => {
+    const response = await axios.post(`${API_BASE_URL}/settings/campaign-sites`, {
+      campaigns: campaigns
+    });
+    return response.data;
+  },
+
+  getCampaignSite: async (campaignId) => {
+    const response = await axios.get(`${API_BASE_URL}/settings/campaign-site/${campaignId}`);
+    return response.data;
   }
 };
 

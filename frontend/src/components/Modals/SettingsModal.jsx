@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Modal, Button, Form, Tab, Tabs, Alert, Row, Col } from 'react-bootstrap';
 import api from '../../services/api';
 
-const SettingsModal = ({ show, onHide }) => {
+const SettingsModal = ({ show, onHide, onSettingsChange }) => {
   const [activeTab, setActiveTab] = useState('database');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -11,6 +11,7 @@ const SettingsModal = ({ show, onHide }) => {
   const [connectionStatus, setConnectionStatus] = useState({});
   const [currentDbInfo, setCurrentDbInfo] = useState(null);
   const [restarting, setRestarting] = useState(false);
+  const [campaignSites, setCampaignSites] = useState([]);
   const [settings, setSettings] = useState({
     // Database settings
     db_host: 'localhost',
@@ -42,54 +43,55 @@ const SettingsModal = ({ show, onHide }) => {
 
   // Все доступные колонки
   const allColumns = [
-    { key: 'keyword', label: 'Keyword' },
-    { key: 'criterion_type', label: 'Criterion Type' },
-    { key: 'max_cpc', label: 'Max CPC' },
-    { key: 'max_cpm', label: 'Max CPM' },
-    { key: 'max_cpv', label: 'Max CPV' },
-    { key: 'first_page_bid', label: 'First page bid' },
-    { key: 'top_of_page_bid', label: 'Top of page bid' },
-    { key: 'first_position_bid', label: 'First position bid' },
-    { key: 'quality_score', label: 'Quality score' },
-    { key: 'landing_page_experience', label: 'Landing page experience' },
-    { key: 'expected_ctr', label: 'Expected CTR' },
-    { key: 'ad_relevance', label: 'Ad relevance' },
-    { key: 'final_url', label: 'Final URL' },
-    { key: 'final_mobile_url', label: 'Final mobile URL' },
-    { key: 'tracking_template', label: 'Tracking template' },
-    { key: 'final_url_suffix', label: 'Final URL suffix' },
-    { key: 'custom_parameters', label: 'Custom parameters' },
-    { key: 'status', label: 'Status' },
-    { key: 'approval_status', label: 'Approval Status' },
-    { key: 'comment', label: 'Comment' },
-    { key: 'has_ads', label: 'Есть реклама?' },
-    { key: 'has_school_sites', label: 'Есть сайты школ?' },
-    { key: 'has_google_maps', label: 'Есть Google карты?' },
-    { key: 'has_our_site', label: 'Есть наш сайт?' },
-    { key: 'intent_type', label: 'Тип интента' },
-    { key: 'recommendation', label: 'Рекомендация' },
-    { key: 'avg_monthly_searches', label: 'Среднее число запросов в месяц' },
-    { key: 'three_month_change', label: 'Изменение за три месяца' },
-    { key: 'yearly_change', label: 'Изменение за год' },
-    { key: 'competition', label: 'Конкуренция' },
-    { key: 'competition_percent', label: 'Конкуренция, %' },
-    { key: 'min_top_of_page_bid', label: 'Ставка для показа вверху стр. (мин.)' },
-    { key: 'max_top_of_page_bid', label: 'Ставка для показа вверху стр. (макс.)' },
-    { key: 'ad_impression_share', label: 'Ad impression share' },
-    { key: 'organic_average_position', label: 'Organic average position' },
-    { key: 'organic_impression_share', label: 'Organic impression share' },
-    { key: 'labels', label: 'Labels' }
-  ];
+      { key: 'keyword', label: 'Keyword' },
+      { key: 'criterion_type', label: 'Criterion Type' },
+      { key: 'max_cpc', label: 'Max CPC' },
+      { key: 'max_cpm', label: 'Max CPM' },
+      { key: 'max_cpv', label: 'Max CPV' },
+      { key: 'first_page_bid', label: 'First page bid' },
+      { key: 'top_of_page_bid', label: 'Top of page bid' },
+      { key: 'first_position_bid', label: 'First position bid' },
+      { key: 'quality_score', label: 'Quality score' },
+      { key: 'landing_page_experience', label: 'Landing page experience' },
+      { key: 'expected_ctr', label: 'Expected CTR' },
+      { key: 'ad_relevance', label: 'Ad relevance' },
+      { key: 'final_url', label: 'Final URL' },
+      { key: 'final_mobile_url', label: 'Final mobile URL' },
+      { key: 'tracking_template', label: 'Tracking template' },
+      { key: 'final_url_suffix', label: 'Final URL suffix' },
+      { key: 'custom_parameters', label: 'Custom parameters' },
+      { key: 'status', label: 'Status' },
+      { key: 'approval_status', label: 'Approval Status' },
+      { key: 'comment', label: 'Comment' },
+      { key: 'has_ads', label: 'Есть реклама?' },
+      { key: 'has_school_sites', label: 'Есть сайты школ?' },
+      { key: 'has_google_maps', label: 'Есть Google карты?' },
+      { key: 'has_our_site', label: 'Есть наш сайт?' },
+      { key: 'intent_type', label: 'Тип интента' },
+      { key: 'recommendation', label: 'Рекомендация' },
+      { key: 'avg_monthly_searches', label: 'Среднее число запросов в месяц' },
+      { key: 'three_month_change', label: 'Изменение за три месяца' },
+      { key: 'yearly_change', label: 'Изменение за год' },
+      { key: 'competition', label: 'Конкуренция' },
+      { key: 'competition_percent', label: 'Конкуренция, %' },
+      { key: 'min_top_of_page_bid', label: 'Ставка для показа вверху стр. (мин.)' },
+      { key: 'max_top_of_page_bid', label: 'Ставка для показа вверху стр. (макс.)' },
+      { key: 'ad_impression_share', label: 'Ad impression share' },
+      { key: 'organic_average_position', label: 'Organic average position' },
+      { key: 'organic_impression_share', label: 'Organic impression share' },
+      { key: 'labels', label: 'Labels' }
+    ];
 
   // Загрузка настроек при открытии модального окна
   useEffect(() => {
   if (show) {
     loadSettings();
-    loadCurrentDbInfo(); // Новая функция
+    loadCurrentDbInfo();
+    loadCampaignSites();
   }
 }, [show]);
 
-  const loadSettings = async () => {
+const loadSettings = async () => {
   setLoading(true);
   try {
     console.log('Loading settings from /api/settings/get');
@@ -134,8 +136,23 @@ const SettingsModal = ({ show, onHide }) => {
 const handleSave = async () => {
   setSaving(true);
   try {
+    // 1. Сохраняем основные настройки
     const response = await api.saveSettings(settings);
+    
+    // 2. Сохраняем сайты кампаний (если мы на вкладке Бизнес или всегда)
+    try {
+      await saveCampaignSites();
+    } catch (siteError) {
+      console.error('Error saving campaign sites:', siteError);
+      // Продолжаем даже если не удалось сохранить сайты
+    }
+    
     if (response.success) {
+      // Применяем настройки перед закрытием
+      if (onSettingsChange) {
+        onSettingsChange(settings);
+      }
+      
       if (response.requires_restart) {
         // Показываем диалог подтверждения
         const confirmed = window.confirm(response.restart_message);
@@ -171,7 +188,7 @@ const handleSave = async () => {
         }
       } else {
         // Обычное сохранение без перезапуска
-        alert(response.message);
+        alert(response.message || 'Настройки успешно сохранены!');
         onHide();
       }
     } else {
@@ -184,6 +201,16 @@ const handleSave = async () => {
       setSaving(false);
     }
   }
+};
+
+const handleSiteUrlChange = (campaignId, newUrl) => {
+  setCampaignSites(prev => 
+    prev.map(campaign => 
+      campaign.id === campaignId 
+        ? { ...campaign, site_url: newUrl }
+        : campaign
+    )
+  );
 };
 
 const testConnection = async (type) => {
@@ -236,14 +263,63 @@ const testConnection = async (type) => {
   }
 };
 
-  const handleColumnToggle = (columnKey) => {
-    setSettings(prev => ({
-      ...prev,
-      visible_columns: prev.visible_columns.includes(columnKey)
-        ? prev.visible_columns.filter(col => col !== columnKey)
-        : [...prev.visible_columns, columnKey]
-    }));
-  };
+const handleColumnToggle = (columnKey) => {
+    const newVisibleColumns = settings.visible_columns.includes(columnKey)
+      ? settings.visible_columns.filter(col => col !== columnKey)
+      : [...settings.visible_columns, columnKey];
+    
+    const newSettings = {
+      ...settings,
+      visible_columns: newVisibleColumns
+    };
+    
+    setSettings(newSettings);
+    
+    // Мгновенно применяем изменения
+    if (onSettingsChange) {
+      onSettingsChange({ visible_columns: newVisibleColumns });
+    }
+};
+
+// 3. Добавьте функцию загрузки сайтов кампаний:
+const loadCampaignSites = async () => {
+  try {
+    const response = await fetch('/api/settings/campaign-sites');
+    const data = await response.json();
+    
+    if (data.success) {
+      setCampaignSites(data.campaigns);
+    }
+  } catch (error) {
+    console.error('Error loading campaign sites:', error);
+  }
+};
+
+// 4. Добавьте функцию сохранения сайтов:
+const saveCampaignSites = async () => {
+  try {
+    const response = await fetch('/api/settings/campaign-sites', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ campaigns: campaignSites })
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      console.log('✅ Campaign sites saved successfully');
+      return true;
+    } else {
+      console.error('❌ Error saving campaign sites:', data.error);
+      // Не показываем alert здесь, чтобы не прерывать основной процесс сохранения
+      return false;
+    }
+  } catch (error) {
+    console.error('❌ Network error saving campaign sites:', error);
+    // Не показываем alert здесь, чтобы не прерывать основной процесс сохранения
+    return false;
+  }
+};
 
   return (
     <Modal show={show} onHide={onHide} size="lg">
@@ -445,84 +521,161 @@ const testConnection = async (type) => {
     </Alert>
   </Form>
 </Tab>
+{/* Вкладка Google Ads API */}
+<Tab eventKey="googleads" title="Google Ads API">
+  <Form>
+    <Alert variant="warning">
+      <strong>Google Ads API</strong><br />
+      В разработке. Будет использоваться для экспорта ключевых слов в рекламные кампании.
+    </Alert>
+    
+    <Form.Group className="mb-3">
+      <Form.Label>Client ID:</Form.Label>
+      <Form.Control
+        type="text"
+        value={settings.google_ads_client_id}
+        onChange={(e) => setSettings(prev => ({ ...prev, google_ads_client_id: e.target.value }))}
+        placeholder="Google Ads Client ID"
+        disabled
+      />
+    </Form.Group>
+    
+    <Form.Group className="mb-3">
+      <Form.Label>Client Secret:</Form.Label>
+      <Form.Control
+        type="password"
+        value={settings.google_ads_client_secret}
+        onChange={(e) => setSettings(prev => ({ ...prev, google_ads_client_secret: e.target.value }))}
+        placeholder="Google Ads Client Secret"
+        disabled
+      />
+    </Form.Group>
+    
+    <Form.Group className="mb-3">
+      <Form.Label>Developer Token:</Form.Label>
+      <Form.Control
+        type="text"
+        value={settings.google_ads_developer_token}
+        onChange={(e) => setSettings(prev => ({ ...prev, google_ads_developer_token: e.target.value }))}
+        placeholder="Google Ads Developer Token"
+        disabled
+      />
+    </Form.Group>
+    
+    <Form.Group className="mb-3">
+      <Form.Label>Customer ID:</Form.Label>
+      <Form.Control
+        type="text"
+        value={settings.google_ads_customer_id}
+        onChange={(e) => setSettings(prev => ({ ...prev, google_ads_customer_id: e.target.value }))}
+        placeholder="1234567890"
+        disabled
+      />
+    </Form.Group>
+  </Form>
+</Tab>
 
-            {/* Вкладка Google Ads API */}
-            <Tab eventKey="googleads" title="Google Ads API">
-              <Form>
-                <Alert variant="warning">
-                  <strong>Google Ads API</strong><br />
-                  В разработке. Будет использоваться для экспорта ключевых слов в рекламные кампании.
-                </Alert>
-                
-                <Form.Group className="mb-3">
-                  <Form.Label>Client ID:</Form.Label>
-                  <Form.Control
-                    type="text"
-                    value={settings.google_ads_client_id}
-                    onChange={(e) => setSettings(prev => ({ ...prev, google_ads_client_id: e.target.value }))}
-                    placeholder="Google Ads Client ID"
-                    disabled
-                  />
-                </Form.Group>
-                
-                <Form.Group className="mb-3">
-                  <Form.Label>Client Secret:</Form.Label>
-                  <Form.Control
-                    type="password"
-                    value={settings.google_ads_client_secret}
-                    onChange={(e) => setSettings(prev => ({ ...prev, google_ads_client_secret: e.target.value }))}
-                    placeholder="Google Ads Client Secret"
-                    disabled
-                  />
-                </Form.Group>
-                
-                <Form.Group className="mb-3">
-                  <Form.Label>Developer Token:</Form.Label>
-                  <Form.Control
-                    type="text"
-                    value={settings.google_ads_developer_token}
-                    onChange={(e) => setSettings(prev => ({ ...prev, google_ads_developer_token: e.target.value }))}
-                    placeholder="Google Ads Developer Token"
-                    disabled
-                  />
-                </Form.Group>
-                
-                <Form.Group className="mb-3">
-                  <Form.Label>Customer ID:</Form.Label>
-                  <Form.Control
-                    type="text"
-                    value={settings.google_ads_customer_id}
-                    onChange={(e) => setSettings(prev => ({ ...prev, google_ads_customer_id: e.target.value }))}
-                    placeholder="1234567890"
-                    disabled
-                  />
-                </Form.Group>
-              </Form>
-            </Tab>
-
-            {/* Вкладка Отображение */}
-            <Tab eventKey="display" title="Отображение">
-              <Form>
-                <Form.Label>Выберите колонки для отображения в таблице:</Form.Label>
-                <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #dee2e6', padding: '10px', borderRadius: '4px' }}>
-                  {allColumns.map(column => (
-                    <Form.Check
-                      key={column.key}
-                      type="checkbox"
-                      id={`column-${column.key}`}
-                      label={column.label}
-                      checked={settings.visible_columns.includes(column.key)}
-                      onChange={() => handleColumnToggle(column.key)}
-                      className="mb-2"
-                    />
-                  ))}
-                </div>
-                <Form.Text className="text-muted mt-2">
-                  Выбрано колонок: {settings.visible_columns.length} из {allColumns.length}
-                </Form.Text>
-              </Form>
-            </Tab>
-          </Tabs>
+<Tab eventKey="display" title="Отображение">
+    <Form>
+      <Form.Label>Выберите колонки для отображения в таблице:</Form.Label>
+      
+      <div className="mb-3">
+        <Button 
+          size="sm" 
+          variant="outline-primary" 
+          className="me-2"
+          onClick={() => {
+            const allKeys = allColumns.map(c => c.key);
+            setSettings(prev => ({ ...prev, visible_columns: allKeys }));
+            if (onSettingsChange) {
+              onSettingsChange({ visible_columns: allKeys });
+            }
+          }}
+        >
+          Выбрать все
+        </Button>
+        <Button 
+          size="sm" 
+          variant="outline-secondary"
+          onClick={() => {
+            setSettings(prev => ({ ...prev, visible_columns: [] }));
+            if (onSettingsChange) {
+              onSettingsChange({ visible_columns: [] });
+            }
+          }}
+        >
+          Снять все
+        </Button>
+      </div>
+      
+      <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #dee2e6', padding: '10px', borderRadius: '4px' }}>
+        {allColumns.map(column => (
+          <Form.Check
+            key={column.key}
+            type="checkbox"
+            id={`column-${column.key}`}
+            label={column.label}
+            checked={settings.visible_columns.includes(column.key)}
+            onChange={() => handleColumnToggle(column.key)}
+            className="mb-2"
+          />
+        ))}
+      </div>
+      <Form.Text className="text-muted mt-2">
+        Выбрано колонок: {settings.visible_columns.length} из {allColumns.length}
+        <br />
+        <small>Изменения применяются сразу, но сохраняются только после нажатия "Сохранить настройки"</small>
+      </Form.Text>
+    </Form>
+  </Tab>
+  <Tab eventKey="business" title="Бизнес">
+  <Form>
+    <Alert variant="info">
+      <strong>Настройки сайтов кампаний</strong><br />
+      Укажите URL сайта для каждой кампании. Этот URL будет использоваться для определения присутствия вашего сайта в SERP выдаче.
+    </Alert>
+    
+    <Form.Label className="mb-3">Сайты кампаний:</Form.Label>
+    
+    <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+      {campaignSites.length > 0 ? (
+        campaignSites.map(campaign => (
+          <Row key={campaign.id} className="mb-3 align-items-center">
+            <Col md={4}>
+              <Form.Label className="mb-0">
+                <strong>{campaign.name}</strong>
+              </Form.Label>
+            </Col>
+            <Col md={8}>
+              <Form.Control
+                type="url"
+                value={campaign.site_url || ''}
+                onChange={(e) => handleSiteUrlChange(campaign.id, e.target.value)}
+                placeholder="https://example.com"
+              />
+              <Form.Text className="text-muted">
+                {campaign.domain && (
+                  <small>Домен: {campaign.domain}</small>
+                )}
+              </Form.Text>
+            </Col>
+          </Row>
+        ))
+      ) : (
+        <div className="text-center py-3 text-muted">
+          Нет доступных кампаний
+        </div>
+      )}
+    </div>
+    
+    <Alert variant="warning" className="mt-3">
+      <small>
+        <strong>Важно:</strong> После изменения URL сайта необходимо выполнить SERP анализ заново, чтобы обновить поле "Есть наш сайт?" для ключевых слов.
+      </small>
+    </Alert>
+  </Form>
+</Tab>
+</Tabs>
         )}
       </Modal.Body>
       <Modal.Footer>
