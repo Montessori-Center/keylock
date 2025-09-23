@@ -137,6 +137,83 @@ def reject_changes():
     finally:
         if connection:
             connection.close()
+            
+@keywords_bp.route('/campaigns', methods=['GET'])
+def get_campaigns():
+    """Получение списка кампаний с группами объявлений"""
+    connection = None
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # Получаем кампании
+        cursor.execute("SELECT id, name, status FROM campaigns ORDER BY id")
+        campaigns = cursor.fetchall()
+        
+        campaigns_data = []
+        for campaign in campaigns:
+            # Получаем группы объявлений для каждой кампании
+            cursor.execute("""
+                SELECT id, name, status 
+                FROM ad_groups 
+                WHERE campaign_id = %s 
+                ORDER BY id
+            """, (campaign['id'],))
+            ad_groups = cursor.fetchall()
+            
+            # Для каждой группы считаем новые изменения
+            ad_groups_with_stats = []
+            for ag in ad_groups:
+                cursor.execute("""
+                    SELECT COUNT(*) as new_changes 
+                    FROM keywords 
+                    WHERE ad_group_id = %s AND is_new = TRUE
+                """, (ag['id'],))
+                new_changes = cursor.fetchone()['new_changes']
+                
+                # Получаем уникальные цвета партий
+                cursor.execute("""
+                    SELECT DISTINCT batch_color 
+                    FROM keywords 
+                    WHERE ad_group_id = %s 
+                    AND is_new = TRUE 
+                    AND batch_color IS NOT NULL
+                """, (ag['id'],))
+                colors = [row['batch_color'] for row in cursor.fetchall()]
+                
+                ad_groups_with_stats.append({
+                    'id': ag['id'],
+                    'name': ag['name'],
+                    'status': ag['status'],
+                    'newChanges': new_changes,
+                    'batchColors': colors,
+                    'hasChanges': new_changes > 0
+                })
+            
+            campaigns_data.append({
+                'id': campaign['id'],
+                'name': campaign['name'],
+                'status': campaign['status'],
+                'adGroups': ad_groups_with_stats
+            })
+        
+        cursor.close()
+        
+        return jsonify({
+            'success': True,
+            'data': campaigns_data
+        })
+        
+    except Exception as e:
+        print(f"Error in get_campaigns: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'data': []
+        })
+    finally:
+        if connection:
+            connection.close()
 
 @keywords_bp.route('/list/<int:ad_group_id>', methods=['GET'])
 def get_keywords(ad_group_id):

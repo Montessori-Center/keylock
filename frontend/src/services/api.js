@@ -127,6 +127,11 @@ const api = {
   getCampaignSite: async (campaignId) => {
     const response = await axios.get(`${API_BASE_URL}/settings/campaign-site/${campaignId}`);
     return response.data;
+  },
+  
+  getCampaigns: async () => {
+    const response = await axios.get(`${API_BASE_URL}/keywords/campaigns`);
+    return response.data;
   }
 };
 

@@ -2,6 +2,7 @@
 from flask import Blueprint, request, jsonify
 from urllib.parse import urlparse
 from services.config_manager import config_manager
+from config import Config
 import pymysql
 import os
 import sys
