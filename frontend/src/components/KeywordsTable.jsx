@@ -1,4 +1,4 @@
-// frontend/src/components/KeywordsTable.jsx - ИСПРАВЛЕННАЯ ВЕРСИЯ
+// frontend/src/components/KeywordsTable.jsx - ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ
 import React, { useRef, useEffect, useState } from 'react';
 import { HotTable } from '@handsontable/react';
 import { registerAllModules } from 'handsontable/registry';
@@ -64,7 +64,6 @@ const KeywordsTable = ({
 
   // Формируем колонки на основе настроек видимости
   const getVisibleColumns = () => {
-    // Если visibleColumns не передан или пуст, используем дефолтный набор
     const defaultColumns = [
       'selected', 'id', 'keyword', 'criterion_type', 'max_cpc', 'status', 'comment',
       'has_ads', 'has_school_sites', 'has_google_maps', 'has_our_site',
@@ -122,53 +121,51 @@ const KeywordsTable = ({
       organic_average_position: keyword.organic_average_position,
       organic_impression_share: keyword.organic_impression_share,
       labels: keyword.labels,
-      is_new: keyword.is_new || false // ИСПРАВЛЕНО: добавлен флаг новой записи
+      is_new: keyword.is_new || false,
+      batch_color: keyword.batch_color // Сохраняем цвет партии
     }));
     setTableData(data);
-    
-    // Обновляем таблицу принудительно если изменились selectedIds
-    if (hotTableRef.current && hotTableRef.current.hotInstance) {
-      hotTableRef.current.hotInstance.loadData(data);
-    }
   }, [keywords, selectedIds]);
-  
-   useEffect(() => {
-      if (!hotTableRef.current?.hotInstance) return;
-      if (tableData.length === 0) return;
-      
-      const instance = hotTableRef.current.hotInstance;
-      
-      // Применяем стили через afterRenderer
-      instance.updateSettings({
-        afterRenderer: function(td, row, col, prop, value, cellProperties) {
-          const rowData = instance.getSourceDataAtRow(row);
-          
-          if (rowData && rowData.is_new === true && rowData.batch_color) {
+
+  // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: правильное применение стилей после загрузки данных
+  useEffect(() => {
+    if (!hotTableRef.current?.hotInstance || tableData.length === 0) return;
+    
+    const instance = hotTableRef.current.hotInstance;
+    
+    // Настраиваем рендеринг ячеек с учетом цветов новых записей
+    instance.updateSettings({
+      cells: function(row, col) {
+        const cellProperties = {};
+        const rowData = this.instance.getSourceDataAtRow(row);
+        
+        if (rowData && rowData.is_new && rowData.batch_color) {
+          // Применяем стиль через renderer
+          cellProperties.renderer = function(hotInstance, td, row, col, prop, value, cellProperties) {
+            // Вызываем стандартный renderer
+            Handsontable.renderers.getRenderer(cellProperties.type)(hotInstance, td, row, col, prop, value, cellProperties);
+            
+            // Применяем наш цвет фона
             td.style.backgroundColor = rowData.batch_color;
             td.style.fontWeight = 'bold';
             
+            // Добавляем левую границу для первой колонки
             if (col === 0) {
               td.style.borderLeft = `4px solid ${rowData.batch_color}`;
             }
-          }
-        },
-        
-        cells: function(row, col) {
-          const cellProperties = {};
-          const rowData = this.instance.getSourceDataAtRow(row);
-          
-          if (rowData && rowData.is_new === true && rowData.batch_color) {
-            cellProperties.className = 'new-record-cell';
-          }
-          
-          return cellProperties;
+            
+            return td;
+          };
         }
-      });
-      
-      // Принудительный рендеринг
-      instance.render();
-      
-    }, [tableData]);
+        
+        return cellProperties;
+      }
+    });
+    
+    // Принудительная перерисовка таблицы
+    instance.render();
+    
+  }, [tableData]); // Срабатывает при изменении данных
 
   // Обработка изменений в таблице
   const handleAfterChange = (changes, source) => {
@@ -207,26 +204,26 @@ const KeywordsTable = ({
   return (
     <div className="keywords-table-container">
       <HotTable
-          ref={hotTableRef}
-          data={tableData}
-          columns={visibleColumnsConfig}
-          colHeaders={true}
-          rowHeaders={false}
-          height="calc(100vh - 300px)"
-          width="100%"
-          stretchH="all"
-          autoWrapRow={true}
-          autoWrapCol={true}
-          licenseKey="non-commercial-and-evaluation"
-          afterChange={handleAfterChange}
-          manualColumnResize={true}
-          manualRowResize={true}
-          contextMenu={true}
-          filters={true}
-          dropdownMenu={true}
-          columnSorting={true}
-          className="keywords-handsontable"
-        />
+        ref={hotTableRef}
+        data={tableData}
+        columns={visibleColumnsConfig}
+        colHeaders={true}
+        rowHeaders={false}
+        height="calc(100vh - 300px)"
+        width="100%"
+        stretchH="all"
+        autoWrapRow={true}
+        autoWrapCol={true}
+        licenseKey="non-commercial-and-evaluation"
+        afterChange={handleAfterChange}
+        manualColumnResize={true}
+        manualRowResize={true}
+        contextMenu={true}
+        filters={true}
+        dropdownMenu={true}
+        columnSorting={true}
+        className="keywords-handsontable"
+      />
     </div>
   );
 };

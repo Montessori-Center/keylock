@@ -84,19 +84,71 @@ function App() {
   };
   
   useEffect(() => {
-    loadColumnSettings();
-  }, []);
-
-  const loadColumnSettings = async () => {
-    try {
-      const response = await api.getSettings();
-      if (response.success && response.settings.visible_columns) {
-        setVisibleColumns(response.settings.visible_columns);
+      const initializeApp = async () => {
+        console.log('🚀 Initializing app...');
+        
+        // Шаг 1: Загружаем настройки колонок
+        try {
+          const response = await api.getSettings();
+          if (response.success && response.settings.visible_columns) {
+            setVisibleColumns(response.settings.visible_columns);
+            console.log('✅ Column settings loaded');
+          }
+        } catch (error) {
+          console.error('Error loading column settings:', error);
+        }
+        
+        // Шаг 2: Загружаем кампании
+        const loadedCampaigns = await loadCampaigns();
+        
+        // Шаг 3: Если кампании загрузились, загружаем статистику
+        if (loadedCampaigns && loadedCampaigns.length > 0) {
+          console.log('📊 Loading stats for loaded campaigns...');
+          await loadAdGroupsStats(loadedCampaigns);
+        }
+      };
+      
+      initializeApp();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    
+    useEffect(() => {
+      const savedAdGroupId = localStorage.getItem('selectedAdGroupId');
+      if (savedAdGroupId && campaigns.length > 0) {
+        // Ищем сохраненную группу в загруженных кампаниях
+        for (const campaign of campaigns) {
+          const adGroup = campaign.adGroups.find(ag => ag.id === parseInt(savedAdGroupId));
+          if (adGroup) {
+            console.log(`📌 Restoring selected ad group: ${adGroup.name} (has ${adGroup.newChanges || 0} changes)`);
+            setSelectedAdGroup(adGroup);
+            break;
+          }
+        }
       }
-    } catch (error) {
-      console.error('Error loading column settings:', error);
-    }
-  };
+    }, [campaigns]);
+    
+    useEffect(() => {
+      const savedAdGroupId = localStorage.getItem('selectedAdGroupId');
+      if (savedAdGroupId && campaigns.length > 0) {
+        // Ищем сохраненную группу в загруженных кампаниях
+        for (const campaign of campaigns) {
+          const adGroup = campaign.adGroups.find(ag => ag.id === parseInt(savedAdGroupId));
+          if (adGroup) {
+            console.log(`📌 Restoring selected ad group: ${adGroup.name} (has ${adGroup.newChanges || 0} changes)`);
+            setSelectedAdGroup(adGroup);
+            break;
+          }
+        }
+      }
+    }, [campaigns]);
+    
+    useEffect(() => {
+      if (selectedAdGroup) {
+        console.log(`📋 Loading keywords for ad group: ${selectedAdGroup.name}`);
+        setSelectedKeywordIds([]); // Сбрасываем выделение
+        loadKeywords(selectedAdGroup.id);
+      }
+    }, [selectedAdGroup]);
   
   const handleSettingsChange = (newSettings) => {
     if (newSettings.visible_columns) {
@@ -128,37 +180,6 @@ function App() {
       }
   };
 
-  useEffect(() => {
-  loadCampaigns();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-  useEffect(() => {
-    const savedAdGroupId = localStorage.getItem('selectedAdGroupId');
-    if (savedAdGroupId && campaigns.length > 0) {
-      for (const campaign of campaigns) {
-        const adGroup = campaign.adGroups.find(ag => ag.id === parseInt(savedAdGroupId));
-        if (adGroup) {
-          setSelectedAdGroup(adGroup);
-          break;
-        }
-      }
-    }
-  }, [campaigns]);
-
-  useEffect(() => {
-    if (selectedAdGroup) {
-      localStorage.setItem('selectedAdGroupId', selectedAdGroup.id.toString());
-    }
-  }, [selectedAdGroup]);
-
-  useEffect(() => {
-    if (selectedAdGroup) {
-      setSelectedKeywordIds([]);
-      loadKeywords(selectedAdGroup.id);
-    }
-  }, [selectedAdGroup]);
-
   // ИСПРАВЛЕННАЯ функция loadCampaigns
     const loadCampaigns = async () => {
       try {
@@ -168,16 +189,16 @@ function App() {
             id: 1,
             name: 'montessori.ua',
             adGroups: [
-              { id: 1, name: '001 Уроки фортепиано (RU)', newChanges: 0 },
-              { id: 2, name: '002 Уроки вокала (RU)', newChanges: 0 },
-              { id: 3, name: '003 Уроки классической гитары (RU)', newChanges: 0 },
-              { id: 4, name: '004 Уроки электрогитары (RU)', newChanges: 0 },
-              { id: 5, name: '005 Уроки бас-гитары (RU)', newChanges: 0 },
-              { id: 6, name: '006 Уроки барабанов (RU)', newChanges: 0 },
-              { id: 7, name: '007 Уроки скрипки (RU)', newChanges: 0 },
-              { id: 8, name: '008 Уроки виолончели (RU)', newChanges: 0 },
-              { id: 9, name: '009 Уроки саксофона (RU)', newChanges: 0 },
-              { id: 10, name: '010 Уроки флейты (RU)', newChanges: 0 },
+              { id: 1, name: '001 Уроки фортепиано (RU)', newChanges: 0, hasChanges: false },
+              { id: 2, name: '002 Уроки вокала (RU)', newChanges: 0, hasChanges: false },
+              { id: 3, name: '003 Уроки классической гитары (RU)', newChanges: 0, hasChanges: false },
+              { id: 4, name: '004 Уроки электрогитары (RU)', newChanges: 0, hasChanges: false },
+              { id: 5, name: '005 Уроки бас-гитары (RU)', newChanges: 0, hasChanges: false },
+              { id: 6, name: '006 Уроки барабанов (RU)', newChanges: 0, hasChanges: false },
+              { id: 7, name: '007 Уроки скрипки (RU)', newChanges: 0, hasChanges: false },
+              { id: 8, name: '008 Уроки виолончели (RU)', newChanges: 0, hasChanges: false },
+              { id: 9, name: '009 Уроки саксофона (RU)', newChanges: 0, hasChanges: false },
+              { id: 10, name: '010 Уроки флейты (RU)', newChanges: 0, hasChanges: false },
             ]
           }
         ];
@@ -186,11 +207,12 @@ function App() {
         setSelectedCampaign(campaignData[0]);
         console.log('✅ Campaigns loaded:', campaignData);
         
-        // Загружаем статистику после установки кампаний
-        setTimeout(() => loadAdGroupsStats(), 1000);
+        // Возвращаем данные для использования в useEffect
+        return campaignData;
       } catch (error) {
         console.error('❌ Error loading campaigns:', error);
         toast.error('Ошибка загрузки кампаний');
+        return null;
       }
     };
 
@@ -245,45 +267,107 @@ function App() {
   };
 
   const handleAddKeywords = async (keywordsText) => {
-    if (!selectedAdGroup) {
-      toast.error('Выберите группу объявлений');
-      return;
-    }
-    
-    try {
-      const response = await api.addKeywords(selectedAdGroup.id, keywordsText);
-      if (response.success) {
-        toast.success(response.message);
-        loadKeywords(selectedAdGroup.id);
+      if (!selectedAdGroup) {
+        toast.error('Выберите группу объявлений');
+        return;
       }
-    } catch (error) {
-      toast.error('Ошибка добавления ключевых слов');
-    }
-  };
+      
+      try {
+        const response = await api.addKeywords(selectedAdGroup.id, keywordsText);
+        if (response.success) {
+          toast.success(response.message);
+          await loadKeywords(selectedAdGroup.id);
+          await loadAdGroupsStats(); // <-- Добавить эту строку
+        }
+      } catch (error) {
+        toast.error('Ошибка добавления ключевых слов');
+      }
+    };
 
   const handleBulkAction = async (action) => {
-    if (selectedKeywordIds.length === 0 && action !== 'paste') {
-      toast.warning('Выберите ключевые слова');
-      return;
-    }
-
-    try {
-      if (action === 'copy' || action === 'copy_data') {
-        const response = await api.bulkAction(action, selectedKeywordIds);
-        if (response.success) {
-          setCopiedData({
-            type: action === 'copy' ? 'keywords' : 'full_data',
-            data: action === 'copy' ? response.copied : response.copied_data
-          });
+      if (selectedKeywordIds.length === 0 && action !== 'paste') {
+        toast.warning('Выберите ключевые слова');
+        return;
+      }
+    
+      try {
+        if (action === 'copy' || action === 'copy_data') {
+          const response = await api.bulkAction(action, selectedKeywordIds);
+          if (response.success) {
+            setCopiedData({
+              type: action === 'copy' ? 'keywords' : 'full_data',
+              data: action === 'copy' ? response.copied : response.copied_data
+            });
+            
+            let textToCopy = '';
+            let successMessage = '';
+            
+            if (action === 'copy') {
+              textToCopy = response.copied.join(', ');
+              successMessage = `Скопировано ${response.copied.length} ключевых слов в буфер обмена`;
+            } else {
+              const rows = response.copied_data.map(item => [
+                item.keyword || 'None',
+                item.criterion_type || 'None',
+                item.max_cpc || 'None',
+                item.max_cpm || 'None',
+                item.status || 'None',
+                item.comment || 'None',
+                item.has_ads ? 'true' : 'false',
+                item.has_school_sites ? 'true' : 'false', 
+                item.has_google_maps ? 'true' : 'false',
+                item.has_our_site ? 'true' : 'false',
+                item.intent_type || 'None',
+                item.recommendation || 'None',
+                item.avg_monthly_searches || 'None',
+                item.three_month_change || 'None',
+                item.yearly_change || 'None',
+                item.competition || 'None',
+                item.competition_percent || 'None',
+                item.min_top_of_page_bid || 'None',
+                item.max_top_of_page_bid || 'None',
+                item.ad_impression_share || 'None',
+                item.organic_average_position || 'None',
+                item.organic_impression_share || 'None',
+                item.labels || 'None'
+              ].join(' '));
+              
+              textToCopy = rows.join(', ');
+              successMessage = `Скопированы данные ${response.copied_data.length} ключевых слов в буфер обмена`;
+            }
+            
+            const copySuccess = await copyToClipboard(textToCopy);
+            
+            if (copySuccess) {
+              toast.success(successMessage);
+            } else {
+              toast.warning('Копирование не удалось. Данные в консоли для ручного копирования.');
+              console.log('=== ДАННЫЕ ДЛЯ КОПИРОВАНИЯ ===');
+              console.log(textToCopy);
+              console.log('=== КОНЕЦ ДАННЫХ ===');
+              
+              if (textToCopy.length < 2000) {
+                setTimeout(() => {
+                  window.prompt('Скопируйте данные:', textToCopy);
+                }, 100);
+              }
+            }
+          }
+        } else if (action === 'paste') {
+          if (!copiedData) {
+            toast.warning('Нет скопированных данных');
+            return;
+          }
           
-          let textToCopy = '';
-          let successMessage = '';
+          console.log('=== PASTE DEBUG ===');
+          console.log('copiedData:', copiedData);
           
-          if (action === 'copy') {
-            textToCopy = response.copied.join(', ');
-            successMessage = `Скопировано ${response.copied.length} ключевых слов в буфер обмена`;
-          } else {
-            const rows = response.copied_data.map(item => [
+          let pasteDataArray;
+          if (copiedData.type === 'keywords') {
+            pasteDataArray = copiedData.data;
+            console.log('Keywords paste data:', pasteDataArray);
+          } else if (copiedData.type === 'full_data') {
+            pasteDataArray = copiedData.data.map(item => [
               item.keyword || 'None',
               item.criterion_type || 'None',
               item.max_cpc || 'None',
@@ -308,147 +392,132 @@ function App() {
               item.organic_impression_share || 'None',
               item.labels || 'None'
             ].join(' '));
-            
-            textToCopy = rows.join(', ');
-            successMessage = `Скопированы данные ${response.copied_data.length} ключевых слов в буфер обмена`;
+            console.log('Full data paste array:', pasteDataArray);
           }
           
-          const copySuccess = await copyToClipboard(textToCopy);
+          console.log('Final paste data array:', pasteDataArray);
+          console.log('Array length:', pasteDataArray?.length);
+          console.log('=== END PASTE DEBUG ===');
           
-          if (copySuccess) {
-            toast.success(successMessage);
-          } else {
-            toast.warning('Копирование не удалось. Данные в консоли для ручного копирования.');
-            console.log('=== ДАННЫЕ ДЛЯ КОПИРОВАНИЯ ===');
-            console.log(textToCopy);
-            console.log('=== КОНЕЦ ДАННЫХ ===');
+          const response = await api.pasteKeywords(
+            selectedAdGroup.id,
+            pasteDataArray,
+            copiedData.type
+          );
+          if (response.success) {
+            toast.success(response.message);
+            await loadKeywords(selectedAdGroup.id);
+            await loadAdGroupsStats(); // ДОБАВЛЕНО: обновляем статистику групп после вставки
+          }
+        } else if (action === 'change_field') {
+          setShowChangeField(true);
+        } else if (action === 'delete') {
+          const confirmed = window.confirm(`Вы уверены, что хотите удалить ${selectedKeywordIds.length} ключевых слов?`);
+          if (!confirmed) return;
+          
+          const response = await api.bulkAction(action, selectedKeywordIds);
+          if (response.success) {
+            toast.success(response.message);
+            await loadKeywords(selectedAdGroup.id);
+            await loadAdGroupsStats(); // ДОБАВЛЕНО: обновляем статистику после удаления
+            setSelectedKeywordIds([]); // Сбрасываем выделение после удаления
+          }
+        } else if (action === 'pause' || action === 'activate') {
+          const response = await api.bulkAction(action, selectedKeywordIds);
+          if (response.success) {
+            toast.success(response.message);
+            await loadKeywords(selectedAdGroup.id);
+            // Для pause/activate статистику обновлять не обязательно, 
+            // так как количество новых записей не меняется
+          }
+        } else {
+          // Для любых других действий
+          const response = await api.bulkAction(action, selectedKeywordIds);
+          if (response.success) {
+            toast.success(response.message);
+            await loadKeywords(selectedAdGroup.id);
             
-            if (textToCopy.length < 2000) {
-              setTimeout(() => {
-                window.prompt('Скопируйте данные:', textToCopy);
-              }, 100);
+            // Если действие может повлиять на новые записи, обновляем статистику
+            if (action === 'update_field' || action === 'remove') {
+              await loadAdGroupsStats();
             }
           }
         }
-      } else if (action === 'paste') {
-        if (!copiedData) {
-          toast.warning('Нет скопированных данных');
-          return;
-        }
-        
-        console.log('=== PASTE DEBUG ===');
-        console.log('copiedData:', copiedData);
-        
-        let pasteDataArray;
-        if (copiedData.type === 'keywords') {
-          pasteDataArray = copiedData.data;
-          console.log('Keywords paste data:', pasteDataArray);
-        } else if (copiedData.type === 'full_data') {
-          pasteDataArray = copiedData.data.map(item => [
-            item.keyword || 'None',
-            item.criterion_type || 'None',
-            item.max_cpc || 'None',
-            item.max_cpm || 'None',
-            item.status || 'None',
-            item.comment || 'None',
-            item.has_ads ? 'true' : 'false',
-            item.has_school_sites ? 'true' : 'false', 
-            item.has_google_maps ? 'true' : 'false',
-            item.has_our_site ? 'true' : 'false',
-            item.intent_type || 'None',
-            item.recommendation || 'None',
-            item.avg_monthly_searches || 'None',
-            item.three_month_change || 'None',
-            item.yearly_change || 'None',
-            item.competition || 'None',
-            item.competition_percent || 'None',
-            item.min_top_of_page_bid || 'None',
-            item.max_top_of_page_bid || 'None',
-            item.ad_impression_share || 'None',
-            item.organic_average_position || 'None',
-            item.organic_impression_share || 'None',
-            item.labels || 'None'
-          ].join(' '));
-          console.log('Full data paste array:', pasteDataArray);
-        }
-        
-        console.log('Final paste data array:', pasteDataArray);
-        console.log('Array length:', pasteDataArray?.length);
-        console.log('=== END PASTE DEBUG ===');
-        
-        const response = await api.pasteKeywords(
-          selectedAdGroup.id,
-          pasteDataArray,
-          copiedData.type
-        );
-        if (response.success) {
-          toast.success(response.message);
-          loadKeywords(selectedAdGroup.id);
-        }
-      } else if (action === 'change_field') {
-        setShowChangeField(true);
-      } else {
-        const response = await api.bulkAction(action, selectedKeywordIds);
-        if (response.success) {
-          toast.success(response.message);
-          loadKeywords(selectedAdGroup.id);
-        }
+      } catch (error) {
+        console.error('Bulk action error:', error);
+        toast.error(`Ошибка выполнения действия: ${error.message || 'Неизвестная ошибка'}`);
       }
-    } catch (error) {
-      console.error('Bulk action error:', error);
-      toast.error(`Ошибка выполнения действия: ${error.message || 'Неизвестная ошибка'}`);
-    }
-  };
+    };
   
-  const loadAdGroupsStats = async () => {
+    const loadAdGroupsStats = async (campaignsData = null) => {
       try {
         console.log('🔄 Loading ad groups stats...');
         
-        if (!campaigns || campaigns.length === 0) {
+        // Используем переданные campaigns или берем из state
+        const campaignsToUse = campaignsData || campaigns;
+        
+        if (!campaignsToUse || campaignsToUse.length === 0) {
           console.log('⚠️ No campaigns to load stats for');
           return;
         }
     
         // Получаем статистику новых изменений для каждой группы
         const adGroupsWithStats = await Promise.all(
-          campaigns[0]?.adGroups?.map(async (adGroup) => {
+          campaignsToUse[0]?.adGroups?.map(async (adGroup) => {
             try {
               console.log(`🔍 Loading stats for ad group ${adGroup.id}: ${adGroup.name}`);
               const response = await api.getKeywords(adGroup.id);
+              
+              // Подсчитываем новые записи
               const newChangesCount = response.success 
-                ? response.data.filter(keyword => keyword.is_new).length 
+                ? response.data.filter(keyword => keyword.is_new === true).length 
                 : 0;
               
-              // ДОБАВЛЕНО: получаем уникальные цвета для этой группы
+              // Получаем уникальные цвета партий
               const uniqueColors = response.success
                 ? [...new Set(response.data
-                    .filter(keyword => keyword.is_new && keyword.batch_color)
+                    .filter(keyword => keyword.is_new === true && keyword.batch_color)
                     .map(keyword => keyword.batch_color))]
                 : [];
               
-              console.log(`📊 Ad group ${adGroup.id} has ${newChangesCount} new changes with ${uniqueColors.length} different colors`);
+              console.log(`📊 Ad group ${adGroup.id}: ${newChangesCount} new changes, ${uniqueColors.length} colors`);
               
               return {
                 ...adGroup,
                 newChanges: newChangesCount,
-                batchColors: uniqueColors // ДОБАВЛЕНО: массив цветов для группы
+                batchColors: uniqueColors,
+                hasChanges: newChangesCount > 0
               };
             } catch (error) {
               console.error(`❌ Error loading stats for ad group ${adGroup.id}:`, error);
-              return { ...adGroup, newChanges: 0, batchColors: [] };
+              return { 
+                ...adGroup, 
+                newChanges: 0, 
+                batchColors: [],
+                hasChanges: false 
+              };
             }
           }) || []
         );
     
         // Обновляем кампании с новой статистикой
-        const updatedCampaigns = [{
-          id: 1,
-          name: 'montessori.ua',
+        const updatedCampaigns = campaignsToUse.map(campaign => ({
+          ...campaign,
           adGroups: adGroupsWithStats
-        }];
+        }));
         
         setCampaigns(updatedCampaigns);
         console.log('✅ Ad groups stats updated:', adGroupsWithStats);
+        
+        // Если текущая выбранная группа обновилась, обновляем и её
+        if (selectedAdGroup) {
+          const updatedSelectedGroup = adGroupsWithStats.find(ag => ag.id === selectedAdGroup.id);
+          if (updatedSelectedGroup) {
+            setSelectedAdGroup(updatedSelectedGroup);
+          }
+        }
+        
+        return updatedCampaigns;
         
       } catch (error) {
         console.error('❌ Error loading ad groups stats:', error);
@@ -469,27 +538,28 @@ function App() {
 
   // ИСПРАВЛЕНО: handleAddNewOutput теперь правильно обрабатывает параметры
   const handleAddNewOutput = async (params) => {
-    if (!selectedAdGroup) {
-      toast.error('Выберите группу объявлений');
-      return;
-    }
-
-    try {
-      const response = await api.getNewKeywords({
-        ...params,
-        ad_group_id: selectedAdGroup.id
-      });
-      if (response.success) {
-        toast.success(response.message);
-        loadKeywords(selectedAdGroup.id);
-      } else {
-        toast.error(response.error || 'Ошибка получения новых ключевых слов');
+      if (!selectedAdGroup) {
+        toast.error('Выберите группу объявлений');
+        return;
       }
-    } catch (error) {
-      console.error('Add new output error:', error);
-      toast.error('Ошибка получения новых ключевых слов: ' + (error.message || 'Неизвестная ошибка'));
-    }
-  };
+    
+      try {
+        const response = await api.getNewKeywords({
+          ...params,
+          ad_group_id: selectedAdGroup.id
+        });
+        if (response.success) {
+          toast.success(response.message);
+          await loadKeywords(selectedAdGroup.id);
+          await loadAdGroupsStats(); // <-- Добавить эту строку
+        } else {
+          toast.error(response.error || 'Ошибка получения новых ключевых слов');
+        }
+      } catch (error) {
+        console.error('Add new output error:', error);
+        toast.error('Ошибка получения новых ключевых слов: ' + (error.message || 'Неизвестная ошибка'));
+      }
+    };
 
   const handleApplySerp = async (params) => {
     try {

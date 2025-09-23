@@ -397,32 +397,10 @@ body {
   border-top: 1px solid var(--border-color);
 }
 
-/* Стили для групп объявлений с изменениями */
-.ad-group-item.has-changes {
-  background-color: #fff3cd !important;
-  border-left: 3px solid #ffc107;
-  font-weight: 500;
-}
-
-.ad-group-item.has-changes:hover {
-  background-color: #fff3cd !important;
-}
-
 .ad-group-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-}
-
-.changes-badge {
-  background: #ffc107;
-  color: #856404;
-  font-size: 10px;
-  padding: 2px 5px;
-  border-radius: 10px;
-  font-weight: bold;
-  min-width: 18px;
-  text-align: center;
 }
 
 /* Стили для отладки сайдбара */
@@ -461,83 +439,79 @@ body {
   margin-bottom: 2px;
 }
 
-.changes-indicator {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.changes-badge {
-  background: #ffc107;
-  color: #856404;
-  font-size: 10px;
-  padding: 2px 5px;
-  border-radius: 10px;
-  font-weight: bold;
-  min-width: 18px;
-  text-align: center;
-}
-
-.batch-colors-indicator {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.batch-color-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  border: 1px solid rgba(0,0,0,0.2);
-  display: inline-block;
-}
-
 .more-colors {
   font-size: 8px;
   color: #666;
   margin-left: 2px;
 }
 
-/* Стили для групп с изменениями */
-.ad-group-item.has-changes {
-  background: linear-gradient(90deg, #ffeb3b 0%, #ffc107 100%) !important;
-  border-left: 5px solid #ff9800 !important;
-  padding-left: 7px !important;
-  margin-left: -2px !important;
-  font-weight: 700 !important;
-  box-shadow: 0 2px 4px rgba(255, 152, 0, 0.3);
-  position: relative;
+/* Стили для ячеек таблицы с новыми записями */
+.handsontable td.htDimmed {
+  color: #777 !important;
 }
 
-.ad-group-item.has-changes::before {
-  content: "NEW";
-  position: absolute;
-  top: 50%;
-  right: 60px;
-  transform: translateY(-50%);
-  background: #ff5722;
-  color: white;
-  font-size: 9px;
-  padding: 1px 4px;
-  border-radius: 3px;
-  font-weight: bold;
+.handsontable td {
+  transition: background-color 0.3s ease;
 }
 
-.ad-group-item.has-changes .ad-group-name {
-  color: #e65100 !important;
-  font-weight: bold !important;
-  text-shadow: 0 0 1px rgba(0,0,0,0.1);
+/* Убираем конфликтующие стили */
+.keywords-handsontable .new-record,
+.keywords-handsontable .new-record::before,
+.new-badge {
+  display: none !important;
 }
 
-/* Стили для новых записей в таблице */
-.new-record-cell {
-  font-weight: bold !important;
+/* Анимированный бейдж с количеством изменений */
+.ad-group-item.has-changes .changes-badge {
+  font-weight: 900 !important;
+  font-size: 11px !important;
+  padding: 2px 6px !important;
+  border-left: 1px solid;
 }
 
-.handsontable td.new-record-cell {
-  font-weight: bold !important;
+@keyframes badge-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 2px 4px rgba(255, 87, 34, 0.4);
+  }
+  50% {
+    transform: scale(1.15);
+    box-shadow: 0 3px 6px rgba(255, 87, 34, 0.6);
+  }
 }
 
+/* Индикаторы цветов партий */
+.batch-colors-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 5px;
+}
+
+.batch-color-dot {
+  display: none;
+}
+
+.batch-color-dot:hover {
+  transform: scale(1.3);
+}
+
+/* Убедимся что активная группа с изменениями тоже жирная */
+.ad-group-item.active.has-changes .ad-group-name {
+  font-weight: 900 !important;
+}
+
+/* Дополнительное выделение для групп без изменений */
+.ad-group-item:not(.has-changes) .ad-group-name {
+  font-weight: normal;
+  color: #5f6368;
+}
+
+/* Активная группа без изменений */
+.ad-group-item.active:not(.has-changes) .ad-group-name {
+  font-weight: 500;
+  color: var(--primary-color);
+}
 
 /* ДОБАВЛЕНО: анимации для новых записей */
 @keyframes newRecordPulse {
