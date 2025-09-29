@@ -142,6 +142,7 @@ class DataForSeoClient:
     def parse_keywords_response(self, response: Dict) -> List[Dict]:
         """
         Парсинг ответа с ключевыми словами (только основные данные)
+        Интент и SERP данные будут определены отдельно через SERP анализ
         """
         debug_print(f"🔄 parse_keywords_response начат")
         keywords_data = []
@@ -215,9 +216,6 @@ class DataForSeoClient:
                     "UNSPECIFIED": "Неизвестно"
                 }
                 
-                # Базовое определение интента по ключевому слову (без SERP данных)
-                intent_type = determine_intent_from_keyword(keyword_text)
-                
                 keyword_result = {
                     "keyword": keyword_text,
                     "avg_monthly_searches": search_volume,
@@ -228,11 +226,12 @@ class DataForSeoClient:
                     "three_month_change": round(three_month_change, 2) if three_month_change else None,
                     "yearly_change": round(yearly_change, 2) if yearly_change else None,
                     "cpc": cpc,
-                    "intent_type": intent_type,
-                    # SERP данные недоступны в этом API
+                    # Значения по умолчанию - будут определены через SERP анализ
+                    "intent_type": "Информационный",
                     "has_ads": None,
                     "has_google_maps": None,
-                    "has_our_site": None
+                    "has_our_site": None,
+                    "has_school_sites": None
                 }
                 
                 keywords_data.append(keyword_result)
@@ -244,52 +243,6 @@ class DataForSeoClient:
             debug_print(f"📝 Конкуренция: {keywords_data[0]['competition']}")
         
         return keywords_data
-        
-    def determine_intent_from_keyword(keyword: str) -> str:
-        """Определение интента только по ключевому слову (без SERP данных)"""
-        keyword_lower = keyword.lower()
-        
-        # Коммерческие индикаторы
-        commercial_words = [
-            'купить', 'цена', 'стоимость', 'заказать', 'магазин', 'недорого',
-            'акция', 'скидка', 'распродажа', 'доставка', 'оплата', 'прайс',
-            'shop', 'buy', 'price', 'cost', 'order', 'store', 'cheap'
-        ]
-        
-        # Информационные индикаторы
-        informational_words = [
-            'как', 'что', 'почему', 'зачем', 'когда', 'какой', 'где', 'кто',
-            'инструкция', 'руководство', 'обзор', 'отзывы', 'рейтинг',
-            'how', 'what', 'why', 'when', 'where', 'who', 'guide', 'review'
-        ]
-        
-        # Навигационные индикаторы
-        navigational_words = [
-            'сайт', 'официальный', 'website', '.com', '.ua', '.ru',
-            'facebook', 'instagram', 'youtube', 'google'
-        ]
-        
-        # Транзакционные индикаторы
-        transactional_words = [
-            'скачать', 'download', 'регистрация', 'вход', 'login',
-            'подписка', 'оформить', 'получить', 'забронировать'
-        ]
-        
-        # Проверяем по приоритету
-        if any(word in keyword_lower for word in commercial_words):
-            return 'Коммерческий'
-        
-        if any(word in keyword_lower for word in transactional_words):
-            return 'Транзакционный'
-        
-        if any(word in keyword_lower for word in navigational_words):
-            return 'Навигационный'
-        
-        if any(word in keyword_lower for word in informational_words):
-            return 'Информационный'
-        
-        # По умолчанию
-        return 'Информационный'
     
     def get_search_volume(
         self,

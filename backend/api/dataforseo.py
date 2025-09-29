@@ -1,4 +1,5 @@
 # api/dataforseo.py - ПОЛНОСТЬЮ ПЕРЕРАБОТАННАЯ ВЕРСИЯ
+from typing import Dict
 from flask import Blueprint, request, jsonify
 from config import Config
 import pymysql
@@ -6,7 +7,6 @@ from typing import Dict
 from datetime import datetime
 from services.dataforseo_client import get_dataforseo_client, DataForSeoClient
 from api.keywords import get_random_batch_color
-import sys
 
 dataforseo_bp = Blueprint('dataforseo', __name__)
 
@@ -205,7 +205,6 @@ def get_new_keywords():
                             three_month_change = %s,
                             yearly_change = %s,
                             max_cpc = %s,
-                            intent_type = %s,
                             updated_at = NOW()
                         WHERE id = %s
                     """
@@ -219,7 +218,6 @@ def get_new_keywords():
                         kw_data.get('three_month_change'),
                         kw_data.get('yearly_change'),
                         kw_data.get('cpc', existing['max_cpc']),
-                        kw_data.get('intent_type', 'Информационный'),
                         existing['id']
                     )
                     
@@ -232,8 +230,9 @@ def get_new_keywords():
                             campaign_id, ad_group_id, keyword, criterion_type, status,
                             avg_monthly_searches, competition, competition_percent,
                             min_top_of_page_bid, max_top_of_page_bid, three_month_change,
-                            yearly_change, max_cpc, intent_type, is_new, batch_color
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            yearly_change, max_cpc, intent_type, is_new, batch_color,
+                            has_ads, has_school_sites, has_google_maps, has_our_site
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """
                     
                     insert_data = (
@@ -250,9 +249,13 @@ def get_new_keywords():
                         kw_data.get('three_month_change'),
                         kw_data.get('yearly_change'),
                         kw_data.get('cpc', 3.61),
-                        kw_data.get('intent_type', 'Информационный'),
+                        'Информационный',  # Значение по умолчанию, будет определено через SERP
                         True,  # is_new
-                        batch_color  # batch_color
+                        batch_color,  # batch_color
+                        False,  # has_ads - по умолчанию
+                        False,  # has_school_sites - по умолчанию
+                        False,  # has_google_maps - по умолчанию
+                        False   # has_our_site - по умолчанию
                     )
                     
                     cursor.execute(insert_query, insert_data)
@@ -526,41 +529,6 @@ def get_languages():
         return jsonify({'success': False, 'error': f'DataForSeo API не настроен: {str(e)}'}), 400
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
-
-def check_our_site_in_serp(serp_items, campaign_id):
-    """Проверяет наличие нашего сайта в SERP выдаче"""
-    try:
-        connection = get_db_connection()
-        cursor = connection.cursor()
-        
-        cursor.execute("""
-            SELECT domain 
-            FROM campaign_sites 
-            WHERE campaign_id = %s
-        """, (campaign_id,))
-        
-        result = cursor.fetchone()
-        cursor.close()
-        connection.close()
-        
-        if not result or not result['domain']:
-            return False
-        
-        our_domain = result['domain'].lower()
-        
-        for item in serp_items:
-            if item.get('type') in ['organic', 'paid', 'local_pack', 'maps']:
-                url = item.get('url', '').lower()
-                domain = item.get('domain', '').lower()
-                
-                if our_domain in url or our_domain == domain:
-                    return True
-        
-        return False
-        
-    except Exception as e:
-        log_print(f"❌ Error checking our site: {e}")
-        return False
         
 def parse_serp_response(serp_response: Dict, campaign_id: int, connection) -> Dict:
     """
@@ -738,77 +706,3 @@ def get_school_domains(connection) -> set:
         log_print(f"⚠️ Error getting school domains: {e}")
         # Если таблицы нет, возвращаем пустой set
         return set()
-
-def determine_intent_from_serp(serp_items):
-    """Определяет интент на основе типов элементов в SERP"""
-    commercial_signals = 0
-    informational_signals = 0
-    
-    for item in serp_items:
-        item_type = item.get('type', '')
-        
-        if item_type in ['paid', 'shopping', 'local_pack']:
-            commercial_signals += 1
-        elif item_type in ['featured_snippet', 'people_also_ask', 'knowledge_graph']:
-            informational_signals += 1
-    
-    if commercial_signals > informational_signals:
-        return 'Коммерческий'
-    elif informational_signals > 0:
-        return 'Информационный'
-    else:
-        return 'Смешанный'
-
-def determine_intent_type(keyword_data: Dict) -> str:
-    """Определение типа интента на основе данных ключевого слова"""
-    keyword = keyword_data.get('keyword', '').lower()
-    serp_types = keyword_data.get('serp_item_types', [])
-    
-    # Анализ SERP элементов (приоритетный метод)
-    if serp_types:
-        commercial_serp_types = {'shopping', 'paid', 'google_ads', 'local_pack', 'maps'}
-        if any(serp_type in commercial_serp_types for serp_type in serp_types):
-            return 'Коммерческий'
-        
-        informational_serp_types = {'featured_snippet', 'people_also_ask', 'knowledge_graph', 'video'}
-        if any(serp_type in informational_serp_types for serp_type in serp_types):
-            return 'Информационный'
-        
-        if 'knowledge_panel' in serp_types:
-            return 'Навигационный'
-    
-    # Анализ ключевых слов (резервный метод)
-    commercial_words = [
-        'купить', 'цена', 'стоимость', 'заказать', 'магазин', 'недорого',
-        'акция', 'скидка', 'распродажа', 'доставка', 'оплата', 'прайс'
-    ]
-    
-    transactional_words = [
-        'скачать', 'download', 'регистрация', 'вход', 'login',
-        'подписка', 'оформить', 'получить', 'забронировать'
-    ]
-    
-    informational_words = [
-        'как', 'что', 'почему', 'зачем', 'когда', 'какой', 'где', 'кто',
-        'инструкция', 'руководство', 'обзор', 'отзывы', 'рейтинг'
-    ]
-    
-    navigational_words = [
-        'сайт', 'официальный', 'website', '.com', '.ua', '.ru',
-        'facebook', 'instagram', 'youtube', 'google'
-    ]
-    
-    # Проверка по ключевым словам
-    if any(word in keyword for word in commercial_words):
-        return 'Коммерческий'
-    
-    if any(word in keyword for word in transactional_words):
-        return 'Транзакционный'
-    
-    if any(word in keyword for word in navigational_words):
-        return 'Навигационный'
-    
-    if any(word in keyword for word in informational_words):
-        return 'Информационный'
-    
-    return 'Информационный'
