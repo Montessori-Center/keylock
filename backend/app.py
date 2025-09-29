@@ -2,6 +2,7 @@
 from flask import Flask, request, make_response
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
+from flask import render_template
 from config import Config
 from sqlalchemy import text
 from datetime import datetime
@@ -157,6 +158,10 @@ def create_app():
     @app.route('/test')  
     def simple_test():
         return "Flask is working!"
+        
+    @app.route('/serp-viewer')
+    def serp_viewer():
+        return render_template('serp_viewer.html')
 
 if __name__ == '__main__':
     # Проверяем подключение к БД, но не останавливаем приложение при ошибке
