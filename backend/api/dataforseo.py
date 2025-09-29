@@ -298,7 +298,6 @@ def apply_serp_analysis():
     try:
         data = request.json
         keyword_ids = data.get('keyword_ids', [])
-        params = data.get('params', {})
         
         if not keyword_ids:
             return jsonify({'success': False, 'error': 'No keywords selected'}), 400
@@ -306,80 +305,114 @@ def apply_serp_analysis():
         connection = get_db_connection()
         cursor = connection.cursor()
         
-        # Получаем ключевые слова
+        # Получаем ключевые слова с campaign_id
         placeholders = ','.join(['%s'] * len(keyword_ids))
         cursor.execute(f"""
-            SELECT id, keyword, campaign_id 
-            FROM keywords 
-            WHERE id IN ({placeholders})
+            SELECT k.id, k.keyword, k.campaign_id 
+            FROM keywords k
+            WHERE k.id IN ({placeholders})
         """, keyword_ids)
         keywords_data = cursor.fetchall()
         
         if not keywords_data:
             return jsonify({'success': False, 'error': 'Keywords not found'}), 404
         
-        campaign_id = keywords_data[0]['campaign_id']
+        # Получаем DataForSeo клиент
+        try:
+            dataforseo_client = get_dataforseo_client()
+        except ValueError as e:
+            return jsonify({
+                'success': False,
+                'error': f'DataForSeo API не настроен: {str(e)}'
+            }), 400
         
-        dataforseo_client = get_dataforseo_client()
         updated_count = 0
         errors = []
         total_cost = 0
         
+        # Параметры SERP запроса
+        serp_params = {
+            'location_code': data.get('location_code', 2804),
+            'language_code': data.get('language_code', 'ru'),
+            'device': data.get('device', 'desktop'),
+            'os': data.get('os', 'windows'),
+            'depth': data.get('depth', 10)
+        }
+        
         for kw in keywords_data:
             try:
+                log_print(f"🔍 Выполняем SERP для: {kw['keyword']}")
+                
                 # Выполняем SERP запрос
                 serp_response = dataforseo_client.get_serp(
                     keyword=kw['keyword'],
-                    location_code=params.get('location_code', 2804),
-                    language_code=params.get('language_code', 'ru'),
-                    device=params.get('device', 'desktop'),
-                    os=params.get('os', 'windows'),
-                    depth=params.get('depth', 10)
+                    **serp_params
                 )
                 
-                # Анализируем результаты
-                if serp_response.get('tasks') and serp_response['tasks'][0].get('result'):
-                    task = serp_response['tasks'][0]
-                    items = task['result'][0].get('items', [])
-                    
-                    # Считаем стоимость
-                    total_cost += task.get('cost', 0.01)
-                    
-                    has_ads = any(item.get('type') == 'paid' for item in items)
-                    has_maps = any(item.get('type') in ['maps', 'local_pack'] for item in items)
-                    has_our_site = check_our_site_in_serp(items, campaign_id)
-                    intent_type = determine_intent_from_serp(items)
-                    
-                    # Обновляем в БД
+                # Парсим результаты
+                serp_data = parse_serp_response(serp_response, kw['campaign_id'], connection)
+                
+                if serp_data:
+                    # Обновляем данные в БД
                     cursor.execute("""
                         UPDATE keywords 
                         SET 
                             has_ads = %s,
+                            has_school_sites = %s,
                             has_google_maps = %s,
                             has_our_site = %s,
                             intent_type = %s,
                             updated_at = NOW()
                         WHERE id = %s
-                    """, (has_ads, has_maps, has_our_site, intent_type, kw['id']))
+                    """, (
+                        serp_data['has_ads'],
+                        serp_data['has_school_sites'],
+                        serp_data['has_google_maps'],
+                        serp_data['has_our_site'],
+                        serp_data['intent_type'],
+                        kw['id']
+                    ))
                     
                     updated_count += 1
                     
+                    # Считаем стоимость
+                    if serp_response.get('tasks'):
+                        total_cost += serp_response['tasks'][0].get('cost', 0.01)
+                    
+                    log_print(f"✅ Обновлено: {kw['keyword']}")
+                    log_print(f"   - has_ads: {serp_data['has_ads']}")
+                    log_print(f"   - has_school_sites: {serp_data['has_school_sites']}")
+                    log_print(f"   - has_maps: {serp_data['has_google_maps']}")
+                    log_print(f"   - has_our_site: {serp_data['has_our_site']}")
+                    log_print(f"   - intent_type: {serp_data['intent_type']}")
+                else:
+                    errors.append(f"No data for '{kw['keyword']}'")
+                    
             except Exception as e:
+                log_print(f"❌ Error for '{kw['keyword']}': {str(e)}")
                 errors.append(f"Error for '{kw['keyword']}': {str(e)}")
         
         connection.commit()
+        cursor.close()
         
         return jsonify({
             'success': True,
-            'message': f'SERP анализ применен к {updated_count} ключевым словам',
-            'updated': updated_count,
-            'errors': errors[:10] if errors else [],
-            'cost': total_cost
+            'message': f'SERP анализ применен к {updated_count} из {len(keywords_data)} ключевых слов',
+            'stats': {
+                'total': len(keywords_data),
+                'updated': updated_count,
+                'errors': len(errors)
+            },
+            'errors': errors[:5] if errors else [],
+            'cost': round(total_cost, 4)
         })
         
     except Exception as e:
         if connection:
             connection.rollback()
+        log_print(f"❌ SERP analysis error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         if connection:
@@ -528,6 +561,183 @@ def check_our_site_in_serp(serp_items, campaign_id):
     except Exception as e:
         log_print(f"❌ Error checking our site: {e}")
         return False
+        
+def parse_serp_response(serp_response: Dict, campaign_id: int, connection) -> Dict:
+    """
+    Парсинг SERP ответа и определение всех необходимых полей
+    """
+    try:
+        if not serp_response.get('tasks'):
+            return None
+        
+        task = serp_response['tasks'][0]
+        if task.get('status_code') != 20000:
+            log_print(f"❌ SERP error: {task.get('status_message')}")
+            return None
+        
+        if not task.get('result') or len(task['result']) == 0:
+            return None
+        
+        result = task['result'][0]
+        items = result.get('items', [])
+        
+        if not items:
+            log_print("⚠️ No items in SERP response")
+            return None
+        
+        # Инициализация результатов
+        has_ads = False
+        has_google_maps = False
+        has_our_site = False
+        has_school_sites = False
+        
+        # Счетчики для определения интента
+        total_organic_sites = 0
+        school_sites_count = 0
+        
+        # Получаем домен нашего сайта для кампании
+        our_domain = get_campaign_domain(campaign_id, connection)
+        log_print(f"📌 Наш домен для кампании {campaign_id}: {our_domain}")
+        
+        # Получаем список доменов школ-конкурентов
+        school_domains = get_school_domains(connection)
+        log_print(f"📚 Загружено доменов школ: {len(school_domains)}")
+        
+        # Анализируем каждый элемент SERP
+        for item in items:
+            item_type = item.get('type', '')
+            
+            # Проверка на рекламу
+            if item_type in ['paid', 'google_ads', 'shopping', 'commercial_units']:
+                has_ads = True
+                log_print(f"   💰 Найдена реклама: {item_type}")
+            
+            # Проверка на Google Maps
+            elif item_type in ['local_pack', 'maps', 'map', 'google_maps']:
+                has_google_maps = True
+                log_print(f"   🗺️ Найдены Google Maps: {item_type}")
+            
+            # Анализ органических результатов
+            elif item_type == 'organic':
+                total_organic_sites += 1
+                
+                # Получаем URL и домен
+                url = item.get('url', '').lower()
+                domain = item.get('domain', '').lower()
+                
+                # Убираем www. из домена для сравнения
+                clean_domain = domain.replace('www.', '') if domain else ''
+                
+                # Проверяем наш сайт
+                if our_domain and (our_domain in url or our_domain == clean_domain):
+                    has_our_site = True
+                    log_print(f"   ✅ Найден наш сайт: {domain}")
+                
+                # Проверка сайтов школ
+                if clean_domain in school_domains:
+                    school_sites_count += 1
+                    has_school_sites = True
+                    log_print(f"   🏫 Найден сайт школы: {domain}")
+        
+        # Определение типа интента по исправленной логике:
+        # Коммерческий - если есть сайты школ и их >= 60% от органики
+        # Информационный - в противном случае
+        
+        if has_school_sites and total_organic_sites > 0:
+            school_percentage = (school_sites_count / total_organic_sites) * 100
+            log_print(f"📊 Процент сайтов школ: {school_percentage:.1f}% ({school_sites_count}/{total_organic_sites})")
+            
+            if school_percentage >= 60:
+                intent_type = 'Коммерческий'
+            else:
+                intent_type = 'Информационный'
+        else:
+            # Если нет сайтов школ - всегда информационный
+            intent_type = 'Информационный'
+        
+        log_print(f"📊 SERP анализ завершен:")
+        log_print(f"   - Органических сайтов: {total_organic_sites}")
+        log_print(f"   - Сайтов школ: {school_sites_count}")
+        log_print(f"   - Есть реклама: {has_ads}")
+        log_print(f"   - Есть карты: {has_google_maps}")
+        log_print(f"   - Есть наш сайт: {has_our_site}")
+        log_print(f"   - Есть сайты школ: {has_school_sites}")
+        log_print(f"   - Тип интента: {intent_type}")
+        
+        return {
+            'has_ads': has_ads,
+            'has_school_sites': has_school_sites,
+            'has_google_maps': has_google_maps,
+            'has_our_site': has_our_site,
+            'intent_type': intent_type
+        }
+        
+    except Exception as e:
+        log_print(f"❌ Error parsing SERP response: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return None
+        
+def get_campaign_domain(campaign_id: int, connection) -> str:
+    """
+    Получает домен сайта для кампании из таблицы campaign_sites
+    """
+    try:
+        cursor = connection.cursor()
+        cursor.execute("""
+            SELECT domain 
+            FROM campaign_sites 
+            WHERE campaign_id = %s
+        """, (campaign_id,))
+        
+        result = cursor.fetchone()
+        cursor.close()
+        
+        if result and result['domain']:
+            domain = result['domain'].lower()
+            # Убираем www. если есть
+            if domain.startswith('www.'):
+                domain = domain[4:]
+            return domain
+        
+        return None
+        
+    except Exception as e:
+        log_print(f"❌ Error getting campaign domain: {e}")
+        return None
+
+
+def get_school_domains(connection) -> set:
+    """
+    Получает список доменов школ-конкурентов из БД
+    """
+    try:
+        cursor = connection.cursor()
+        cursor.execute("""
+            SELECT domain 
+            FROM school_sites 
+            WHERE is_active = TRUE
+        """)
+        
+        results = cursor.fetchall()
+        cursor.close()
+        
+        # Создаем set доменов для быстрой проверки
+        domains = set()
+        for row in results:
+            if row['domain']:
+                domain = row['domain'].lower()
+                # Убираем www. если есть
+                if domain.startswith('www.'):
+                    domain = domain[4:]
+                domains.add(domain)
+        
+        return domains
+        
+    except Exception as e:
+        log_print(f"⚠️ Error getting school domains: {e}")
+        # Если таблицы нет, возвращаем пустой set
+        return set()
 
 def determine_intent_from_serp(serp_items):
     """Определяет интент на основе типов элементов в SERP"""

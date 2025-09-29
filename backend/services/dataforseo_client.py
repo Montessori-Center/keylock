@@ -333,6 +333,37 @@ class DataForSeoClient:
         debug_print(f"🔍 Запрос статуса аккаунта")
         endpoint = "/appendix/user_data"
         return self._make_request("GET", endpoint)
+        
+    def get_serp(
+        self,
+        keyword: str,
+        location_code: int = 2804,
+        language_code: str = "ru",
+        device: str = "desktop",
+        os: str = "windows",
+        depth: int = 10
+    ) -> Dict:
+        """
+        Получение SERP результатов для ключевого слова
+        Docs: https://docs.dataforseo.com/v3/serp/google/organic/live/regular/
+        """
+        
+        debug_print(f"🔍 get_serp вызван для keyword: {keyword}")
+        debug_print(f"   - location: {location_code}, language: {language_code}")
+        debug_print(f"   - device: {device}, depth: {depth}")
+        
+        endpoint = "/serp/google/organic/live/regular"
+        
+        data = [{
+            "keyword": keyword,
+            "location_code": location_code,
+            "language_code": language_code,
+            "device": device,
+            "os": os,
+            "depth": depth  # Количество результатов для получения
+        }]
+        
+        return self._make_request("POST", endpoint, data)
 
 # Создаем глобальный экземпляр клиента
 def get_dataforseo_client(login: str = None, password: str = None) -> DataForSeoClient:

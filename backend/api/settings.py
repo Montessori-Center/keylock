@@ -305,6 +305,7 @@ def save_campaign_sites():
             # Извлекаем домен из URL
             domain = ''
             if site_url:
+                from urllib.parse import urlparse
                 try:
                     parsed = urlparse(site_url)
                     domain = parsed.netloc or parsed.path
@@ -379,6 +380,137 @@ def get_campaign_site(campaign_id):
         
     except Exception as e:
         print(f"❌ Error getting campaign site: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if connection:
+            connection.close()
+            
+@settings_bp.route('/school-sites', methods=['GET'])
+def get_school_sites():
+    """Получение списка сайтов школ-конкурентов"""
+    connection = None
+    try:
+        connection = pymysql.connect(
+            host=Config.DB_HOST,
+            port=Config.DB_PORT,
+            user=Config.DB_USER,
+            password=Config.DB_PASSWORD,
+            database=Config.DB_NAME,
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        cursor = connection.cursor()
+        
+        cursor.execute("""
+            SELECT id, name, domain, full_url, is_active, category, notes
+            FROM school_sites
+            ORDER BY name
+        """)
+        
+        results = cursor.fetchall()
+        cursor.close()
+        
+        return jsonify({
+            'success': True,
+            'schools': results
+        })
+        
+    except Exception as e:
+        print(f"❌ Error getting school sites: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if connection:
+            connection.close()
+            
+@settings_bp.route('/school-sites', methods=['POST'])
+def save_school_site():
+    """Добавление/обновление сайта школы"""
+    connection = None
+    try:
+        data = request.json
+        school_id = data.get('id')
+        name = data.get('name', '').strip()
+        domain = data.get('domain', '').strip().lower()
+        full_url = data.get('full_url', '').strip()
+        is_active = data.get('is_active', True)
+        category = data.get('category', '').strip()
+        notes = data.get('notes', '').strip()
+        
+        if not name or not domain:
+            return jsonify({'success': False, 'error': 'Название и домен обязательны'}), 400
+        
+        # Убираем www. из домена
+        if domain.startswith('www.'):
+            domain = domain[4:]
+        
+        connection = pymysql.connect(
+            host=Config.DB_HOST,
+            port=Config.DB_PORT,
+            user=Config.DB_USER,
+            password=Config.DB_PASSWORD,
+            database=Config.DB_NAME
+        )
+        cursor = connection.cursor()
+        
+        if school_id:
+            # Обновление существующей записи
+            cursor.execute("""
+                UPDATE school_sites 
+                SET name = %s, domain = %s, full_url = %s, 
+                    is_active = %s, category = %s, notes = %s
+                WHERE id = %s
+            """, (name, domain, full_url, is_active, category, notes, school_id))
+        else:
+            # Создание новой записи
+            cursor.execute("""
+                INSERT INTO school_sites (name, domain, full_url, is_active, category, notes)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (name, domain, full_url, is_active, category, notes))
+        
+        connection.commit()
+        cursor.close()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Сайт школы сохранен'
+        })
+        
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        print(f"❌ Error saving school site: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if connection:
+            connection.close()
+            
+@settings_bp.route('/school-sites/<int:school_id>', methods=['DELETE'])
+def delete_school_site(school_id):
+    """Удаление сайта школы"""
+    connection = None
+    try:
+        connection = pymysql.connect(
+            host=Config.DB_HOST,
+            port=Config.DB_PORT,
+            user=Config.DB_USER,
+            password=Config.DB_PASSWORD,
+            database=Config.DB_NAME
+        )
+        cursor = connection.cursor()
+        
+        cursor.execute("DELETE FROM school_sites WHERE id = %s", (school_id,))
+        
+        connection.commit()
+        cursor.close()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Сайт школы удален'
+        })
+        
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        print(f"❌ Error deleting school site: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         if connection:
