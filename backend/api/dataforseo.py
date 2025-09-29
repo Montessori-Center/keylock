@@ -95,15 +95,15 @@ def get_new_keywords():
         log_print(f"🔑 Seed keywords count: {len(seed_keywords)}")
         log_print(f"🏷️  Ad group ID: {ad_group_id}")
         
-        # Все параметры из frontend
+        # Параметры API согласно документации
         location_code = data.get('location_code', 2804)
         language_code = data.get('language_code', 'ru')
         limit = data.get('limit', 700)
         search_partners = data.get('search_partners', False)
         include_seed_keyword = data.get('include_seed_keyword', True)
-        include_clickstream_data = data.get('include_clickstream_data', False)
-        include_serp_info = data.get('include_serp_info', False)
         sort_by = data.get('sort_by', 'relevance')
+        date_from = data.get('date_from', '2024-01-01')
+        date_to = data.get('date_to')
         
         if not seed_keywords:
             return jsonify({'success': False, 'error': 'No seed keywords provided'}), 400
@@ -133,8 +133,8 @@ def get_new_keywords():
                 sort_by=sort_by,
                 limit=limit,
                 include_seed_keyword=include_seed_keyword,
-                include_clickstream_data=include_clickstream_data,
-                include_serp_info=include_serp_info
+                date_from=date_from,
+                date_to=date_to
             )
             
             # Проверяем ответ
@@ -194,7 +194,7 @@ def get_new_keywords():
                 existing = cursor.fetchone()
                 
                 if existing:
-                    # Обновляем существующее
+                    # Обновляем существующее (только основные данные)
                     update_query = """
                         UPDATE keywords SET 
                             avg_monthly_searches = %s,
@@ -205,8 +205,6 @@ def get_new_keywords():
                             three_month_change = %s,
                             yearly_change = %s,
                             max_cpc = %s,
-                            has_ads = %s,
-                            has_google_maps = %s,
                             intent_type = %s,
                             updated_at = NOW()
                         WHERE id = %s
@@ -221,9 +219,7 @@ def get_new_keywords():
                         kw_data.get('three_month_change'),
                         kw_data.get('yearly_change'),
                         kw_data.get('cpc', existing['max_cpc']),
-                        kw_data.get('has_ads', False) if include_serp_info else existing['has_ads'],
-                        kw_data.get('has_maps', False) if include_serp_info else existing['has_google_maps'],
-                        determine_intent_type(kw_data) if include_serp_info else existing['intent_type'],
+                        kw_data.get('intent_type', 'Информационный'),
                         existing['id']
                     )
                     
@@ -236,9 +232,8 @@ def get_new_keywords():
                             campaign_id, ad_group_id, keyword, criterion_type, status,
                             avg_monthly_searches, competition, competition_percent,
                             min_top_of_page_bid, max_top_of_page_bid, three_month_change,
-                            yearly_change, max_cpc, has_ads, has_google_maps, intent_type,
-                            is_new, batch_color
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            yearly_change, max_cpc, intent_type, is_new, batch_color
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """
                     
                     insert_data = (
@@ -255,9 +250,7 @@ def get_new_keywords():
                         kw_data.get('three_month_change'),
                         kw_data.get('yearly_change'),
                         kw_data.get('cpc', 3.61),
-                        kw_data.get('has_ads', False) if include_serp_info else False,
-                        kw_data.get('has_maps', False) if include_serp_info else False,
-                        determine_intent_type(kw_data) if include_serp_info else 'Информационный',
+                        kw_data.get('intent_type', 'Информационный'),
                         True,  # is_new
                         batch_color  # batch_color
                     )
@@ -500,29 +493,6 @@ def get_languages():
         return jsonify({'success': False, 'error': f'DataForSeo API не настроен: {str(e)}'}), 400
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
-
-@dataforseo_bp.route('/estimate-cost', methods=['POST'])
-def estimate_cost():
-    """Оценка стоимости запроса"""
-    try:
-        data = request.json
-        include_serp = data.get('include_serp_info', False)
-        include_clickstream = data.get('include_clickstream_data', False)
-        
-        cost = 0.05  # Базовая стоимость
-        if include_serp:
-            cost += 0.02
-        if include_clickstream:
-            cost += 0.03
-        
-        return jsonify({
-            'success': True,
-            'estimated_cost': cost
-        })
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-# Вспомогательные функции
 
 def check_our_site_in_serp(serp_items, campaign_id):
     """Проверяет наличие нашего сайта в SERP выдаче"""

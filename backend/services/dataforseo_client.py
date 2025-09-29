@@ -108,8 +108,8 @@ class DataForSeoClient:
         sort_by: str = "search_volume",
         limit: int = 700,
         include_seed_keyword: bool = True,
-        include_clickstream_data: bool = False,
-        include_serp_info: bool = True  # Включаем информацию о SERP
+        date_from: str = "2024-01-01",
+        date_to: str = None
     ) -> Dict:
         
         debug_print(f"🔍 get_keywords_for_keywords вызван с параметрами:")
@@ -117,11 +117,10 @@ class DataForSeoClient:
         debug_print(f"   - location_code: {location_code}")
         debug_print(f"   - language_code: {language_code}")
         debug_print(f"   - limit: {limit}")
-        debug_print(f"   - include_serp_info: {include_serp_info}")
         
         endpoint = "/keywords_data/google_ads/keywords_for_keywords/live"
         
-        # Структура запроса по документации
+        # Структура запроса согласно официальной документации
         data = [{
             "keywords": keywords[:700],  # Ограничение API - макс 700 ключевых слов
             "location_code": location_code,
@@ -130,17 +129,19 @@ class DataForSeoClient:
             "sort_by": sort_by,
             "limit": limit,
             "include_seed_keyword": include_seed_keyword,
-            "include_clickstream_data": include_clickstream_data,
-            "include_serp_info": include_serp_info,
-            "date_from": "2024-01-01",  # Для получения исторических данных
+            "date_from": date_from,
         }]
+        
+        # Добавляем date_to только если указан
+        if date_to:
+            data[0]["date_to"] = date_to
         
         debug_print(f"📋 Структура запроса создана")
         return self._make_request("POST", endpoint, data)
     
     def parse_keywords_response(self, response: Dict) -> List[Dict]:
         """
-        Парсинг ответа с ключевыми словами
+        Парсинг ответа с ключевыми словами (только основные данные)
         """
         debug_print(f"🔄 parse_keywords_response начат")
         keywords_data = []
@@ -165,11 +166,11 @@ class DataForSeoClient:
             result_items = task.get("result", [])
             debug_print(f"📊 Количество result items: {len(result_items)}")
             
-            # ИСПРАВЛЕНИЕ: В Google Ads API каждый элемент result[] - это уже ключевое слово
+            # В Google Ads API каждый элемент result[] - это ключевое слово
             for keyword_item in result_items:
                 debug_print(f"🔄 Обработка keyword с ключами: {list(keyword_item.keys())}")
                 
-                # Извлекаем данные напрямую из элемента result[]
+                # Извлекаем основные данные
                 keyword_text = keyword_item.get("keyword", "")
                 search_volume = keyword_item.get("search_volume", 0)
                 competition = keyword_item.get("competition", "UNSPECIFIED")
@@ -214,6 +215,9 @@ class DataForSeoClient:
                     "UNSPECIFIED": "Неизвестно"
                 }
                 
+                # Базовое определение интента по ключевому слову (без SERP данных)
+                intent_type = determine_intent_from_keyword(keyword_text)
+                
                 keyword_result = {
                     "keyword": keyword_text,
                     "avg_monthly_searches": search_volume,
@@ -224,9 +228,11 @@ class DataForSeoClient:
                     "three_month_change": round(three_month_change, 2) if three_month_change else None,
                     "yearly_change": round(yearly_change, 2) if yearly_change else None,
                     "cpc": cpc,
-                    "serp_item_types": [],
-                    "se_results_count": 0,
-                    "keyword_difficulty": None
+                    "intent_type": intent_type,
+                    # SERP данные недоступны в этом API
+                    "has_ads": None,
+                    "has_google_maps": None,
+                    "has_our_site": None
                 }
                 
                 keywords_data.append(keyword_result)
@@ -238,6 +244,52 @@ class DataForSeoClient:
             debug_print(f"📝 Конкуренция: {keywords_data[0]['competition']}")
         
         return keywords_data
+        
+    def determine_intent_from_keyword(keyword: str) -> str:
+        """Определение интента только по ключевому слову (без SERP данных)"""
+        keyword_lower = keyword.lower()
+        
+        # Коммерческие индикаторы
+        commercial_words = [
+            'купить', 'цена', 'стоимость', 'заказать', 'магазин', 'недорого',
+            'акция', 'скидка', 'распродажа', 'доставка', 'оплата', 'прайс',
+            'shop', 'buy', 'price', 'cost', 'order', 'store', 'cheap'
+        ]
+        
+        # Информационные индикаторы
+        informational_words = [
+            'как', 'что', 'почему', 'зачем', 'когда', 'какой', 'где', 'кто',
+            'инструкция', 'руководство', 'обзор', 'отзывы', 'рейтинг',
+            'how', 'what', 'why', 'when', 'where', 'who', 'guide', 'review'
+        ]
+        
+        # Навигационные индикаторы
+        navigational_words = [
+            'сайт', 'официальный', 'website', '.com', '.ua', '.ru',
+            'facebook', 'instagram', 'youtube', 'google'
+        ]
+        
+        # Транзакционные индикаторы
+        transactional_words = [
+            'скачать', 'download', 'регистрация', 'вход', 'login',
+            'подписка', 'оформить', 'получить', 'забронировать'
+        ]
+        
+        # Проверяем по приоритету
+        if any(word in keyword_lower for word in commercial_words):
+            return 'Коммерческий'
+        
+        if any(word in keyword_lower for word in transactional_words):
+            return 'Транзакционный'
+        
+        if any(word in keyword_lower for word in navigational_words):
+            return 'Навигационный'
+        
+        if any(word in keyword_lower for word in informational_words):
+            return 'Информационный'
+        
+        # По умолчанию
+        return 'Информационный'
     
     def get_search_volume(
         self,

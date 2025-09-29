@@ -147,19 +147,60 @@ class Config:
     # Encryption key for sensitive data
     ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY') or 'generate-strong-key-for-production'
     
-    # CORS - обновленный для HTTPS
-    cors_origins = os.environ.get('CORS_ORIGINS', 'http://localhost:3000').split(',')
-    CORS_ORIGINS = [origin.strip() for origin in cors_origins]
+    @property
+    def CORS_ORIGINS(self):
+        """Динамические CORS origins из переменных окружения или auto-detect"""
+        
+        # Базовые origins из .env
+        env_origins = os.environ.get('CORS_ORIGINS', '').split(',')
+        cors_origins = [origin.strip() for origin in env_origins if origin.strip()]
+        
+        # Если в .env не указано, автоопределяем для development
+        if not cors_origins:
+            cors_origins = []
+            
+            # Development origins
+            if self.DEBUG:
+                cors_origins.extend([
+                    'http://localhost:3000',
+                    'http://127.0.0.1:3000'
+                ])
+            
+            # Автоопределение для production
+            server_name = os.environ.get('SERVER_NAME')
+            if server_name:
+                cors_origins.extend([
+                    f'https://{server_name}',
+                    f'http://{server_name}',
+                    f'https://www.{server_name}',
+                    f'http://www.{server_name}'
+                ])
+            
+            # Если ничего не найдено, разрешаем все для development
+            if not cors_origins and self.DEBUG:
+                return ["*"]
+        
+        # Убираем дубли и возвращаем
+        return list(set(cors_origins))
     
-    # Добавляем все варианты домена для HTTPS
-    CORS_ORIGINS.extend([
-        'https://keylock.interschool.online',
-        'https://www.keylock.interschool.online',
-        'http://keylock.interschool.online',
-        'http://www.keylock.interschool.online',
-        'http://127.0.0.1:3000',
-        'http://localhost:3000'
-    ])
+    # Упрощенная версия для совместимости
+    @property 
+    def cors_origins_list(self):
+        return self.CORS_ORIGINS
     
-    # Убираем дубли
-    CORS_ORIGINS = list(set(CORS_ORIGINS))
+    # # CORS - обновленный для HTTPS
+    # cors_origins = os.environ.get('CORS_ORIGINS', 'http://localhost:3000').split(',')
+    # CORS_ORIGINS = [origin.strip() for origin in cors_origins]
+    
+    # # Добавляем все варианты домена для HTTPS
+    # CORS_ORIGINS.extend([
+    #     'https://keylock.interschool.online',
+    #     'https://www.keylock.interschool.online',
+    #     'http://keylock.interschool.online',
+    #     'http://www.keylock.interschool.online',
+    #     'http://127.0.0.1:3000',
+    #     'http://localhost:3000'
+    # ])
+    
+    # # Убираем дубли
+    # CORS_ORIGINS = list(set(CORS_ORIGINS))

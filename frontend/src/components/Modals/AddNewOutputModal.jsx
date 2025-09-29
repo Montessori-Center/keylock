@@ -1,7 +1,6 @@
-// src/components/Modals/AddNewOutputModal.jsx
+// src/components/Modals/AddNewOutputModal.jsx - ИСПРАВЛЕННАЯ ВЕРСИЯ
 import React, { useState, useEffect } from 'react';
 import { Modal, Button, Form, Row, Col, Alert } from 'react-bootstrap';
-// import api from '../../services/api'; // Временно закомментируем если не используется
 
 const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
   // Дата по умолчанию - 6 месяцев назад
@@ -27,15 +26,15 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
     date_from: getDefaultDateFrom(),
     date_to: getDefaultDateTo(),
     include_seed_keyword: true,
-    include_clickstream_data: false,
-    include_serp_info: true, // ИСПРАВЛЕНО: По умолчанию включено
     sort_by: 'relevance'
   });
 
   const [locations, setLocations] = useState([]);
   const [languages, setLanguages] = useState([]);
   const [loadingLocations, setLoadingLocations] = useState(false);
-  const [estimatedCost, setEstimatedCost] = useState(0);
+
+  // Базовая стоимость API запроса
+  const baseCost = 0.05;
 
   // Загрузка списка локаций при открытии модального окна
   useEffect(() => {
@@ -47,39 +46,20 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
 
   // Если есть выбранные ключевые слова, добавляем их как seed
   useEffect(() => {
-  if (selectedKeywords && selectedKeywords.length > 0) {
-    const text = selectedKeywords.map(k => k.keyword).join('\n');
-    setKeywordText(text);
-    setParams(prev => ({
-      ...prev,
-      seed_keywords: selectedKeywords.map(k => k.keyword)
-    }));
-  }
-}, [selectedKeywords, show]);
-
-  // Расчет примерной стоимости
-  useEffect(() => {
-    // Базовая стоимость запроса Keywords for Keywords: $0.05
-    let cost = 0.05;
-    
-    // Дополнительная стоимость за SERP info (примерно)
-    if (params.include_serp_info) {
-      cost += 0.02;
+    if (selectedKeywords && selectedKeywords.length > 0) {
+      const text = selectedKeywords.map(k => k.keyword).join('\n');
+      setKeywordText(text);
+      setParams(prev => ({
+        ...prev,
+        seed_keywords: selectedKeywords.map(k => k.keyword)
+      }));
     }
-    
-    // Дополнительная стоимость за Clickstream data
-    if (params.include_clickstream_data) {
-      cost += 0.03;
-    }
-    
-    setEstimatedCost(cost);
-  }, [params.include_serp_info, params.include_clickstream_data]);
+  }, [selectedKeywords, show]);
 
   const loadLocations = async () => {
     setLoadingLocations(true);
     try {
-      // Здесь должен быть запрос к API для получения списка локаций
-      // Пока используем статический список популярных стран
+      // Популярные локации
       const popularLocations = [
         { code: 2804, name: 'Ukraine', name_ru: 'Украина' },
         { code: 2840, name: 'United States', name_ru: 'США' },
@@ -145,7 +125,6 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
       return;
     }
     
-    // ИСПРАВЛЕНО: Изменен лимит с 1000 на 700
     if (params.seed_keywords.length > 700) {
       alert('Максимум 700 ключевых слов за один запрос');
       return;
@@ -160,18 +139,17 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
     onHide();
   };
 
-  // ИСПРАВЛЕНО: Функция теперь корректно обрабатывает ввод запятых и переводов строк
   const handleKeywordsChange = (text) => {
-      setKeywordText(text);
-      
-      // Парсим ключевые слова
-      const keywords = text
-        .split(/[,\n]+/)
-        .map(k => k.trim())
-        .filter(k => k.length > 0);
-      
-      setParams(prev => ({ ...prev, seed_keywords: keywords }));
-    };
+    setKeywordText(text);
+    
+    // Парсим ключевые слова
+    const keywords = text
+      .split(/[,\n]+/)
+      .map(k => k.trim())
+      .filter(k => k.length > 0);
+    
+    setParams(prev => ({ ...prev, seed_keywords: keywords }));
+  };
 
   const sortByOptions = [
     { value: 'relevance', label: 'По релевантности' },
@@ -188,9 +166,6 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
       <Modal.Header closeButton>
         <Modal.Title>
           Добавить новую выдачу ($)
-          <small className="text-muted ms-2">
-            Примерная стоимость: ${estimatedCost.toFixed(3)}
-          </small>
         </Modal.Title>
       </Modal.Header>
       <Modal.Body>
@@ -205,7 +180,6 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
             <Form.Label>
               Seed ключевые слова:
               <small className="text-muted ms-2">
-                {/* ИСПРАВЛЕНО: Изменен лимит с 1000 на 700 */}
                 ({params.seed_keywords.length} / 700)
               </small>
             </Form.Label>
@@ -218,7 +192,6 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
               style={{ resize: 'vertical' }}
             />
             <Form.Text className="text-muted">
-              {/* ИСПРАВЛЕНО: Изменен текст с 1000 на 700 */}
               Введите от 1 до 700 ключевых слов для получения релевантной выдачи. Разделители: запятая или новая строка.
             </Form.Text>
           </Form.Group>
@@ -361,55 +334,10 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
             </Col>
           </Row>
 
-          <Row>
-            <Col md={6}>
-              <Form.Group className="mb-3">
-                <Form.Label>
-                  Включить SERP данные:
-                  <span className="text-warning ms-1">($)</span>
-                </Form.Label>
-                <Form.Select
-                  value={params.include_serp_info ? 'true' : 'false'}
-                  onChange={(e) => setParams(prev => ({ 
-                    ...prev, 
-                    include_serp_info: e.target.value === 'true' 
-                  }))}
-                >
-                  <option value="false">Нет</option>
-                  <option value="true">Да (+$0.02)</option>
-                </Form.Select>
-                <Form.Text className="text-muted">
-                  Анализ выдачи для определения интента (рекомендуется)
-                </Form.Text>
-              </Form.Group>
-            </Col>
-            <Col md={6}>
-              <Form.Group className="mb-3">
-                <Form.Label>
-                  Включить Clickstream данные:
-                  <span className="text-warning ms-1">($)</span>
-                </Form.Label>
-                <Form.Select
-                  value={params.include_clickstream_data ? 'true' : 'false'}
-                  onChange={(e) => setParams(prev => ({ 
-                    ...prev, 
-                    include_clickstream_data: e.target.value === 'true' 
-                  }))}
-                >
-                  <option value="false">Нет</option>
-                  <option value="true">Да (+$0.03)</option>
-                </Form.Select>
-                <Form.Text className="text-muted">
-                  Дополнительная статистика кликов
-                </Form.Text>
-              </Form.Group>
-            </Col>
-          </Row>
-
           <Alert variant="warning">
             <strong>Внимание!</strong> Это платный запрос к DataForSeo API.
             <br />
-            Примерная стоимость: <strong>${estimatedCost.toFixed(3)}</strong>
+            Стоимость: <strong>${baseCost.toFixed(3)}</strong>
             <br />
             <small>
               Количество seed-слов: {params.seed_keywords.length} | 
@@ -427,7 +355,7 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
           onClick={handleSubmit}
           disabled={params.seed_keywords.length === 0}
         >
-          Получить выдачу (${estimatedCost.toFixed(3)})
+          Получить выдачу (${baseCost.toFixed(3)})
         </Button>
       </Modal.Footer>
     </Modal>

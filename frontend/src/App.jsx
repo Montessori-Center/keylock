@@ -189,67 +189,24 @@ function App() {
         
         const response = await api.getCampaigns();
         
-        if (response.success) {
+        if (response.success && response.data.length > 0) {
           setCampaigns(response.data);
-          
-          if (response.data.length > 0) {
-            setSelectedCampaign(response.data[0]);
-            console.log('✅ Campaigns loaded:', response.data);
-          }
-          
-          // Возвращаем данные для использования в useEffect
+          setSelectedCampaign(response.data[0]);
+          console.log('✅ Campaigns loaded:', response.data);
           return response.data;
         } else {
-          console.error('❌ Failed to load campaigns:', response.error);
-          toast.error('Ошибка загрузки кампаний: ' + response.error);
-          
-          // Fallback на хардкод если API не работает
-          const fallbackData = [{
-            id: 1,
-            name: 'montessori.ua (fallback)',
-            adGroups: [
-              { id: 1, name: '001 Уроки фортепиано (RU)', newChanges: 0, hasChanges: false },
-              { id: 2, name: '002 Уроки вокала (RU)', newChanges: 0, hasChanges: false },
-              { id: 3, name: '003 Уроки классической гитары (RU)', newChanges: 0, hasChanges: false },
-              { id: 4, name: '004 Уроки электрогитары (RU)', newChanges: 0, hasChanges: false },
-              { id: 5, name: '005 Уроки бас-гитары (RU)', newChanges: 0, hasChanges: false },
-              { id: 6, name: '006 Уроки барабанов (RU)', newChanges: 0, hasChanges: false },
-              { id: 7, name: '007 Уроки скрипки (RU)', newChanges: 0, hasChanges: false },
-              { id: 8, name: '008 Уроки виолончели (RU)', newChanges: 0, hasChanges: false },
-              { id: 9, name: '009 Уроки саксофона (RU)', newChanges: 0, hasChanges: false },
-              { id: 10, name: '010 Уроки флейты (RU)', newChanges: 0, hasChanges: false },
-            ]
-          }];
-          
-          setCampaigns(fallbackData);
-          setSelectedCampaign(fallbackData[0]);
-          return fallbackData;
+          console.error('❌ No campaigns found or API error:', response.error);
+          toast.error('Нет доступных кампаний. Проверьте базу данных.');
+          setCampaigns([]);
+          setSelectedCampaign(null);
+          return [];
         }
       } catch (error) {
         console.error('❌ Error loading campaigns:', error);
-        toast.error('Ошибка загрузки кампаний: ' + error.message);
-        
-        // Fallback на хардкод
-        const fallbackData = [{
-          id: 1,
-          name: 'montessori.ua (fallback)',
-          adGroups: [
-            { id: 1, name: '001 Уроки фортепиано (RU)', newChanges: 0, hasChanges: false },
-            { id: 2, name: '002 Уроки вокала (RU)', newChanges: 0, hasChanges: false },
-            { id: 3, name: '003 Уроки классической гитары (RU)', newChanges: 0, hasChanges: false },
-            { id: 4, name: '004 Уроки электрогитары (RU)', newChanges: 0, hasChanges: false },
-            { id: 5, name: '005 Уроки бас-гитары (RU)', newChanges: 0, hasChanges: false },
-            { id: 6, name: '006 Уроки барабанов (RU)', newChanges: 0, hasChanges: false },
-            { id: 7, name: '007 Уроки скрипки (RU)', newChanges: 0, hasChanges: false },
-            { id: 8, name: '008 Уроки виолончели (RU)', newChanges: 0, hasChanges: false },
-            { id: 9, name: '009 Уроки саксофона (RU)', newChanges: 0, hasChanges: false },
-            { id: 10, name: '010 Уроки флейты (RU)', newChanges: 0, hasChanges: false },
-          ]
-        }];
-        
-        setCampaigns(fallbackData);
-        setSelectedCampaign(fallbackData[0]);
-        return fallbackData;
+        toast.error('Ошибка подключения к серверу: ' + error.message);
+        setCampaigns([]);
+        setSelectedCampaign(null);
+        return [];
       }
     };
 

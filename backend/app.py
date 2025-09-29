@@ -43,14 +43,24 @@ def create_app():
     # Initialize extensions with app
     db.init_app(app)
     
-    # CORS setup
-    CORS(app, 
-         resources={r"/api/*": {
-             "origins": ["*"],  # Временно разрешаем все для диагностики
-             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-             "allow_headers": ["Content-Type", "Authorization"],
-             "supports_credentials": False  # Отключаем для упрощения
-         }})
+    # Динамические CORS настройки
+    config_instance = Config()
+    cors_origins = config_instance.CORS_ORIGINS
+    
+    print(f"🌐 CORS Origins: {cors_origins}")
+    
+    # CORS setup - упрощенная конфигурация для aaPanel
+    if "*" in cors_origins:
+        # Development mode - разрешаем все
+        CORS(app, resources={r"/api/*": {"origins": "*"}})
+    else:
+        # Production mode - конкретные домены
+        CORS(app, 
+             resources={r"/api/*": {
+                 "origins": cors_origins,
+                 "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+                 "allow_headers": ["Content-Type", "Authorization"]
+             }})
     
     # Import models BEFORE registering blueprints
     with app.app_context():
