@@ -300,32 +300,8 @@ class DataForSeoClient:
         browser_screen_height: int = 1080,
         se_domain: str = "google.com.ua"
     ) -> Dict:
-        """
-        Получение SERP результатов для ключевого слова
-        Docs: https://docs.dataforseo.com/v3/serp/google/organic/live/regular/
-        
-        Args:
-            keyword: Ключевое слово для анализа
-            location_code: Код локации (2804 = Ukraine)
-            language_code: Код языка интерфейса
-            device: Тип устройства (desktop, mobile, tablet)
-            os: Операционная система
-            depth: Глубина выдачи (макс 700)
-            calculate_rectangles: Вычислять координаты элементов
-            browser_screen_width: Ширина экрана браузера
-            browser_screen_height: Высота экрана браузера
-            se_domain: Домен поисковой системы
-        """
-        
-        debug_print(f"🔍 get_serp вызван для keyword: {keyword}")
-        debug_print(f"   - location: {location_code}, language: {language_code}")
-        debug_print(f"   - device: {device}, os: {os}")
-        debug_print(f"   - depth: {depth}, se_domain: {se_domain}")
-        debug_print(f"   - screen: {browser_screen_width}x{browser_screen_height}")
-        
         endpoint = "/serp/google/organic/live/regular"
         
-        # Структура запроса согласно документации
         data = [{
             "keyword": keyword,
             "location_code": location_code,
@@ -337,10 +313,6 @@ class DataForSeoClient:
             "browser_screen_width": browser_screen_width,
             "browser_screen_height": browser_screen_height,
             "se_domain": se_domain,
-            # Дополнительные параметры
-            "load_async": False,
-            "tag": f"serp_{keyword[:20]}",  # Тег для идентификации
-            "pingback_url": None  # Можно указать URL для webhook
         }]
         
         return self._make_request("POST", endpoint, data)

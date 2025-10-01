@@ -298,188 +298,183 @@ def get_new_keywords():
 
 @dataforseo_bp.route('/apply-serp', methods=['POST'])
 def apply_serp_analysis():
-    """Применение SERP анализа к выбранным ключевым словам с прогрессом"""
+    """Применение SERP анализа к выбранным ключевым словам"""
+    connection = None
     
-    def generate():
-        """Генератор для отправки прогресса через Server-Sent Events"""
-        connection = None
+    try:
+        data = request.json
+        keyword_ids = data.get('keyword_ids', [])
+        
+        if not keyword_ids:
+            return jsonify({'success': False, 'error': 'No keywords selected'}), 400
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # Получаем ключевые слова с campaign_id
+        placeholders = ','.join(['%s'] * len(keyword_ids))
+        cursor.execute(f"""
+            SELECT k.id, k.keyword, k.campaign_id 
+            FROM keywords k
+            WHERE k.id IN ({placeholders})
+        """, keyword_ids)
+        keywords_data = cursor.fetchall()
+        
+        if not keywords_data:
+            return jsonify({'success': False, 'error': 'Keywords not found'}), 404
+        
+        # Получаем DataForSeo клиент
         try:
-            data = request.json
-            keyword_ids = data.get('keyword_ids', [])
-            
-            if not keyword_ids:
-                yield f"data: {json.dumps({'error': 'No keywords selected'})}\n\n"
-                return
-            
-            connection = get_db_connection()
-            cursor = connection.cursor()
-            
-            # Получаем ключевые слова с campaign_id
-            placeholders = ','.join(['%s'] * len(keyword_ids))
-            cursor.execute(f"""
-                SELECT k.id, k.keyword, k.campaign_id 
-                FROM keywords k
-                WHERE k.id IN ({placeholders})
-            """, keyword_ids)
-            keywords_data = cursor.fetchall()
-            
-            if not keywords_data:
-                yield f"data: {json.dumps({'error': 'Keywords not found'})}\n\n"
-                return
-            
-            # Отправляем начальный статус
-            yield f"data: {json.dumps({
-                'status': 'start',
-                'total': len(keywords_data),
-                'message': f'Начинаем SERP анализ для {len(keywords_data)} ключевых слов'
-            })}\n\n"
-            
-            # Получаем DataForSeo клиент
+            dataforseo_client = get_dataforseo_client()
+        except ValueError as e:
+            return jsonify({
+                'success': False,
+                'error': f'DataForSeo API не настроен: {str(e)}'
+            }), 400
+        
+        # Параметры SERP запроса
+        serp_params = {
+            'location_code': data.get('location_code', 2804),
+            'language_code': data.get('language_code', 'ru'),
+            'device': data.get('device', 'desktop'),
+            'os': data.get('os', 'windows'),
+            'depth': data.get('depth', 100),
+            'calculate_rectangles': data.get('calculate_rectangles', False),
+            'browser_screen_width': data.get('browser_screen_width', 1920),
+            'browser_screen_height': data.get('browser_screen_height', 1080),
+            'se_domain': data.get('se_domain', 'google.com.ua')
+        }
+        
+        updated_count = 0
+        errors = []
+        total_cost = 0
+        results_summary = {
+            'with_ads': 0,
+            'with_maps': 0,
+            'with_our_site': 0,
+            'with_school_sites': 0,
+            'commercial_intent': 0
+        }
+        
+        for idx, kw in enumerate(keywords_data):
             try:
-                dataforseo_client = get_dataforseo_client()
-            except ValueError as e:
-                yield f"data: {json.dumps({'error': f'DataForSeo API не настроен: {str(e)}'})}\n\n"
-                return
-            
-            # Параметры SERP запроса
-            serp_params = {
-                'location_code': data.get('location_code', 2804),
-                'language_code': data.get('language_code', 'ru'),
-                'device': data.get('device', 'desktop'),
-                'os': data.get('os', 'windows'),
-                'depth': data.get('depth', 100),
-                'calculate_rectangles': data.get('calculate_rectangles', False),
-                'browser_screen_width': data.get('browser_screen_width', 1920),
-                'browser_screen_height': data.get('browser_screen_height', 1080),
-                'se_domain': data.get('se_domain', 'google.com.ua')
-            }
-            
-            updated_count = 0
-            errors = []
-            total_cost = 0
-            results_summary = {
-                'with_ads': 0,
-                'with_maps': 0,
-                'with_our_site': 0,
-                'with_school_sites': 0,
-                'commercial_intent': 0
-            }
-            
-            for idx, kw in enumerate(keywords_data):
-                try:
-                    # Отправляем прогресс
-                    yield f"data: {json.dumps({
-                        'status': 'progress',
-                        'current': idx,
-                        'total': len(keywords_data),
-                        'keyword': kw['keyword'],
-                        'message': f'Анализируется: {kw["keyword"]}'
-                    })}\n\n"
+                log_print(f"\n🔍 Анализ [{idx+1}/{len(keywords_data)}]: {kw['keyword']}")
+                
+                # Выполняем SERP запрос
+                serp_response = dataforseo_client.get_serp(
+                    keyword=kw['keyword'],
+                    **serp_params
+                )
+                
+                # Парсим результаты
+                serp_data = parse_serp_response(
+                    serp_response, 
+                    kw['campaign_id'], 
+                    connection,
+                    keyword_id=kw['id'],
+                    keyword_text=kw['keyword']
+                )
+                
+                if serp_data:
+                    # Находим позицию нашего сайта
+                    our_position = 0
+                    if serp_response.get('tasks') and serp_response['tasks'][0].get('result'):
+                        items = serp_response['tasks'][0]['result'][0].get('items', [])
+                        for item in items:
+                            if item.get('type') == 'organic':
+                                domain = item.get('domain', '').lower().replace('www.', '')
+                                # TODO: получать домен динамически из campaign_sites
+                                if domain == 'montessori.ua':
+                                    our_position = item.get('rank_absolute', 0)
+                                    break
                     
-                    # Выполняем SERP запрос
-                    serp_response = dataforseo_client.get_serp(
-                        keyword=kw['keyword'],
-                        **serp_params
-                    )
+                    # Обновляем данные в БД с позицией и датой
+                    cursor.execute("""
+                        UPDATE keywords 
+                        SET 
+                            has_ads = %s,
+                            has_school_sites = %s,
+                            has_google_maps = %s,
+                            has_our_site = %s,
+                            intent_type = %s,
+                            last_serp_check = NOW(),
+                            serp_position = %s,
+                            updated_at = NOW()
+                        WHERE id = %s
+                    """, (
+                        serp_data['has_ads'],
+                        serp_data['has_school_sites'],
+                        serp_data['has_google_maps'],
+                        serp_data['has_our_site'],
+                        serp_data['intent_type'],
+                        our_position if our_position > 0 else None,
+                        kw['id']
+                    ))
                     
-                    # Парсим результаты
-                    serp_data = parse_serp_response(
-                        serp_response, 
-                        kw['campaign_id'], 
-                        connection,
-                        keyword_id=kw['id'],
-                        keyword_text=kw['keyword']
-                    )
+                    updated_count += 1
                     
-                    if serp_data:
-                        # Находим позицию нашего сайта
-                        our_position = 0
-                        if 'parsed_items' in serp_response.get('tasks', [{}])[0].get('result', [{}])[0]:
-                            items = serp_response['tasks'][0]['result'][0].get('items', [])
-                            for item in items:
-                                if item.get('type') == 'organic':
-                                    domain = item.get('domain', '').lower().replace('www.', '')
-                                    if domain == 'montessori.ua':  # Или получать динамически
-                                        our_position = item.get('rank_absolute', 0)
-                                        break
-                        
-                        # Обновляем данные в БД с позицией и датой
-                        cursor.execute("""
-                            UPDATE keywords 
-                            SET 
-                                has_ads = %s,
-                                has_school_sites = %s,
-                                has_google_maps = %s,
-                                has_our_site = %s,
-                                intent_type = %s,
-                                last_serp_check = NOW(),
-                                serp_position = %s,
-                                updated_at = NOW()
-                            WHERE id = %s
-                        """, (
-                            serp_data['has_ads'],
-                            serp_data['has_school_sites'],
-                            serp_data['has_google_maps'],
-                            serp_data['has_our_site'],
-                            serp_data['intent_type'],
-                            our_position if our_position > 0 else None,
-                            kw['id']
-                        ))
-                        
-                        updated_count += 1
-                        
-                        # Обновляем статистику
-                        if serp_data['has_ads']:
-                            results_summary['with_ads'] += 1
-                        if serp_data['has_google_maps']:
-                            results_summary['with_maps'] += 1
-                        if serp_data['has_our_site']:
-                            results_summary['with_our_site'] += 1
-                        if serp_data['has_school_sites']:
-                            results_summary['with_school_sites'] += 1
-                        if serp_data['intent_type'] == 'Коммерческий':
-                            results_summary['commercial_intent'] += 1
-                        
-                        # Считаем стоимость
-                        if serp_response.get('tasks'):
-                            task_cost = serp_response['tasks'][0].get('cost', 0.003)
-                            total_cost += task_cost
-                    else:
-                        errors.append(f"Нет данных для '{kw['keyword']}'")
-                        
-                except Exception as e:
-                    error_msg = f"Ошибка для '{kw['keyword']}': {str(e)}"
+                    # Обновляем статистику
+                    if serp_data['has_ads']:
+                        results_summary['with_ads'] += 1
+                    if serp_data['has_google_maps']:
+                        results_summary['with_maps'] += 1
+                    if serp_data['has_our_site']:
+                        results_summary['with_our_site'] += 1
+                    if serp_data['has_school_sites']:
+                        results_summary['with_school_sites'] += 1
+                    if serp_data['intent_type'] == 'Коммерческий':
+                        results_summary['commercial_intent'] += 1
+                    
+                    # Считаем стоимость
+                    if serp_response.get('tasks'):
+                        task_cost = serp_response['tasks'][0].get('cost', 0.003)
+                        total_cost += task_cost
+                    
+                    log_print(f"   ✅ Обновлено")
+                else:
+                    error_msg = f"Нет данных для '{kw['keyword']}'"
                     errors.append(error_msg)
-            
-            connection.commit()
-            cursor.close()
-            
-            # Отправляем финальный результат
-            yield f"data: {json.dumps({
-                'status': 'complete',
-                'updated': updated_count,
-                'total': len(keywords_data),
-                'errors': errors[:10] if errors else [],
-                'cost': round(total_cost, 4),
-                'summary': results_summary,
-                'message': f'SERP анализ завершен! Обработано: {updated_count} из {len(keywords_data)} слов'
-            })}\n\n"
-            
-        except Exception as e:
-            if connection:
-                connection.rollback()
-            yield f"data: {json.dumps({'error': str(e)})}\n\n"
-        finally:
-            if connection:
-                connection.close()
-    
-    # Если запрос обычный POST (не SSE)
-    if request.headers.get('Accept') != 'text/event-stream':
-        # Старый способ для обратной совместимости
-        return apply_serp_analysis_sync()
-    
-    # Возвращаем поток SSE
-    return Response(generate(), mimetype='text/event-stream')
+                    log_print(f"   ⚠️ {error_msg}")
+                    
+            except Exception as e:
+                error_msg = f"Ошибка для '{kw['keyword']}': {str(e)}"
+                errors.append(error_msg)
+                log_print(f"   ❌ {error_msg}")
+                import traceback
+                traceback.print_exc()
+        
+        connection.commit()
+        cursor.close()
+        
+        # Формируем ответ
+        message = f'SERP анализ завершен! Обработано: {updated_count} из {len(keywords_data)} слов'
+        
+        log_print(f"\n📊 Результаты SERP анализа:")
+        log_print(f"   Обработано: {updated_count}/{len(keywords_data)}")
+        log_print(f"   Ошибок: {len(errors)}")
+        log_print(f"   Стоимость: ${total_cost:.4f}")
+        
+        return jsonify({
+            'success': True,
+            'message': message,
+            'updated': updated_count,
+            'total': len(keywords_data),
+            'errors': errors[:10] if errors else [],
+            'cost': round(total_cost, 4),
+            'summary': results_summary
+        })
+        
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        log_print(f"❌ Error in apply_serp_analysis: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+        
+    finally:
+        if connection:
+            connection.close()
             
 @dataforseo_bp.route('/serp-logs', methods=['GET'])
 def get_serp_logs():
@@ -997,7 +992,7 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
             item_type = item.get('type', '')
             position = item.get('rank_absolute', idx + 1)
             
-            # Сохраняем для отладки
+            # Сохраняем ВСЕ элементы для полной картины
             item_parsed = {
                 'position': position,
                 'type': item_type,
@@ -1006,6 +1001,10 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
                 'title': (item.get('title', '') or '')[:100]
             }
             
+            # Добавляем в общий список ВСЕГДА
+            all_items_parsed.append(item_parsed)
+            
+            # Далее идет специфичная обработка по типам...
             # РЕКЛАМНЫЕ БЛОКИ
             if item_type in ['paid', 'google_ads', 'shopping', 'commercial_units']:
                 has_ads = True
@@ -1058,19 +1057,55 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
                     has_school_sites = True
                     log_print(f"        🏫 ЭТО САЙТ ШКОЛЫ-КОНКУРЕНТА!")
             
-            # ДРУГИЕ ТИПЫ
+            # ДРУГИЕ ТИПЫ - тоже логируем подробнее
             else:
                 log_print(f"   #{position} [{item_type.upper()}]")
+                
+                # Специфичная информация по типам
                 if item_type == 'people_also_ask':
-                    log_print(f"        Вопросов: {len(item.get('items', []))}")
+                    questions = item.get('items', [])
+                    log_print(f"        Вопросов: {len(questions)}")
+                    if questions:
+                        for q in questions[:3]:  # Первые 3 вопроса
+                            log_print(f"        - {q.get('title', '')[:60]}")
+                            
                 elif item_type == 'video':
-                    log_print(f"        Видео блок")
+                    videos = item.get('items', [])
+                    log_print(f"        Видео блок ({len(videos)} видео)")
+                    if videos:
+                        for v in videos[:2]:  # Первые 2 видео
+                            log_print(f"        - {v.get('title', '')[:50]}")
+                            
+                elif item_type == 'ai_overview':
+                    log_print(f"        AI Overview блок")
+                    text = item.get('text', '')
+                    if text:
+                        log_print(f"        Текст: {text[:100]}...")
+                        
                 elif item_type == 'images':
                     log_print(f"        Блок изображений")
+                    
                 elif item_type == 'related_searches':
-                    log_print(f"        Похожие запросы: {len(item.get('items', []))}")
-            
-            all_items_parsed.append(item_parsed)
+                    searches = item.get('items', [])
+                    log_print(f"        Похожие запросы: {len(searches)}")
+                    if searches:
+                        for s in searches[:3]:  # Первые 3 запроса
+                            log_print(f"        - {s.get('title', '')}")
+                            
+                elif item_type == 'people_also_search':
+                    log_print(f"        Люди также ищут")
+                    
+                elif item_type == 'knowledge_graph':
+                    log_print(f"        Knowledge Graph")
+                    kg_title = item.get('title', '')
+                    if kg_title:
+                        log_print(f"        Title: {kg_title}")
+                        
+                elif item_type == 'featured_snippet':
+                    log_print(f"        Featured Snippet")
+                    domain = item.get('domain', '')
+                    if domain:
+                        log_print(f"        Источник: {domain}")
         
         log_print("-" * 50)
         

@@ -1,127 +1,134 @@
 #!/usr/bin/env python3
-# fix_serp_logs.py - запустите этот скрипт в папке backend
+# backend/update_db_serp_fields.py
+"""
+Добавление полей SERP отслеживания в таблицу keywords
+Запуск: python3 update_db_serp_fields.py
+"""
 
+import sys
 import pymysql
 from config import Config
+from datetime import datetime
 
-def fix_serp_logs_table():
-    """Пересоздание таблицы serp_logs с правильной структурой"""
+def update_database():
+    """Обновить структуру БД для SERP полей"""
     connection = None
+    
     try:
+        print(f"\n{'='*60}")
+        print(f"🚀 Обновление БД: добавление SERP полей")
+        print(f"📅 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"{'='*60}\n")
+        
+        # Подключение к БД
+        print(f"📊 Подключение к {Config.DB_HOST}:{Config.DB_PORT}/{Config.DB_NAME}...")
         connection = pymysql.connect(
             host=Config.DB_HOST,
             port=Config.DB_PORT,
             user=Config.DB_USER,
             password=Config.DB_PASSWORD,
-            database=Config.DB_NAME
+            database=Config.DB_NAME,
+            cursorclass=pymysql.cursors.DictCursor
         )
         cursor = connection.cursor()
+        print("✅ Подключено\n")
         
-        print("🔧 Исправление таблицы serp_logs...")
+        # Проверяем существующие колонки
+        cursor.execute("SHOW COLUMNS FROM keywords")
+        existing_columns = {row['Field'] for row in cursor.fetchall()}
         
-        # Удаляем старую таблицу если существует
-        cursor.execute("DROP TABLE IF EXISTS serp_logs")
-        print("✅ Старая таблица удалена")
+        changes_made = []
         
-        # Создаем новую с правильной структурой (TEXT вместо JSON для MySQL 5.7)
-        cursor.execute("""
-        CREATE TABLE serp_logs (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            keyword_id INT,
-            keyword_text VARCHAR(500),
-            location_code INT,
-            language_code VARCHAR(10),
-            device VARCHAR(50),
-            depth INT,
-            total_items INT DEFAULT 0,
-            organic_count INT DEFAULT 0,
-            paid_count INT DEFAULT 0,
-            maps_count INT DEFAULT 0,
-            shopping_count INT DEFAULT 0,
-            has_ads BOOLEAN DEFAULT FALSE,
-            has_maps BOOLEAN DEFAULT FALSE,
-            has_our_site BOOLEAN DEFAULT FALSE,
-            has_school_sites BOOLEAN DEFAULT FALSE,
-            intent_type VARCHAR(50),
-            school_percentage DECIMAL(5,2),
-            cost DECIMAL(10,4),
-            raw_response TEXT,
-            parsed_items TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (keyword_id) REFERENCES keywords(id) ON DELETE SET NULL,
-            INDEX idx_keyword_id (keyword_id),
-            INDEX idx_created_at (created_at)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-        """)
-        print("✅ Новая таблица serp_logs создана с TEXT полями")
+        # 1. Добавляем last_serp_check
+        if 'last_serp_check' not in existing_columns:
+            print("➕ Добавление колонки last_serp_check...")
+            cursor.execute("""
+                ALTER TABLE keywords 
+                ADD COLUMN last_serp_check DATETIME DEFAULT NULL 
+                COMMENT 'Дата последней SERP проверки'
+            """)
+            changes_made.append('last_serp_check')
+            print("   ✅ Добавлена\n")
+        else:
+            print("   ℹ️  last_serp_check уже существует")
         
-        # Проверяем структуру
-        cursor.execute("DESCRIBE serp_logs")
-        columns = cursor.fetchall()
-        print("\n📋 Структура таблицы serp_logs:")
-        for col in columns:
-            print(f"  - {col[0]}: {col[1]}")
+        # 2. Добавляем serp_position
+        if 'serp_position' not in existing_columns:
+            print("➕ Добавление колонки serp_position...")
+            cursor.execute("""
+                ALTER TABLE keywords 
+                ADD COLUMN serp_position INT DEFAULT NULL 
+                COMMENT 'Позиция в SERP (rank_absolute)'
+            """)
+            changes_made.append('serp_position')
+            print("   ✅ Добавлена\n")
+        else:
+            print("   ℹ️  serp_position уже существует")
         
+        # 3. Проверяем и добавляем индексы
+        cursor.execute("SHOW INDEX FROM keywords")
+        existing_indexes = {row['Key_name'] for row in cursor.fetchall()}
+        
+        if 'idx_last_serp_check' not in existing_indexes:
+            print("➕ Создание индекса idx_last_serp_check...")
+            cursor.execute("ALTER TABLE keywords ADD INDEX idx_last_serp_check (last_serp_check)")
+            changes_made.append('idx_last_serp_check')
+            print("   ✅ Создан\n")
+        else:
+            print("   ℹ️  idx_last_serp_check уже существует")
+        
+        if 'idx_serp_position' not in existing_indexes:
+            print("➕ Создание индекса idx_serp_position...")
+            cursor.execute("ALTER TABLE keywords ADD INDEX idx_serp_position (serp_position)")
+            changes_made.append('idx_serp_position')
+            print("   ✅ Создан\n")
+        else:
+            print("   ℹ️  idx_serp_position уже существует")
+        
+        # Применяем изменения
         connection.commit()
-        cursor.close()
         
-        print("\n✅ Таблица успешно пересоздана!")
+        # Статистика
+        print(f"\n{'='*60}")
+        if changes_made:
+            print(f"✅ Выполнено изменений: {len(changes_made)}")
+            for item in changes_made:
+                print(f"   • {item}")
+        else:
+            print("✅ Все изменения уже были применены ранее")
         
-    except Exception as e:
-        print(f"❌ Ошибка: {str(e)}")
-        if connection:
-            connection.rollback()
-    finally:
-        if connection:
-            connection.close()
-
-def test_insert():
-    """Тест вставки данных"""
-    connection = None
-    try:
-        connection = pymysql.connect(
-            host=Config.DB_HOST,
-            port=Config.DB_PORT,
-            user=Config.DB_USER,
-            password=Config.DB_PASSWORD,
-            database=Config.DB_NAME
-        )
-        cursor = connection.cursor()
-        
-        print("\n🧪 Тест вставки...")
-        
-        # Тестовая вставка
+        # Проверка результата
         cursor.execute("""
-            INSERT INTO serp_logs (
-                keyword_text, location_code, language_code,
-                device, depth, total_items, organic_count,
-                has_ads, has_our_site, intent_type,
-                school_percentage, cost, raw_response, parsed_items
-            ) VALUES (
-                'тест', 2804, 'ru', 'desktop', 10, 10, 10,
-                FALSE, TRUE, 'Информационный',
-                0.0, 0.003, '{"test": "data"}', '{"organic": []}'
-            )
+            SELECT 
+                COUNT(*) as total,
+                SUM(CASE WHEN last_serp_check IS NOT NULL THEN 1 ELSE 0 END) as checked,
+                SUM(CASE WHEN serp_position IS NOT NULL THEN 1 ELSE 0 END) as with_position
+            FROM keywords
         """)
+        stats = cursor.fetchone()
         
-        connection.commit()
-        print("✅ Тестовая запись успешно вставлена")
-        
-        # Проверяем
-        cursor.execute("SELECT COUNT(*) as cnt FROM serp_logs")
-        result = cursor.fetchone()
-        print(f"📊 Записей в таблице: {result[0]}")
+        print(f"\n📈 Статистика keywords:")
+        print(f"   Всего записей: {stats['total']}")
+        print(f"   С SERP проверкой: {stats['checked']}")
+        print(f"   С позицией: {stats['with_position']}")
         
         cursor.close()
+        print(f"\n{'='*60}")
+        print("✨ База данных успешно обновлена!")
+        print(f"{'='*60}\n")
+        
+        return True
         
     except Exception as e:
-        print(f"❌ Ошибка теста: {str(e)}")
+        print(f"\n❌ ОШИБКА: {str(e)}")
         if connection:
             connection.rollback()
+        return False
+        
     finally:
         if connection:
             connection.close()
 
 if __name__ == "__main__":
-    fix_serp_logs_table()
-    test_insert()
+    success = update_database()
+    sys.exit(0 if success else 1)
