@@ -7,6 +7,7 @@ import SettingsModal from './components/Modals/SettingsModal';
 import AddKeywordsModal from './components/Modals/AddKeywordsModal';
 import AddNewOutputModal from './components/Modals/AddNewOutputModal';
 import ApplySerpModal from './components/Modals/ApplySerpModal';
+import SerpLogsModal from './components/Modals/SerpLogsModal';
 import ApplyFiltersModal from './components/Modals/ApplyFiltersModal';
 import ChangeFieldModal from './components/Modals/ChangeFieldModal';
 import TrashModal from './components/Modals/TrashModal';
@@ -39,6 +40,7 @@ function App() {
   const [showApplyFilters, setShowApplyFilters] = useState(false);
   const [showChangeField, setShowChangeField] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
+  const [showSerpLogs, setShowSerpLogs] = useState(false);
 
   // Максимально совместимая функция копирования
   const copyToClipboard = (text) => {
@@ -629,6 +631,12 @@ function App() {
             Применить SERP ($)
           </button>
           <button 
+          className="btn btn-yellow" 
+          onClick={() => setShowSerpLogs(true)}
+        >
+          📊 SERP Логи
+        </button>
+          <button 
             className="btn btn-dark-blue" 
             onClick={() => setShowApplyFilters(true)}
             disabled={!selectedAdGroup}
@@ -759,6 +767,13 @@ function App() {
           onAdd={handleAddKeywords}
         />
       )}
+      
+      {showSerpLogs && (
+          <SerpLogsModal
+            show={showSerpLogs}
+            onHide={() => setShowSerpLogs(false)}
+          />
+        )}
       
       {showAddNewOutput && (
         <AddNewOutputModal

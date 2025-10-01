@@ -1,5 +1,6 @@
 # api/dataforseo.py - ПОЛНОСТЬЮ ПЕРЕРАБОТАННАЯ ВЕРСИЯ
 import sys
+import json
 from typing import Dict
 from flask import Blueprint, request, jsonify
 from config import Config
@@ -996,8 +997,8 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
                 
                 url = item.get('url', '').lower()
                 domain = item.get('domain', '').lower()
-                title = item.get('title', '')
-                description = item.get('description', '')
+                title = item.get('title') or ''  # ИСПРАВЛЕНО: обработка None
+                description = item.get('description') or ''  # ИСПРАВЛЕНО: обработка None
                 
                 # Очищаем домен
                 clean_domain = domain.replace('www.', '') if domain else ''
@@ -1005,13 +1006,13 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
                 organic_results.append({
                     'position': position,
                     'domain': clean_domain,
-                    'title': title[:100],
+                    'title': title[:100] if title else '',  # ИСПРАВЛЕНО: безопасная обрезка
                     'url': url,
-                    'description': description[:200]
+                    'description': description[:200] if description else ''  # ИСПРАВЛЕНО: безопасная обрезка
                 })
                 
                 log_print(f"   #{position} [ОРГАНИКА] {clean_domain}")
-                log_print(f"        Title: {title[:60]}")
+                log_print(f"        Title: {title[:60] if title else 'No title'}")
                 log_print(f"        URL: {url[:80]}")
                 
                 # Проверяем наш сайт
@@ -1096,10 +1097,10 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
                 """, (
                     keyword_id,
                     keyword_text or '',
-                    task.get('data', [{}])[0].get('location_code', 0),
-                    task.get('data', [{}])[0].get('language_code', ''),
-                    task.get('data', [{}])[0].get('device', ''),
-                    task.get('data', [{}])[0].get('depth', 0),
+                    task.get('data', [{}])[0].get('location_code', 0) if task.get('data') else 0,
+                    task.get('data', [{}])[0].get('language_code', '') if task.get('data') else '',
+                    task.get('data', [{}])[0].get('device', '') if task.get('data') else '',
+                    task.get('data', [{}])[0].get('depth', 0) if task.get('data') else 0,
                     items_count,
                     total_organic_sites,
                     len(paid_results),
