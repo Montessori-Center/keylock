@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
-# create_serp_tables.py - выполните этот скрипт в папке backend
+# fix_serp_logs.py - запустите этот скрипт в папке backend
 
 import pymysql
 from config import Config
 
-def create_serp_tables():
-    """Создание недостающих таблиц для SERP функционала"""
+def fix_serp_logs_table():
+    """Пересоздание таблицы serp_logs с правильной структурой"""
     connection = None
     try:
-        # Подключаемся к БД
         connection = pymysql.connect(
             host=Config.DB_HOST,
             port=Config.DB_PORT,
@@ -18,11 +17,15 @@ def create_serp_tables():
         )
         cursor = connection.cursor()
         
-        print("🔨 Создаю таблицы для SERP функционала...")
+        print("🔧 Исправление таблицы serp_logs...")
         
-        # Таблица для логирования SERP анализов
+        # Удаляем старую таблицу если существует
+        cursor.execute("DROP TABLE IF EXISTS serp_logs")
+        print("✅ Старая таблица удалена")
+        
+        # Создаем новую с правильной структурой (TEXT вместо JSON для MySQL 5.7)
         cursor.execute("""
-        CREATE TABLE IF NOT EXISTS serp_logs (
+        CREATE TABLE serp_logs (
             id INT AUTO_INCREMENT PRIMARY KEY,
             keyword_id INT,
             keyword_text VARCHAR(500),
@@ -42,86 +45,27 @@ def create_serp_tables():
             intent_type VARCHAR(50),
             school_percentage DECIMAL(5,2),
             cost DECIMAL(10,4),
-            raw_response JSON,
-            parsed_items JSON,
+            raw_response TEXT,
+            parsed_items TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (keyword_id) REFERENCES keywords(id) ON DELETE SET NULL,
             INDEX idx_keyword_id (keyword_id),
             INDEX idx_created_at (created_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         """)
-        print("✅ Таблица serp_logs создана")
+        print("✅ Новая таблица serp_logs создана с TEXT полями")
         
-        # Таблица для хранения сайтов кампаний
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS campaign_sites (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            campaign_id INT NOT NULL,
-            site_url VARCHAR(500),
-            domain VARCHAR(255),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            UNIQUE KEY unique_campaign (campaign_id),
-            FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
-            INDEX idx_domain (domain)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-        """)
-        print("✅ Таблица campaign_sites создана")
-        
-        # Таблица для хранения сайтов школ-конкурентов
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS school_sites (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            name VARCHAR(255) NOT NULL,
-            domain VARCHAR(255) NOT NULL,
-            full_url VARCHAR(500),
-            is_active BOOLEAN DEFAULT TRUE,
-            category VARCHAR(100),
-            notes TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            UNIQUE KEY unique_domain (domain),
-            INDEX idx_active (is_active)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-        """)
-        print("✅ Таблица school_sites создана")
-        
-        # Добавляем поля для новых ключевых слов (если еще не добавлены)
-        try:
-            cursor.execute("""
-            ALTER TABLE keywords 
-            ADD COLUMN IF NOT EXISTS is_new BOOLEAN DEFAULT FALSE,
-            ADD COLUMN IF NOT EXISTS batch_color VARCHAR(20)
-            """)
-            print("✅ Поля is_new и batch_color добавлены")
-        except:
-            print("ℹ️ Поля is_new и batch_color уже существуют")
-        
-        # Вставляем тестовые данные для сайтов школ
-        cursor.execute("""
-        INSERT IGNORE INTO school_sites (name, domain, full_url, category) VALUES 
-        ('JAM Music School', 'jam.ua', 'https://jam.ua', 'Музыкальная школа'),
-        ('Art School', 'artschool.com.ua', 'https://artschool.com.ua', 'Школа искусств'),
-        ('Music Academy Kiev', 'music-academy.kiev.ua', 'https://music-academy.kiev.ua', 'Музыкальная академия'),
-        ('Voice School', 'voiceschool.com.ua', 'https://voiceschool.com.ua', 'Вокальная школа'),
-        ('Guitar School Kiev', 'guitar-school.kiev.ua', 'https://guitar-school.kiev.ua', 'Гитарная школа')
-        """)
-        print(f"✅ Добавлено школ-конкурентов: {cursor.rowcount}")
-        
-        # Вставляем сайт для первой кампании
-        cursor.execute("""
-        INSERT INTO campaign_sites (campaign_id, site_url, domain) 
-        SELECT 1, 'https://montessori.ua', 'montessori.ua' 
-        FROM dual 
-        WHERE EXISTS (SELECT 1 FROM campaigns WHERE id = 1)
-        ON DUPLICATE KEY UPDATE domain = VALUES(domain)
-        """)
-        print(f"✅ Сайт montessori.ua привязан к кампании")
+        # Проверяем структуру
+        cursor.execute("DESCRIBE serp_logs")
+        columns = cursor.fetchall()
+        print("\n📋 Структура таблицы serp_logs:")
+        for col in columns:
+            print(f"  - {col[0]}: {col[1]}")
         
         connection.commit()
         cursor.close()
         
-        print("\n🎉 Все таблицы успешно созданы!")
+        print("\n✅ Таблица успешно пересоздана!")
         
     except Exception as e:
         print(f"❌ Ошибка: {str(e)}")
@@ -131,5 +75,53 @@ def create_serp_tables():
         if connection:
             connection.close()
 
+def test_insert():
+    """Тест вставки данных"""
+    connection = None
+    try:
+        connection = pymysql.connect(
+            host=Config.DB_HOST,
+            port=Config.DB_PORT,
+            user=Config.DB_USER,
+            password=Config.DB_PASSWORD,
+            database=Config.DB_NAME
+        )
+        cursor = connection.cursor()
+        
+        print("\n🧪 Тест вставки...")
+        
+        # Тестовая вставка
+        cursor.execute("""
+            INSERT INTO serp_logs (
+                keyword_text, location_code, language_code,
+                device, depth, total_items, organic_count,
+                has_ads, has_our_site, intent_type,
+                school_percentage, cost, raw_response, parsed_items
+            ) VALUES (
+                'тест', 2804, 'ru', 'desktop', 10, 10, 10,
+                FALSE, TRUE, 'Информационный',
+                0.0, 0.003, '{"test": "data"}', '{"organic": []}'
+            )
+        """)
+        
+        connection.commit()
+        print("✅ Тестовая запись успешно вставлена")
+        
+        # Проверяем
+        cursor.execute("SELECT COUNT(*) as cnt FROM serp_logs")
+        result = cursor.fetchone()
+        print(f"📊 Записей в таблице: {result[0]}")
+        
+        cursor.close()
+        
+    except Exception as e:
+        print(f"❌ Ошибка теста: {str(e)}")
+        if connection:
+            connection.rollback()
+    finally:
+        if connection:
+            connection.close()
+
 if __name__ == "__main__":
-    create_serp_tables()
+    fix_serp_logs_table()
+    test_insert()
