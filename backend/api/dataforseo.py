@@ -298,7 +298,186 @@ def get_new_keywords():
 
 @dataforseo_bp.route('/apply-serp', methods=['POST'])
 def apply_serp_analysis():
-    """Применение SERP анализа к выбранным ключевым словам"""
+    """Применение SERP анализа с оптимизацией для больших объемов"""
+    connection = None
+    
+    try:
+        data = request.json
+        keyword_ids = data.get('keyword_ids', [])
+        
+        if not keyword_ids:
+            return jsonify({'success': False, 'error': 'No keywords selected'}), 400
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # Получаем ключевые слова
+        placeholders = ','.join(['%s'] * len(keyword_ids))
+        cursor.execute(f"""
+            SELECT k.id, k.keyword, k.campaign_id 
+            FROM keywords k
+            WHERE k.id IN ({placeholders})
+        """, keyword_ids)
+        keywords_data = cursor.fetchall()
+        
+        # Получаем DataForSeo клиент
+        try:
+            dataforseo_client = get_dataforseo_client()
+        except ValueError as e:
+            return jsonify({
+                'success': False,
+                'error': f'DataForSeo API не настроен: {str(e)}'
+            }), 400
+        
+        # Параметры SERP запроса
+        serp_params = {
+            'location_code': data.get('location_code', 2804),
+            'language_code': data.get('language_code', 'ru'),
+            'device': data.get('device', 'desktop'),
+            'os': data.get('os', 'windows'),
+            'depth': data.get('depth', 100),
+            'se_domain': data.get('se_domain', 'google.com.ua')
+        }
+        
+        # Определяем стратегию: live для <10, batch для >=10
+        if len(keywords_data) < 10:
+            # Используем текущий live подход
+            return _process_serp_live(keywords_data, serp_params, connection, dataforseo_client)
+        else:
+            # Используем batch подход через task_post
+            return _process_serp_batch(keywords_data, serp_params, connection, dataforseo_client)
+            
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        log_print(f"❌ Error in apply_serp_analysis: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if connection:
+            connection.close()
+
+def _process_serp_batch(keywords_data, serp_params, connection, dataforseo_client):
+    """Обработка SERP через task_post для больших объемов"""
+    
+    log_print(f"🚀 Batch SERP для {len(keywords_data)} ключевых слов")
+    
+    # Шаг 1: Создаем задачи через task_post
+    task_ids = []
+    batch_size = 100  # Максимум задач в одном запросе
+    
+    for i in range(0, len(keywords_data), batch_size):
+        batch = keywords_data[i:i+batch_size]
+        
+        # Подготавливаем данные для batch запроса
+        tasks = []
+        for kw in batch:
+            task_data = {
+                "keyword": kw['keyword'],
+                "tag": f"keyword_id_{kw['id']}",  # Тег для идентификации
+                **serp_params
+            }
+            tasks.append(task_data)
+        
+        # Отправляем batch запрос
+        response = dataforseo_client.post_serp_tasks(tasks)
+        
+        if response.get('tasks'):
+            for task in response['tasks']:
+                if task.get('id'):
+                    task_ids.append({
+                        'task_id': task['id'],
+                        'keyword_id': int(task.get('data', {}).get('tag', '').replace('keyword_id_', '')),
+                        'keyword': next((kw['keyword'] for kw in batch if str(kw['id']) in task.get('data', {}).get('tag', '')), '')
+                    })
+        
+        log_print(f"📋 Создано {len(task_ids)} задач")
+    
+    # Шаг 2: Ждем выполнения задач
+    import time
+    max_wait = 120  # Максимум 2 минуты ожидания
+    start_time = time.time()
+    completed_tasks = []
+    
+    while len(completed_tasks) < len(task_ids) and time.time() - start_time < max_wait:
+        time.sleep(2)  # Проверяем каждые 2 секунды
+        
+        # Проверяем статус задач
+        ready_tasks = dataforseo_client.get_tasks_ready()
+        
+        for task_info in task_ids:
+            if task_info['task_id'] not in [t['task_id'] for t in completed_tasks]:
+                # Проверяем готовность конкретной задачи
+                if task_info['task_id'] in ready_tasks:
+                    completed_tasks.append(task_info)
+                    log_print(f"✅ Задача готова: {task_info['keyword'][:30]}...")
+        
+        # Отправляем прогресс на frontend через SSE или WebSocket
+        progress_percent = (len(completed_tasks) / len(task_ids)) * 100
+        log_print(f"⏳ Прогресс: {len(completed_tasks)}/{len(task_ids)} ({progress_percent:.0f}%)")
+    
+    # Шаг 3: Получаем результаты
+    updated_count = 0
+    errors = []
+    total_cost = 0
+    
+    for task_info in completed_tasks:
+        try:
+            # Получаем результат задачи
+            result = dataforseo_client.get_task_result(task_info['task_id'])
+            
+            # Парсим и обновляем БД
+            serp_data = parse_serp_response(
+                result,
+                keywords_data[0]['campaign_id'],
+                connection,
+                keyword_id=task_info['keyword_id'],
+                keyword_text=task_info['keyword']
+            )
+            
+            if serp_data:
+                cursor = connection.cursor()
+                cursor.execute("""
+                    UPDATE keywords 
+                    SET 
+                        has_ads = %s,
+                        has_school_sites = %s,
+                        has_google_maps = %s,
+                        has_our_site = %s,
+                        intent_type = %s,
+                        last_serp_check = NOW(),
+                        updated_at = NOW()
+                    WHERE id = %s
+                """, (
+                    serp_data['has_ads'],
+                    serp_data['has_school_sites'],
+                    serp_data['has_google_maps'],
+                    serp_data['has_our_site'],
+                    serp_data['intent_type'],
+                    task_info['keyword_id']
+                ))
+                cursor.close()
+                updated_count += 1
+                
+                # Считаем стоимость
+                if result.get('cost'):
+                    total_cost += result['cost']
+                    
+        except Exception as e:
+            errors.append(f"Ошибка для '{task_info['keyword']}': {str(e)}")
+    
+    connection.commit()
+    
+    return jsonify({
+        'success': True,
+        'message': f'Batch SERP завершен! Обработано: {updated_count} из {len(keywords_data)} слов',
+        'updated': updated_count,
+        'total': len(keywords_data),
+        'errors': errors[:10] if errors else [],
+        'cost': round(total_cost, 4),
+        'method': 'batch_task_post'
+    })
+
+def _process_serp_live(keywords_data, serp_params, connection, dataforseo_client):
     connection = None
     
     try:

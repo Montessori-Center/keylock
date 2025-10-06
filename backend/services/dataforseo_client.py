@@ -287,6 +287,30 @@ class DataForSeoClient:
         endpoint = "/appendix/user_data"
         return self._make_request("GET", endpoint)
         
+    def post_serp_tasks(self, tasks: List[Dict]) -> Dict:
+        """Создание batch задач для SERP"""
+        endpoint = "/serp/google/organic/task_post"
+        return self._make_request("POST", endpoint, tasks)
+
+    def get_tasks_ready(self) -> List[str]:
+        """Получение списка готовых задач"""
+        endpoint = "/serp/google/organic/tasks_ready"
+        response = self._make_request("GET", endpoint)
+        
+        ready_ids = []
+        if response.get('tasks'):
+            for task in response['tasks']:
+                if task.get('result'):
+                    for item in task['result']:
+                        if item.get('id'):
+                            ready_ids.append(item['id'])
+        return ready_ids
+    
+    def get_task_result(self, task_id: str) -> Dict:
+        """Получение результата конкретной задачи"""
+        endpoint = f"/serp/google/organic/task_get/regular/{task_id}"
+        return self._make_request("GET", endpoint)
+            
     def get_serp(
         self,
         keyword: str,

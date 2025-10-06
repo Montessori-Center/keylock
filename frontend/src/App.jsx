@@ -11,6 +11,7 @@ import SerpLogsModal from './components/Modals/SerpLogsModal';
 import ApplyFiltersModal from './components/Modals/ApplyFiltersModal';
 import ChangeFieldModal from './components/Modals/ChangeFieldModal';
 import TrashModal from './components/Modals/TrashModal';
+import SerpProgressModal from './components/Modals/SerpProgressModal';
 import api from './services/api';
 import { toast } from 'react-toastify';
 
@@ -41,6 +42,7 @@ function App() {
   const [showChangeField, setShowChangeField] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
   const [showSerpLogs, setShowSerpLogs] = useState(false);
+  const [serpProgress, setSerpProgress] = useState({show: false, current: 0, total: 0, currentKeyword: '' });
 
   // Максимально совместимая функция копирования
   const copyToClipboard = (text) => {
@@ -558,23 +560,48 @@ function App() {
     };
 
   const handleApplySerp = async (params) => {
-    try {
-      const keywordIds = params.keyword_ids || selectedKeywordIds;
-      const response = await api.applySerp({
-        ...params,
-        keyword_ids: keywordIds
-      });
-      if (response.success) {
-        toast.success(response.message);
-        if (response.errors && response.errors.length > 0) {
-          response.errors.forEach(err => toast.warning(err));
+      try {
+        const keywordIds = params.keyword_ids || selectedKeywordIds;
+        
+        // Показываем прогресс для больших запросов
+        if (keywordIds.length > 1) {
+          setSerpProgress({
+            show: true,
+            current: 0,
+            total: keywordIds.length,
+            currentKeyword: ''
+          });
         }
-        loadKeywords(selectedAdGroup.id);
+        
+        const response = await api.applySerp({
+          ...params,
+          keyword_ids: keywordIds,
+          // Добавляем колбек для обновления прогресса
+          onProgress: (current, total, keyword) => {
+            setSerpProgress({
+              show: true,
+              current,
+              total,
+              currentKeyword: keyword
+            });
+          }
+        });
+        
+        // Скрываем прогресс
+        setSerpProgress(prev => ({ ...prev, show: false }));
+        
+        if (response.success) {
+          toast.success(response.message);
+          if (response.errors && response.errors.length > 0) {
+            response.errors.forEach(err => toast.warning(err));
+          }
+          loadKeywords(selectedAdGroup.id);
+        }
+      } catch (error) {
+        setSerpProgress(prev => ({ ...prev, show: false }));
+        toast.error('Ошибка применения SERP анализа');
       }
-    } catch (error) {
-      toast.error('Ошибка применения SERP анализа');
-    }
-  };
+    };
 
   const handleLoadFromDB = async () => {
     if (!selectedAdGroup) {
@@ -812,6 +839,13 @@ function App() {
           onApply={handleChangeField}
         />
       )}
+      
+      <SerpProgressModal 
+      show={serpProgress.show}
+      current={serpProgress.current}
+      total={serpProgress.total}
+      currentKeyword={serpProgress.currentKeyword}
+    />
       
       {showTrash && (
       <TrashModal

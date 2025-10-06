@@ -66,9 +66,37 @@ const api = {
   },
 
   applySerp: async (params) => {
-    const response = await axios.post(`${API_BASE_URL}/dataforseo/apply-serp`, params);
-    return response.data;
-  },
+      const { onProgress, ...requestParams } = params;
+      
+      // Если есть колбек прогресса и больше 10 слов, используем SSE
+      if (onProgress && requestParams.keyword_ids.length >= 10) {
+        return new Promise((resolve, reject) => {
+          const eventSource = new EventSource(`${API_BASE_URL}/dataforseo/apply-serp-sse`);
+          
+          eventSource.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            
+            if (data.type === 'progress') {
+              onProgress(data.current, data.total, data.keyword);
+            } else if (data.type === 'complete') {
+              eventSource.close();
+              resolve(data);
+            } else if (data.type === 'error') {
+              eventSource.close();
+              reject(new Error(data.message));
+            }
+          };
+          
+          // Запускаем процесс
+          axios.post(`${API_BASE_URL}/dataforseo/apply-serp`, requestParams)
+            .catch(reject);
+        });
+      } else {
+        // Обычный запрос для малого количества
+        const response = await axios.post(`${API_BASE_URL}/dataforseo/apply-serp`, requestParams);
+        return response.data;
+      }
+    },
 
   // Settings
   getSettings: async () => {
