@@ -464,7 +464,7 @@ def apply_serp_analysis():
         }), 500
             
 def process_serp_sync(task_id: str, keyword_ids: list, params: dict) -> dict:
-    """Синхронная обработка SERP для 1 слова (без прогресса)"""
+    """Синхронная обработка SERP с обновлением прогресса"""
     connection = None
     cursor = None
     
@@ -504,10 +504,13 @@ def process_serp_sync(task_id: str, keyword_ids: list, params: dict) -> dict:
         errors = []
         total_cost = 0.0
         
-        # Обрабатываем ключевые слова
+        # ✅ ИСПРАВЛЕНИЕ: Обрабатываем ключевые слова с обновлением прогресса
         for idx, kw in enumerate(keywords_data):
             try:
                 log_print(f"\n🔍 Анализ [{idx+1}/{len(keywords_data)}]: {kw['keyword']}")
+                
+                # ✅ КРИТИЧНО: Обновляем прогресс ПЕРЕД обработкой каждого слова
+                update_progress(task_id, idx, len(keywords_data), kw['keyword'], 'processing')
                 
                 serp_response = dataforseo_client.get_serp(
                     keyword=kw['keyword'],
@@ -542,23 +545,25 @@ def process_serp_sync(task_id: str, keyword_ids: list, params: dict) -> dict:
                         serp_data['intent_type'],
                         kw['id']
                     ))
-                    
                     updated_count += 1
-                    
-                    if serp_response.get('tasks'):
-                        task_cost = float(serp_response['tasks'][0].get('cost', 0.003))
-                        total_cost += task_cost
-                    
-                    log_print(f"   ✅ Обновлено")
-                else:
-                    error_msg = f"Нет данных для '{kw['keyword']}'"
-                    errors.append(error_msg)
-                    log_print(f"   ⚠️ {error_msg}")
-                    
+                    log_print(f"   ✅ Обновлено в БД")
+                
+                # Считаем стоимость
+                if serp_response.get('tasks'):
+                    task_cost = serp_response['tasks'][0].get('cost', 0)
+                    total_cost += task_cost
+                    log_print(f"   💰 Стоимость: ${task_cost:.4f}")
+                
+                # ✅ КРИТИЧНО: Обновляем прогресс ПОСЛЕ обработки
+                update_progress(task_id, idx + 1, len(keywords_data), kw['keyword'], 'processing')
+                
             except Exception as e:
                 error_msg = f"Ошибка для '{kw['keyword']}': {str(e)}"
-                errors.append(error_msg)
                 log_print(f"   ❌ {error_msg}")
+                errors.append(error_msg)
+                
+                # ✅ КРИТИЧНО: Всё равно обновляем прогресс при ошибке
+                update_progress(task_id, idx + 1, len(keywords_data), kw['keyword'], 'processing')
         
         connection.commit()
         

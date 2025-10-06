@@ -14,6 +14,7 @@ import ApplyFiltersModal from './components/Modals/ApplyFiltersModal';
 import ChangeFieldModal from './components/Modals/ChangeFieldModal';
 import TrashModal from './components/Modals/TrashModal';
 import SerpProgressModal from './components/Modals/SerpProgressModal';
+import LiveProgressModal from './components/Modals/LiveProgressModal';
 import api from './services/api';
 import { toast } from 'react-toastify';
 
@@ -50,6 +51,10 @@ function App() {
     total: 0, 
     currentKeyword: '' 
   });
+  const [liveProgress, setLiveProgress] = useState({
+      show: false,
+      keyword: ''
+    });
 
   // Копирование в буфер обмена
   const copyToClipboard = (text) => {
@@ -504,91 +509,134 @@ function App() {
 
   // ИСПРАВЛЕННАЯ ФУНКЦИЯ
   const handleApplySerp = async (params) => {
-      console.log('🎯 handleApplySerp called');
-      
       try {
-        const keywordIds = params.keyword_ids || selectedKeywordIds;
+        console.log('🚀 Starting SERP analysis with params:', params);
         
-        console.log('   Keywords count:', keywordIds.length);
+        const isLiveMode = params.keyword_ids.length === 1;
         
-        // Показываем прогресс только для 2+ слов
-        if (keywordIds.length > 1) {
+        if (isLiveMode) {
+          // ✅ ДЛЯ 1 СЛОВА: Показываем LiveProgressModal
+          const keyword = keywords.find(k => k.id === params.keyword_ids[0])?.keyword || '';
+          
+          setLiveProgress({
+            show: true,
+            keyword: keyword
+          });
+          
+          try {
+            const response = await api.applySerp(params);
+            
+            // Завершаем прогресс (устанавливаем 100%)
+            setTimeout(() => {
+              setLiveProgress({ show: false, keyword: '' });
+            }, 300);
+            
+            console.log('✅ LIVE SERP response:', response);
+            
+            if (response.success) {
+              toast.success(response.message || 'SERP анализ завершен');
+              
+              if (response.warning) {
+                toast.warning(response.warning);
+              }
+              
+              if (response.errors && response.errors.length > 0) {
+                response.errors.slice(0, 3).forEach(err => toast.warning(err));
+              }
+              
+              // Перезагружаем ключевые слова
+              if (selectedAdGroup) {
+                await loadKeywords(selectedAdGroup.id);
+              }
+            } else {
+              toast.error(response.error || 'Ошибка SERP анализа');
+            }
+          } catch (error) {
+            console.error('❌ LIVE SERP Error:', error);
+            setLiveProgress({ show: false, keyword: '' });
+            
+            let errorMessage = 'Ошибка применения SERP анализа';
+            if (error.response?.data?.error) {
+              errorMessage = error.response.data.error;
+            } else if (error.message) {
+              errorMessage = error.message;
+            }
+            toast.error(errorMessage);
+          }
+        } else {
+          // ✅ ДЛЯ 2+ СЛОВ: Используем SSE с SerpProgressModal
           setSerpProgress({
             show: true,
             current: 0,
-            total: keywordIds.length,
-            currentKeyword: 'Подготовка...'
+            total: params.keyword_ids.length,
+            currentKeyword: 'Инициализация...'
           });
-        }
-        
-        try {
-          const response = await api.applySerp({
-            ...params,
-            keyword_ids: keywordIds,
-            onProgress: (current, total, keyword) => {
-              console.log(`📊 Progress: ${current}/${total} - ${keyword}`);
-              // Обновляем прогресс только если модалка показана
-              if (keywordIds.length > 1) {
-                setSerpProgress({
-                  show: true,
-                  current,
-                  total,
-                  currentKeyword: keyword || 'Обработка...'
-                });
+          
+          try {
+            const response = await api.applySerp({
+              ...params,
+              onProgress: (current, total, keyword) => {
+                console.log(`📊 Progress: ${current}/${total} - ${keyword}`);
+                
+                if (current !== undefined && total !== undefined) {
+                  setSerpProgress({
+                    show: true,
+                    current,
+                    total,
+                    currentKeyword: keyword || 'Обработка...'
+                  });
+                }
               }
-            }
-          });
-          
-          console.log('✅ SERP response:', response);
-          
-          // Скрываем прогресс
-          setSerpProgress(prev => ({ ...prev, show: false }));
-          
-          if (response.success) {
-            toast.success(response.message || 'SERP анализ завершен');
+            });
             
-            if (response.warning) {
-              toast.warning(response.warning);
+            console.log('✅ SERP response:', response);
+            
+            // Скрываем прогресс
+            setSerpProgress(prev => ({ ...prev, show: false }));
+            
+            if (response.success) {
+              toast.success(response.message || 'SERP анализ завершен');
+              
+              if (response.warning) {
+                toast.warning(response.warning);
+              }
+              
+              if (response.errors && response.errors.length > 0) {
+                response.errors.slice(0, 3).forEach(err => toast.warning(err));
+              }
+              
+              // Перезагружаем ключевые слова
+              if (selectedAdGroup) {
+                await loadKeywords(selectedAdGroup.id);
+              }
+            } else {
+              toast.error(response.error || 'Ошибка SERP анализа');
+            }
+          } catch (apiError) {
+            console.error('❌ API Error:', apiError);
+            setSerpProgress(prev => ({ ...prev, show: false }));
+            
+            let errorMessage = 'Ошибка применения SERP анализа';
+            
+            if (apiError.response) {
+              console.error('   Response status:', apiError.response.status);
+              console.error('   Response data:', apiError.response.data);
+              
+              errorMessage = apiError.response.data?.error 
+                || apiError.response.data?.message 
+                || `Ошибка сервера: ${apiError.response.status}`;
+            } else if (apiError.message) {
+              errorMessage = apiError.message;
             }
             
-            if (response.errors && response.errors.length > 0) {
-              response.errors.slice(0, 3).forEach(err => toast.warning(err));
-            }
-            
-            // Перезагружаем ключевые слова
-            if (selectedAdGroup) {
-              await loadKeywords(selectedAdGroup.id);
-            }
-          } else {
-            toast.error(response.error || 'Ошибка SERP анализа');
+            toast.error(errorMessage);
           }
-          
-        } catch (apiError) {
-          console.error('❌ API Error:', apiError);
-          setSerpProgress(prev => ({ ...prev, show: false }));
-          
-          let errorMessage = 'Ошибка применения SERP анализа';
-          
-          if (apiError.response) {
-            console.error('   Response status:', apiError.response.status);
-            console.error('   Response data:', apiError.response.data);
-            
-            errorMessage = apiError.response.data?.error 
-              || apiError.response.data?.message
-              || `Ошибка сервера (${apiError.response.status})`;
-          } else if (apiError.request) {
-            errorMessage = 'Нет ответа от сервера';
-          } else {
-            errorMessage = apiError.message || 'Неизвестная ошибка';
-          }
-          
-          toast.error(errorMessage);
         }
-        
       } catch (error) {
         console.error('❌ Unexpected error:', error);
         setSerpProgress(prev => ({ ...prev, show: false }));
-        toast.error('Неожиданная ошибка: ' + error.message);
+        setLiveProgress({ show: false, keyword: '' });
+        toast.error('Непредвиденная ошибка');
       }
     };
 
@@ -803,6 +851,11 @@ function App() {
         current={serpProgress.current}
         total={serpProgress.total}
         currentKeyword={serpProgress.currentKeyword}
+      />
+      
+      <LiveProgressModal 
+        show={liveProgress.show}
+        keyword={liveProgress.keyword}
       />
       
       {showTrash && (
