@@ -1,7 +1,6 @@
-// frontend/src/services/api.js
+// frontend/src/services/api.js - ИСПРАВЛЕНО С SSE
 import axios from 'axios';
 
-// Используем относительный путь - все запросы пойдут через прокси
 const API_BASE_URL = '/api';
 
 console.log('API Base URL:', API_BASE_URL);
@@ -29,11 +28,11 @@ const api = {
   },
   
   rejectChanges: async (adGroupId) => {
-      const response = await axios.post(`${API_BASE_URL}/keywords/reject-changes`, {
-        ad_group_id: adGroupId
-      });
-      return response.data;
-    },
+    const response = await axios.post(`${API_BASE_URL}/keywords/reject-changes`, {
+      ad_group_id: adGroupId
+    });
+    return response.data;
+  },
 
   bulkAction: async (action, keywordIds, field = null, value = null) => {
     const data = {
@@ -68,33 +67,95 @@ const api = {
   applySerp: async (params) => {
       const { onProgress, ...requestParams } = params;
       
-      // Если есть колбек прогресса и больше 10 слов, используем SSE
-      if (onProgress && requestParams.keyword_ids.length >= 10) {
-        return new Promise((resolve, reject) => {
-          const eventSource = new EventSource(`${API_BASE_URL}/dataforseo/apply-serp-sse`);
-          
-          eventSource.onmessage = (event) => {
-            const data = JSON.parse(event.data);
+      console.log('🚀 applySerp called with', requestParams.keyword_ids.length, 'keywords');
+      
+      try {
+        const keywordsCount = requestParams.keyword_ids.length;
+        
+        // Для 1 слова - обычный запрос без SSE (быстро)
+        if (keywordsCount === 1) {
+          const response = await axios.post(`${API_BASE_URL}/dataforseo/apply-serp`, requestParams);
+          console.log('📨 Response:', response.data);
+          return response.data;
+        }
+        
+        // Для 2+ слов - Task-версия с SSE
+        const startResponse = await axios.post(`${API_BASE_URL}/dataforseo/apply-serp`, requestParams);
+        
+        console.log('📨 Start response:', startResponse.data);
+        
+        if (!startResponse.data.success) {
+          throw new Error(startResponse.data.error || 'Failed to start SERP analysis');
+        }
+        
+        if (startResponse.data.use_sse && startResponse.data.task_id) {
+          return new Promise((resolve, reject) => {
+            const task_id = startResponse.data.task_id;
+            const sseUrl = `${API_BASE_URL}/dataforseo/apply-serp-sse?task_id=${task_id}`;
             
-            if (data.type === 'progress') {
-              onProgress(data.current, data.total, data.keyword);
-            } else if (data.type === 'complete') {
-              eventSource.close();
-              resolve(data);
-            } else if (data.type === 'error') {
-              eventSource.close();
-              reject(new Error(data.message));
-            }
-          };
-          
-          // Запускаем процесс
-          axios.post(`${API_BASE_URL}/dataforseo/apply-serp`, requestParams)
-            .catch(reject);
-        });
-      } else {
-        // Обычный запрос для малого количества
-        const response = await axios.post(`${API_BASE_URL}/dataforseo/apply-serp`, requestParams);
-        return response.data;
+            console.log('🔄 Connecting to SSE:', sseUrl);
+            
+            const eventSource = new EventSource(sseUrl);
+            let isResolved = false;
+            
+            const timeout = setTimeout(() => {
+              if (!isResolved) {
+                console.warn('⏱️ SSE timeout');
+                eventSource.close();
+                reject(new Error('SSE connection timeout'));
+              }
+            }, 300000);
+            
+            eventSource.onmessage = (event) => {
+              try {
+                const data = JSON.parse(event.data);
+                console.log('📡 SSE event:', data.type);
+                
+                if (data.type === 'progress') {
+                  if (onProgress) {
+                    onProgress(data.current, data.total, data.keyword);
+                  }
+                } else if (data.type === 'complete') {
+                  clearTimeout(timeout);
+                  eventSource.close();
+                  isResolved = true;
+                  resolve({
+                    success: true,
+                    message: data.message || 'SERP анализ завершен',
+                    ...data.result
+                  });
+                } else if (data.type === 'error') {
+                  clearTimeout(timeout);
+                  eventSource.close();
+                  isResolved = true;
+                  reject(new Error(data.message || 'SERP analysis failed'));
+                }
+              } catch (err) {
+                console.error('❌ Error parsing SSE event:', err);
+              }
+            };
+            
+            eventSource.onerror = (error) => {
+              console.error('❌ SSE connection error:', error);
+              if (!isResolved) {
+                clearTimeout(timeout);
+                eventSource.close();
+                isResolved = true;
+                resolve({
+                  success: true,
+                  message: 'SERP анализ запущен (статус неизвестен)',
+                  warning: 'Не удалось отследить прогресс'
+                });
+              }
+            };
+          });
+        } else {
+          return startResponse.data;
+        }
+        
+      } catch (error) {
+        console.error('❌ applySerp error:', error);
+        throw error;
       }
     },
 
@@ -109,7 +170,6 @@ const api = {
     return response.data;
   },
 
-  // Check balance
   checkBalance: async () => {
     const response = await axios.get(`${API_BASE_URL}/dataforseo/check-balance`);
     return response.data;
@@ -120,7 +180,7 @@ const api = {
     return response.data;
   },
   
-  // Trash/Корзина методы
+  // Trash/Корзина
   getTrashKeywords: async (adGroupId) => {
     const response = await axios.get(`${API_BASE_URL}/keywords/trash/${adGroupId}`);
     return response.data;
@@ -140,6 +200,7 @@ const api = {
     return response.data;
   },
   
+  // Campaign sites
   getCampaignSites: async () => {
     const response = await axios.get(`${API_BASE_URL}/settings/campaign-sites`);
     return response.data;

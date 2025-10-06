@@ -1,16 +1,20 @@
 # api/dataforseo.py - ПОЛНОСТЬЮ ПЕРЕРАБОТАННАЯ ВЕРСИЯ
 import sys
 import json
+import time
+import uuid
 from typing import Dict
-from flask import Blueprint, request, jsonify, Response
+from flask import Blueprint, request, jsonify, Response, stream_with_context
 from config import Config
 import pymysql
-from typing import Dict
 from datetime import datetime
 from services.dataforseo_client import get_dataforseo_client, DataForSeoClient
 from api.keywords import get_random_batch_color
 
 dataforseo_bp = Blueprint('dataforseo', __name__)
+
+# Глобальное хранилище прогресса задач
+SERP_PROGRESS = {}
 
 # Принудительный flush для логов
 def log_print(*args, **kwargs):
@@ -26,6 +30,109 @@ def get_db_connection():
         password=Config.DB_PASSWORD,
         database=Config.DB_NAME,
         cursorclass=pymysql.cursors.DictCursor
+    )
+    
+def update_progress(task_id: str, current: int, total: int, keyword: str = '', status: str = 'processing'):
+    """Обновляет прогресс задачи"""
+    SERP_PROGRESS[task_id] = {
+        'current': current,
+        'total': total,
+        'keyword': keyword,
+        'status': status,
+        'timestamp': time.time()
+    }
+    log_print(f"📊 Progress updated: {current}/{total} - {keyword}")
+
+def get_progress(task_id: str) -> Dict:
+    """Получает прогресс задачи"""
+    return SERP_PROGRESS.get(task_id, {
+        'current': 0,
+        'total': 0,
+        'keyword': '',
+        'status': 'not_found'
+    })
+
+def cleanup_progress(task_id: str):
+    """Очищает прогресс задачи"""
+    if task_id in SERP_PROGRESS:
+        del SERP_PROGRESS[task_id]
+        
+@dataforseo_bp.route('/apply-serp-sse', methods=['GET'])
+def apply_serp_sse():
+    """SSE endpoint для получения прогресса SERP анализа"""
+    task_id = request.args.get('task_id')
+    
+    if not task_id:
+        return jsonify({'error': 'task_id required'}), 400
+    
+    def generate():
+        """Генератор событий SSE"""
+        log_print(f"🔄 SSE stream started for task {task_id}")
+        
+        # Ждем появления задачи (макс 5 сек)
+        wait_time = 0
+        while task_id not in SERP_PROGRESS and wait_time < 5:
+            time.sleep(0.1)
+            wait_time += 0.1
+        
+        if task_id not in SERP_PROGRESS:
+            yield f"data: {json.dumps({'type': 'error', 'message': 'Task not found'})}\n\n"
+            return
+        
+        # Отправляем события прогресса
+        last_current = -1
+        max_wait = 300  # 5 минут максимум
+        start_time = time.time()
+        
+        while True:
+            if time.time() - start_time > max_wait:
+                yield f"data: {json.dumps({'type': 'error', 'message': 'Timeout'})}\n\n"
+                break
+            
+            progress = get_progress(task_id)
+            
+            # Отправляем только если прогресс изменился
+            if progress['current'] != last_current:
+                last_current = progress['current']
+                
+                if progress['status'] == 'processing':
+                    event_data = {
+                        'type': 'progress',
+                        'current': progress['current'],
+                        'total': progress['total'],
+                        'keyword': progress['keyword']
+                    }
+                    yield f"data: {json.dumps(event_data)}\n\n"
+                    
+                elif progress['status'] == 'complete':
+                    event_data = {
+                        'type': 'complete',
+                        'message': progress.get('message', 'Завершено'),
+                        'result': progress.get('result', {})
+                    }
+                    yield f"data: {json.dumps(event_data)}\n\n"
+                    cleanup_progress(task_id)
+                    break
+                    
+                elif progress['status'] == 'error':
+                    event_data = {
+                        'type': 'error',
+                        'message': progress.get('error', 'Unknown error')
+                    }
+                    yield f"data: {json.dumps(event_data)}\n\n"
+                    cleanup_progress(task_id)
+                    break
+            
+            time.sleep(0.5)  # Проверяем каждые 0.5 сек
+    
+    return Response(
+        stream_with_context(generate()),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no',
+            'Connection': 'keep-alive'
+        }
     )
 
 @dataforseo_bp.route('/test', methods=['GET', 'POST'])
@@ -298,20 +405,73 @@ def get_new_keywords():
 
 @dataforseo_bp.route('/apply-serp', methods=['POST'])
 def apply_serp_analysis():
-    """Применение SERP анализа с оптимизацией для больших объемов"""
-    connection = None
+    """Применение SERP анализа с поддержкой прогресса через SSE"""
     
     try:
         data = request.json
         keyword_ids = data.get('keyword_ids', [])
+        task_id = data.get('task_id') or str(uuid.uuid4())
+        
+        log_print(f"\n{'='*50}")
+        log_print(f"🚀 SERP Analysis started: task_id={task_id}")
+        log_print(f"   Keywords: {len(keyword_ids)}")
+        log_print(f"{'='*50}")
         
         if not keyword_ids:
             return jsonify({'success': False, 'error': 'No keywords selected'}), 400
         
+        # ИЗМЕНЕНО: Для 1 слова - синхронно без прогресса, для 2+ - Task-версия
+        if len(keyword_ids) == 1:
+            # Live-анализ для одного слова (быстро, без модалки)
+            try:
+                result = process_serp_sync(task_id, keyword_ids, data)
+                return jsonify(result), 200
+            except Exception as e:
+                log_print(f"❌ Live analysis error: {str(e)}")
+                return jsonify({
+                    'success': False,
+                    'error': f'SERP analysis failed: {str(e)}'
+                }), 500
+        else:
+            # Task-версия для 2+ слов (с прогрессом через SSE)
+            import threading
+            
+            # Инициализируем прогресс
+            update_progress(task_id, 0, len(keyword_ids), '', 'processing')
+            
+            thread = threading.Thread(
+                target=process_serp_async,
+                args=(task_id, keyword_ids, data)
+            )
+            thread.daemon = True
+            thread.start()
+            
+            return jsonify({
+                'success': True,
+                'task_id': task_id,
+                'message': 'SERP analysis started',
+                'use_sse': True
+            }), 200
+            
+    except Exception as e:
+        log_print(f"❌ Error in apply_serp_analysis: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        return jsonify({
+            'success': False, 
+            'error': str(e)
+        }), 500
+            
+def process_serp_sync(task_id: str, keyword_ids: list, params: dict) -> dict:
+    """Синхронная обработка SERP для 1 слова (без прогресса)"""
+    connection = None
+    cursor = None
+    
+    try:
         connection = get_db_connection()
         cursor = connection.cursor()
         
-        # Получаем ключевые слова
         placeholders = ','.join(['%s'] * len(keyword_ids))
         cursor.execute(f"""
             SELECT k.id, k.keyword, k.campaign_id 
@@ -320,41 +480,145 @@ def apply_serp_analysis():
         """, keyword_ids)
         keywords_data = cursor.fetchall()
         
-        # Получаем DataForSeo клиент
+        if not keywords_data:
+            return {'success': False, 'error': 'Keywords not found'}
+        
         try:
             dataforseo_client = get_dataforseo_client()
         except ValueError as e:
-            return jsonify({
-                'success': False,
-                'error': f'DataForSeo API не настроен: {str(e)}'
-            }), 400
+            return {'success': False, 'error': f'DataForSeo API не настроен: {str(e)}'}
         
-        # Параметры SERP запроса
         serp_params = {
-            'location_code': data.get('location_code', 2804),
-            'language_code': data.get('language_code', 'ru'),
-            'device': data.get('device', 'desktop'),
-            'os': data.get('os', 'windows'),
-            'depth': data.get('depth', 100),
-            'se_domain': data.get('se_domain', 'google.com.ua')
+            'location_code': params.get('location_code', 2804),
+            'language_code': params.get('language_code', 'ru'),
+            'device': params.get('device', 'desktop'),
+            'os': params.get('os', 'windows'),
+            'depth': params.get('depth', 100),
+            'calculate_rectangles': params.get('calculate_rectangles', False),
+            'browser_screen_width': params.get('browser_screen_width', 1920),
+            'browser_screen_height': params.get('browser_screen_height', 1080),
+            'se_domain': params.get('se_domain', 'google.com.ua')
         }
         
-        # Определяем стратегию: live для <10, batch для >=10
-        if len(keywords_data) < 10:
-            # Используем текущий live подход
-            return _process_serp_live(keywords_data, serp_params, connection, dataforseo_client)
-        else:
-            # Используем batch подход через task_post
-            return _process_serp_batch(keywords_data, serp_params, connection, dataforseo_client)
-            
+        updated_count = 0
+        errors = []
+        total_cost = 0.0
+        
+        # Обрабатываем ключевые слова
+        for idx, kw in enumerate(keywords_data):
+            try:
+                log_print(f"\n🔍 Анализ [{idx+1}/{len(keywords_data)}]: {kw['keyword']}")
+                
+                serp_response = dataforseo_client.get_serp(
+                    keyword=kw['keyword'],
+                    **serp_params
+                )
+                
+                serp_data = parse_serp_response(
+                    serp_response, 
+                    kw['campaign_id'], 
+                    connection,
+                    keyword_id=kw['id'],
+                    keyword_text=kw['keyword']
+                )
+                
+                if serp_data:
+                    cursor.execute("""
+                        UPDATE keywords 
+                        SET 
+                            has_ads = %s,
+                            has_school_sites = %s,
+                            has_google_maps = %s,
+                            has_our_site = %s,
+                            intent_type = %s,
+                            last_serp_check = NOW(),
+                            updated_at = NOW()
+                        WHERE id = %s
+                    """, (
+                        serp_data['has_ads'],
+                        serp_data['has_school_sites'],
+                        serp_data['has_google_maps'],
+                        serp_data['has_our_site'],
+                        serp_data['intent_type'],
+                        kw['id']
+                    ))
+                    
+                    updated_count += 1
+                    
+                    if serp_response.get('tasks'):
+                        task_cost = float(serp_response['tasks'][0].get('cost', 0.003))
+                        total_cost += task_cost
+                    
+                    log_print(f"   ✅ Обновлено")
+                else:
+                    error_msg = f"Нет данных для '{kw['keyword']}'"
+                    errors.append(error_msg)
+                    log_print(f"   ⚠️ {error_msg}")
+                    
+            except Exception as e:
+                error_msg = f"Ошибка для '{kw['keyword']}': {str(e)}"
+                errors.append(error_msg)
+                log_print(f"   ❌ {error_msg}")
+        
+        connection.commit()
+        
+        message = f'SERP анализ завершен! Обработано: {updated_count} из {len(keywords_data)} слов'
+        
+        log_print(f"\n📊 Результаты:")
+        log_print(f"   Обработано: {updated_count}/{len(keywords_data)}")
+        log_print(f"   Стоимость: ${total_cost:.4f}")
+        
+        return {
+            'success': True,
+            'message': message,
+            'updated': updated_count,
+            'total': len(keywords_data),
+            'errors': errors[:10] if errors else [],
+            'cost': round(total_cost, 4)
+        }
+        
     except Exception as e:
         if connection:
-            connection.rollback()
-        log_print(f"❌ Error in apply_serp_analysis: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+            try:
+                connection.rollback()
+            except:
+                pass
+        log_print(f"❌ Error in process_serp_sync: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise
+        
     finally:
+        if cursor:
+            try:
+                cursor.close()
+            except:
+                pass
         if connection:
-            connection.close()
+            try:
+                connection.close()
+            except:
+                pass
+            
+def process_serp_async(task_id: str, keyword_ids: list, params: dict):
+    """Асинхронная обработка SERP для больших объемов"""
+    try:
+        result = process_serp_sync(task_id, keyword_ids, params)
+        
+        # Обновляем финальный статус
+        SERP_PROGRESS[task_id].update({
+            'status': 'complete',
+            'result': result,
+            'message': result.get('message', 'Completed')
+        })
+        
+    except Exception as e:
+        log_print(f"❌ Async SERP error: {str(e)}")
+        SERP_PROGRESS[task_id].update({
+            'status': 'error',
+            'error': str(e)
+        })
+        
 
 def _process_serp_batch(keywords_data, serp_params, connection, dataforseo_client):
     """Обработка SERP через task_post для больших объемов"""

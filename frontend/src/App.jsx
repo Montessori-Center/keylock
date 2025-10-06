@@ -1,4 +1,6 @@
-// frontend/src/App.jsx - ИСПРАВЛЕННАЯ ВЕРСИЯ
+// ===== ПОЛНЫЙ ФАЙЛ App.jsx С ИСПРАВЛЕНИЯМИ =====
+// Ниже полная версия файла для замены
+
 import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
@@ -27,13 +29,13 @@ function App() {
     total: 0, 
     commercial: 0, 
     duplicates: 0, 
-    newChanges: 0 // ДОБАВЛЕНО: счетчик новых изменений
+    newChanges: 0
   });
   const [selectedKeywordIds, setSelectedKeywordIds] = useState([]);
   const [copiedData, setCopiedData] = useState(null);
   const [loading, setLoading] = useState(false);
   
-  // Modals - ИСПРАВЛЕНО: все модальные окна инициализированы
+  // Modals
   const [showSettings, setShowSettings] = useState(false);
   const [showAddKeywords, setShowAddKeywords] = useState(false);
   const [showAddNewOutput, setShowAddNewOutput] = useState(false);
@@ -42,9 +44,14 @@ function App() {
   const [showChangeField, setShowChangeField] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
   const [showSerpLogs, setShowSerpLogs] = useState(false);
-  const [serpProgress, setSerpProgress] = useState({show: false, current: 0, total: 0, currentKeyword: '' });
+  const [serpProgress, setSerpProgress] = useState({
+    show: false, 
+    current: 0, 
+    total: 0, 
+    currentKeyword: '' 
+  });
 
-  // Максимально совместимая функция копирования
+  // Копирование в буфер обмена
   const copyToClipboard = (text) => {
     return new Promise((resolve) => {
       const input = document.createElement('input');
@@ -90,131 +97,109 @@ function App() {
   };
   
   useEffect(() => {
-      const initializeApp = async () => {
-        console.log('🚀 Initializing app...');
-        
-        // Шаг 1: Загружаем настройки колонок
-        try {
-          const response = await api.getSettings();
-          if (response.success && response.settings.visible_columns) {
-            setVisibleColumns(response.settings.visible_columns);
-            console.log('✅ Column settings loaded:', response.settings.visible_columns.length, 'columns');
-          }
-        } catch (error) {
-          console.error('Error loading column settings:', error);
-        }
-        
-        // Шаг 2: Загружаем кампании
-        const loadedCampaigns = await loadCampaigns();
-        
-        // Шаг 3: Если кампании загрузились, загружаем статистику
-        if (loadedCampaigns && loadedCampaigns.length > 0) {
-          console.log('📊 Loading stats for loaded campaigns...');
-          await loadAdGroupsStats(loadedCampaigns);
-        }
-      };
+    const initializeApp = async () => {
+      console.log('🚀 Initializing app...');
       
-      initializeApp();
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-    
-    useEffect(() => {
-      const savedAdGroupId = localStorage.getItem('selectedAdGroupId');
-      if (savedAdGroupId && campaigns.length > 0) {
-        // Ищем сохраненную группу в загруженных кампаниях
-        for (const campaign of campaigns) {
-          const adGroup = campaign.adGroups.find(ag => ag.id === parseInt(savedAdGroupId));
-          if (adGroup) {
-            console.log(`📌 Restoring selected ad group: ${adGroup.name} (has ${adGroup.newChanges || 0} changes)`);
-            setSelectedAdGroup(adGroup);
-            break;
-          }
-        }
-      }
-    }, [campaigns]);
-    
-    useEffect(() => {
-      const savedAdGroupId = localStorage.getItem('selectedAdGroupId');
-      if (savedAdGroupId && campaigns.length > 0) {
-        // Ищем сохраненную группу в загруженных кампаниях
-        for (const campaign of campaigns) {
-          const adGroup = campaign.adGroups.find(ag => ag.id === parseInt(savedAdGroupId));
-          if (adGroup) {
-            console.log(`📌 Restoring selected ad group: ${adGroup.name} (has ${adGroup.newChanges || 0} changes)`);
-            setSelectedAdGroup(adGroup);
-            break;
-          }
-        }
-      }
-    }, [campaigns]);
-    
-    useEffect(() => {
-      if (selectedAdGroup) {
-        console.log(`📋 Loading keywords for ad group: ${selectedAdGroup.name}`);
-        setSelectedKeywordIds([]); // Сбрасываем выделение
-        loadKeywords(selectedAdGroup.id);
-      }
-    }, [selectedAdGroup]);
-  
-  const handleSettingsChange = (newSettings) => {
-      if (newSettings.visible_columns) {
-        console.log('📊 Settings changed, updating visible columns');
-        setVisibleColumns(newSettings.visible_columns);
-      }
-    };
-
-  // ИСПРАВЛЕНО: обработчик принятия изменений теперь проверяет наличие изменений
-  const handleAcceptChanges = async () => {
-      if (!selectedAdGroup) {
-        toast.warning('Выберите группу объявлений');
-        return;
-      }
-    
-      if (keywordsStats.newChanges === 0) {
-        toast.info('Нет новых изменений для принятия');
-        return;
-      }
-    
       try {
-        const response = await api.acceptChanges(selectedAdGroup.id);
-        if (response.success) {
-          toast.success(response.message);
-          loadKeywords(selectedAdGroup.id);
-          loadAdGroupsStats(); // Обновляем статистику в сайдбаре
+        const response = await api.getSettings();
+        if (response.success && response.settings.visible_columns) {
+          setVisibleColumns(response.settings.visible_columns);
+          console.log('✅ Column settings loaded');
         }
       } catch (error) {
-        toast.error('Ошибка принятия изменений');
+        console.error('Error loading column settings:', error);
       }
+      
+      const loadedCampaigns = await loadCampaigns();
+      
+      if (loadedCampaigns && loadedCampaigns.length > 0) {
+        console.log('📊 Loading stats for campaigns...');
+        await loadAdGroupsStats(loadedCampaigns);
+      }
+    };
+    
+    initializeApp();
+  }, []);
+  
+  useEffect(() => {
+    const savedAdGroupId = localStorage.getItem('selectedAdGroupId');
+    if (savedAdGroupId && campaigns.length > 0) {
+      for (const campaign of campaigns) {
+        const adGroup = campaign.adGroups.find(ag => ag.id === parseInt(savedAdGroupId));
+        if (adGroup) {
+          console.log(`📌 Restoring selected ad group: ${adGroup.name}`);
+          setSelectedAdGroup(adGroup);
+          break;
+        }
+      }
+    }
+  }, [campaigns]);
+  
+  useEffect(() => {
+    if (selectedAdGroup) {
+      console.log(`📋 Loading keywords for: ${selectedAdGroup.name}`);
+      setSelectedKeywordIds([]);
+      loadKeywords(selectedAdGroup.id);
+    }
+  }, [selectedAdGroup]);
+
+  const handleSettingsChange = (newSettings) => {
+    if (newSettings.visible_columns) {
+      console.log('📊 Settings changed, updating columns');
+      setVisibleColumns(newSettings.visible_columns);
+    }
+  };
+
+  const handleAcceptChanges = async () => {
+    if (!selectedAdGroup) {
+      toast.warning('Выберите группу объявлений');
+      return;
+    }
+  
+    if (keywordsStats.newChanges === 0) {
+      toast.info('Нет новых изменений для принятия');
+      return;
+    }
+  
+    try {
+      const response = await api.acceptChanges(selectedAdGroup.id);
+      if (response.success) {
+        toast.success(response.message);
+        loadKeywords(selectedAdGroup.id);
+        loadAdGroupsStats();
+      }
+    } catch (error) {
+      toast.error('Ошибка принятия изменений');
+    }
   };
 
   const loadCampaigns = async () => {
-      try {
-        console.log('🔄 Loading campaigns from API...');
-        
-        const response = await api.getCampaigns();
-        
-        if (response.success && response.data.length > 0) {
-          setCampaigns(response.data);
-          setSelectedCampaign(response.data[0]);
-          console.log('✅ Campaigns loaded:', response.data);
-          return response.data;
-        } else {
-          console.error('❌ No campaigns found or API error:', response.error);
-          toast.error('Нет доступных кампаний. Проверьте базу данных.');
-          setCampaigns([]);
-          setSelectedCampaign(null);
-          return [];
-        }
-      } catch (error) {
-        console.error('❌ Error loading campaigns:', error);
-        toast.error('Ошибка подключения к серверу: ' + error.message);
+    try {
+      console.log('🔄 Loading campaigns...');
+      
+      const response = await api.getCampaigns();
+      
+      if (response.success && response.data.length > 0) {
+        setCampaigns(response.data);
+        setSelectedCampaign(response.data[0]);
+        console.log('✅ Campaigns loaded');
+        return response.data;
+      } else {
+        console.error('❌ No campaigns found');
+        toast.error('Нет доступных кампаний');
         setCampaigns([]);
         setSelectedCampaign(null);
         return [];
       }
-    };
+    } catch (error) {
+      console.error('❌ Error loading campaigns:', error);
+      toast.error('Ошибка подключения к серверу');
+      setCampaigns([]);
+      setSelectedCampaign(null);
+      return [];
+    }
+  };
 
-  // ИСПРАВЛЕНО: loadKeywords теперь считает новые изменения
   const loadKeywords = async (adGroupId) => {
     setLoading(true);
     try {
@@ -222,12 +207,11 @@ function App() {
       if (response.success) {
         setKeywords(response.data);
         
-        // ИСПРАВЛЕНО: подсчитываем новые изменения
-        const newChangesCount = response.data.filter(keyword => keyword.is_new).length;
+        const newChangesCount = response.data.filter(kw => kw.is_new).length;
         
         setKeywordsStats({
           ...response.stats,
-          newChanges: newChangesCount // Добавляем счетчик новых изменений
+          newChanges: newChangesCount
         });
       }
     } catch (error) {
@@ -238,134 +222,75 @@ function App() {
   };
   
   const handleRejectChanges = async () => {
-  if (!selectedAdGroup) {
-    toast.warning('Выберите группу объявлений');
-    return;
-  }
-
-  if (keywordsStats.newChanges === 0) {
-    toast.info('Нет новых изменений для отклонения');
-    return;
-  }
-
-  const confirmed = window.confirm(`Вы уверены, что хотите отклонить ${keywordsStats.newChanges} новых изменений? Новые ключевые слова будут удалены.`);
-  
-  if (!confirmed) return;
-
-  try {
-    const response = await api.rejectChanges(selectedAdGroup.id);
-    if (response.success) {
-      toast.success(response.message);
-      loadKeywords(selectedAdGroup.id);
-      loadAdGroupsStats(); // Обновляем статистику в сайдбаре
+    if (!selectedAdGroup) {
+      toast.warning('Выберите группу объявлений');
+      return;
     }
-  } catch (error) {
-    toast.error('Ошибка отклонения изменений');
-  }
+
+    if (keywordsStats.newChanges === 0) {
+      toast.info('Нет новых изменений для отклонения');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Вы уверены, что хотите отклонить ${keywordsStats.newChanges} новых изменений?`
+    );
+    
+    if (!confirmed) return;
+
+    try {
+      const response = await api.rejectChanges(selectedAdGroup.id);
+      if (response.success) {
+        toast.success(response.message);
+        loadKeywords(selectedAdGroup.id);
+        loadAdGroupsStats();
+      }
+    } catch (error) {
+      toast.error('Ошибка отклонения изменений');
+    }
   };
 
   const handleAddKeywords = async (keywordsText) => {
-      if (!selectedAdGroup) {
-        toast.error('Выберите группу объявлений');
-        return;
+    if (!selectedAdGroup) {
+      toast.error('Выберите группу объявлений');
+      return;
+    }
+    
+    try {
+      const response = await api.addKeywords(selectedAdGroup.id, keywordsText);
+      if (response.success) {
+        toast.success(response.message);
+        await loadKeywords(selectedAdGroup.id);
+        await loadAdGroupsStats();
       }
-      
-      try {
-        const response = await api.addKeywords(selectedAdGroup.id, keywordsText);
-        if (response.success) {
-          toast.success(response.message);
-          await loadKeywords(selectedAdGroup.id);
-          await loadAdGroupsStats(); // <-- Добавить эту строку
-        }
-      } catch (error) {
-        toast.error('Ошибка добавления ключевых слов');
-      }
-    };
+    } catch (error) {
+      toast.error('Ошибка добавления ключевых слов');
+    }
+  };
 
   const handleBulkAction = async (action) => {
-      if (selectedKeywordIds.length === 0 && action !== 'paste') {
-        toast.warning('Выберите ключевые слова');
-        return;
-      }
-    
-      try {
-        if (action === 'copy' || action === 'copy_data') {
-          const response = await api.bulkAction(action, selectedKeywordIds);
-          if (response.success) {
-            setCopiedData({
-              type: action === 'copy' ? 'keywords' : 'full_data',
-              data: action === 'copy' ? response.copied : response.copied_data
-            });
-            
-            let textToCopy = '';
-            let successMessage = '';
-            
-            if (action === 'copy') {
-              textToCopy = response.copied.join(', ');
-              successMessage = `Скопировано ${response.copied.length} ключевых слов в буфер обмена`;
-            } else {
-              const rows = response.copied_data.map(item => [
-                item.keyword || 'None',
-                item.criterion_type || 'None',
-                item.max_cpc || 'None',
-                item.max_cpm || 'None',
-                item.status || 'None',
-                item.comment || 'None',
-                item.has_ads ? 'true' : 'false',
-                item.has_school_sites ? 'true' : 'false', 
-                item.has_google_maps ? 'true' : 'false',
-                item.has_our_site ? 'true' : 'false',
-                item.intent_type || 'None',
-                item.recommendation || 'None',
-                item.avg_monthly_searches || 'None',
-                item.three_month_change || 'None',
-                item.yearly_change || 'None',
-                item.competition || 'None',
-                item.competition_percent || 'None',
-                item.min_top_of_page_bid || 'None',
-                item.max_top_of_page_bid || 'None',
-                item.ad_impression_share || 'None',
-                item.organic_average_position || 'None',
-                item.organic_impression_share || 'None',
-                item.labels || 'None'
-              ].join(' '));
-              
-              textToCopy = rows.join(', ');
-              successMessage = `Скопированы данные ${response.copied_data.length} ключевых слов в буфер обмена`;
-            }
-            
-            const copySuccess = await copyToClipboard(textToCopy);
-            
-            if (copySuccess) {
-              toast.success(successMessage);
-            } else {
-              toast.warning('Копирование не удалось. Данные в консоли для ручного копирования.');
-              console.log('=== ДАННЫЕ ДЛЯ КОПИРОВАНИЯ ===');
-              console.log(textToCopy);
-              console.log('=== КОНЕЦ ДАННЫХ ===');
-              
-              if (textToCopy.length < 2000) {
-                setTimeout(() => {
-                  window.prompt('Скопируйте данные:', textToCopy);
-                }, 100);
-              }
-            }
-          }
-        } else if (action === 'paste') {
-          if (!copiedData) {
-            toast.warning('Нет скопированных данных');
-            return;
-          }
+    if (selectedKeywordIds.length === 0 && action !== 'paste') {
+      toast.warning('Выберите ключевые слова');
+      return;
+    }
+  
+    try {
+      if (action === 'copy' || action === 'copy_data') {
+        const response = await api.bulkAction(action, selectedKeywordIds);
+        if (response.success) {
+          setCopiedData({
+            type: action === 'copy' ? 'keywords' : 'full_data',
+            data: action === 'copy' ? response.copied : response.copied_data
+          });
           
-          console.log('=== PASTE DEBUG ===');
-          console.log('copiedData:', copiedData);
+          let textToCopy = '';
+          let successMessage = '';
           
-          let pasteDataArray;
-          if (copiedData.type === 'keywords') {
-            pasteDataArray = copiedData.data;
-            console.log('Keywords paste data:', pasteDataArray);
-          } else if (copiedData.type === 'full_data') {
-            pasteDataArray = copiedData.data.map(item => [
+          if (action === 'copy') {
+            textToCopy = response.copied.join(', ');
+            successMessage = `Скопировано ${response.copied.length} ключевых слов`;
+          } else {
+            const rows = response.copied_data.map(item => [
               item.keyword || 'None',
               item.criterion_type || 'None',
               item.max_cpc || 'None',
@@ -390,137 +315,156 @@ function App() {
               item.organic_impression_share || 'None',
               item.labels || 'None'
             ].join(' '));
-            console.log('Full data paste array:', pasteDataArray);
-          }
-          
-          console.log('Final paste data array:', pasteDataArray);
-          console.log('Array length:', pasteDataArray?.length);
-          console.log('=== END PASTE DEBUG ===');
-          
-          const response = await api.pasteKeywords(
-            selectedAdGroup.id,
-            pasteDataArray,
-            copiedData.type
-          );
-          if (response.success) {
-            toast.success(response.message);
-            await loadKeywords(selectedAdGroup.id);
-            await loadAdGroupsStats(); // ДОБАВЛЕНО: обновляем статистику групп после вставки
-          }
-        } else if (action === 'change_field') {
-          setShowChangeField(true);
-        } else if (action === 'delete') {
-          const confirmed = window.confirm(`Вы уверены, что хотите удалить ${selectedKeywordIds.length} ключевых слов?`);
-          if (!confirmed) return;
-          
-          const response = await api.bulkAction(action, selectedKeywordIds);
-          if (response.success) {
-            toast.success(response.message);
-            await loadKeywords(selectedAdGroup.id);
-            await loadAdGroupsStats(); // ДОБАВЛЕНО: обновляем статистику после удаления
-            setSelectedKeywordIds([]); // Сбрасываем выделение после удаления
-          }
-        } else if (action === 'pause' || action === 'activate') {
-          const response = await api.bulkAction(action, selectedKeywordIds);
-          if (response.success) {
-            toast.success(response.message);
-            await loadKeywords(selectedAdGroup.id);
-            // Для pause/activate статистику обновлять не обязательно, 
-            // так как количество новых записей не меняется
-          }
-        } else {
-          // Для любых других действий
-          const response = await api.bulkAction(action, selectedKeywordIds);
-          if (response.success) {
-            toast.success(response.message);
-            await loadKeywords(selectedAdGroup.id);
             
-            // Если действие может повлиять на новые записи, обновляем статистику
-            if (action === 'update_field' || action === 'remove') {
-              await loadAdGroupsStats();
-            }
+            textToCopy = rows.join(', ');
+            successMessage = `Скопированы данные ${response.copied_data.length} слов`;
+          }
+          
+          const copySuccess = await copyToClipboard(textToCopy);
+          
+          if (copySuccess) {
+            toast.success(successMessage);
+          } else {
+            toast.warning('Копирование не удалось');
           }
         }
-      } catch (error) {
-        console.error('Bulk action error:', error);
-        toast.error(`Ошибка выполнения действия: ${error.message || 'Неизвестная ошибка'}`);
-      }
-    };
-  
-    const loadAdGroupsStats = async (campaignsData = null) => {
-      try {
-        console.log('🔄 Loading ad groups stats...');
-        
-        // Используем переданные campaigns или берем из state
-        const campaignsToUse = campaignsData || campaigns;
-        
-        if (!campaignsToUse || campaignsToUse.length === 0) {
-          console.log('⚠️ No campaigns to load stats for');
+      } else if (action === 'paste') {
+        if (!copiedData) {
+          toast.warning('Нет скопированных данных');
           return;
         }
-    
-        // Получаем статистику новых изменений для каждой группы
-        const adGroupsWithStats = await Promise.all(
-          campaignsToUse[0]?.adGroups?.map(async (adGroup) => {
-            try {
-              console.log(`🔍 Loading stats for ad group ${adGroup.id}: ${adGroup.name}`);
-              const response = await api.getKeywords(adGroup.id);
-              
-              // Подсчитываем новые записи
-              const newChangesCount = response.success 
-                ? response.data.filter(keyword => keyword.is_new === true).length 
-                : 0;
-              
-              // Получаем уникальные цвета партий
-              const uniqueColors = response.success
-                ? [...new Set(response.data
-                    .filter(keyword => keyword.is_new === true && keyword.batch_color)
-                    .map(keyword => keyword.batch_color))]
-                : [];
-              
-              console.log(`📊 Ad group ${adGroup.id}: ${newChangesCount} new changes, ${uniqueColors.length} colors`);
-              
-              return {
-                ...adGroup,
-                newChanges: newChangesCount,
-                batchColors: uniqueColors,
-                hasChanges: newChangesCount > 0
-              };
-            } catch (error) {
-              console.error(`❌ Error loading stats for ad group ${adGroup.id}:`, error);
-              return { 
-                ...adGroup, 
-                newChanges: 0, 
-                batchColors: [],
-                hasChanges: false 
-              };
-            }
-          }) || []
-        );
-    
-        // Обновляем кампании с новой статистикой
-        const updatedCampaigns = campaignsToUse.map(campaign => ({
-          ...campaign,
-          adGroups: adGroupsWithStats
-        }));
         
-        setCampaigns(updatedCampaigns);
-        console.log('✅ Ad groups stats updated:', adGroupsWithStats);
-        
-        // Если текущая выбранная группа обновилась, обновляем и её
-        if (selectedAdGroup) {
-          const updatedSelectedGroup = adGroupsWithStats.find(ag => ag.id === selectedAdGroup.id);
-          if (updatedSelectedGroup) {
-            setSelectedAdGroup(updatedSelectedGroup);
-          }
+        let pasteDataArray;
+        if (copiedData.type === 'keywords') {
+          pasteDataArray = copiedData.data;
+        } else if (copiedData.type === 'full_data') {
+          pasteDataArray = copiedData.data.map(item => [
+            item.keyword || 'None',
+            item.criterion_type || 'None',
+            item.max_cpc || 'None',
+            item.max_cpm || 'None',
+            item.status || 'None',
+            item.comment || 'None',
+            item.has_ads ? 'true' : 'false',
+            item.has_school_sites ? 'true' : 'false', 
+            item.has_google_maps ? 'true' : 'false',
+            item.has_our_site ? 'true' : 'false',
+            item.intent_type || 'None',
+            item.recommendation || 'None',
+            item.avg_monthly_searches || 'None',
+            item.three_month_change || 'None',
+            item.yearly_change || 'None',
+            item.competition || 'None',
+            item.competition_percent || 'None',
+            item.min_top_of_page_bid || 'None',
+            item.max_top_of_page_bid || 'None',
+            item.ad_impression_share || 'None',
+            item.organic_average_position || 'None',
+            item.organic_impression_share || 'None',
+            item.labels || 'None'
+          ].join(' '));
         }
         
-        return updatedCampaigns;
+        const response = await api.pasteKeywords(
+          selectedAdGroup.id,
+          pasteDataArray,
+          copiedData.type
+        );
+        if (response.success) {
+          toast.success(response.message);
+          await loadKeywords(selectedAdGroup.id);
+          await loadAdGroupsStats();
+        }
+      } else if (action === 'change_field') {
+        setShowChangeField(true);
+      } else if (action === 'delete') {
+        const confirmed = window.confirm(
+          `Вы уверены, что хотите удалить ${selectedKeywordIds.length} слов?`
+        );
+        if (!confirmed) return;
         
-      } catch (error) {
-        console.error('❌ Error loading ad groups stats:', error);
+        const response = await api.bulkAction(action, selectedKeywordIds);
+        if (response.success) {
+          toast.success(response.message);
+          await loadKeywords(selectedAdGroup.id);
+          await loadAdGroupsStats();
+          setSelectedKeywordIds([]);
+        }
+      } else {
+        const response = await api.bulkAction(action, selectedKeywordIds);
+        if (response.success) {
+          toast.success(response.message);
+          await loadKeywords(selectedAdGroup.id);
+        }
       }
-    };
+    } catch (error) {
+      console.error('Bulk action error:', error);
+      toast.error('Ошибка выполнения действия');
+    }
+  };
+
+  const loadAdGroupsStats = async (campaignsData = null) => {
+    try {
+      const campaignsToUse = campaignsData || campaigns;
+      
+      if (!campaignsToUse || campaignsToUse.length === 0) {
+        return;
+      }
+
+      const adGroupsWithStats = await Promise.all(
+        campaignsToUse[0]?.adGroups?.map(async (adGroup) => {
+          try {
+            const response = await api.getKeywords(adGroup.id);
+            
+            const newChangesCount = response.success 
+              ? response.data.filter(kw => kw.is_new === true).length 
+              : 0;
+            
+            const uniqueColors = response.success
+              ? [...new Set(response.data
+                  .filter(kw => kw.is_new === true && kw.batch_color)
+                  .map(kw => kw.batch_color))]
+              : [];
+            
+            return {
+              ...adGroup,
+              newChanges: newChangesCount,
+              batchColors: uniqueColors,
+              hasChanges: newChangesCount > 0
+            };
+          } catch (error) {
+            return { 
+              ...adGroup, 
+              newChanges: 0, 
+              batchColors: [],
+              hasChanges: false 
+            };
+          }
+        }) || []
+      );
+
+      const updatedCampaigns = campaignsToUse.map(campaign => ({
+        ...campaign,
+        adGroups: adGroupsWithStats
+      }));
+      
+      setCampaigns(updatedCampaigns);
+      
+      if (selectedAdGroup) {
+        const updatedSelectedGroup = adGroupsWithStats.find(
+          ag => ag.id === selectedAdGroup.id
+        );
+        if (updatedSelectedGroup) {
+          setSelectedAdGroup(updatedSelectedGroup);
+        }
+      }
+      
+      return updatedCampaigns;
+      
+    } catch (error) {
+      console.error('Error loading ad groups stats:', error);
+    }
+  };
 
   const handleChangeField = async (field, value) => {
     try {
@@ -534,72 +478,117 @@ function App() {
     }
   };
 
-  // ИСПРАВЛЕНО: handleAddNewOutput теперь правильно обрабатывает параметры
   const handleAddNewOutput = async (params) => {
-      if (!selectedAdGroup) {
-        toast.error('Выберите группу объявлений');
-        return;
+    if (!selectedAdGroup) {
+      toast.error('Выберите группу объявлений');
+      return;
+    }
+  
+    try {
+      const response = await api.getNewKeywords({
+        ...params,
+        ad_group_id: selectedAdGroup.id
+      });
+      if (response.success) {
+        toast.success(response.message);
+        await loadKeywords(selectedAdGroup.id);
+        await loadAdGroupsStats();
+      } else {
+        toast.error(response.error || 'Ошибка получения ключевых слов');
       }
-    
-      try {
-        const response = await api.getNewKeywords({
-          ...params,
-          ad_group_id: selectedAdGroup.id
-        });
-        if (response.success) {
-          toast.success(response.message);
-          await loadKeywords(selectedAdGroup.id);
-          await loadAdGroupsStats(); // <-- Добавить эту строку
-        } else {
-          toast.error(response.error || 'Ошибка получения новых ключевых слов');
-        }
-      } catch (error) {
-        console.error('Add new output error:', error);
-        toast.error('Ошибка получения новых ключевых слов: ' + (error.message || 'Неизвестная ошибка'));
-      }
-    };
+    } catch (error) {
+      console.error('Add new output error:', error);
+      toast.error('Ошибка получения ключевых слов');
+    }
+  };
 
+  // ИСПРАВЛЕННАЯ ФУНКЦИЯ
   const handleApplySerp = async (params) => {
+      console.log('🎯 handleApplySerp called');
+      
       try {
         const keywordIds = params.keyword_ids || selectedKeywordIds;
         
-        // Показываем прогресс для больших запросов
+        console.log('   Keywords count:', keywordIds.length);
+        
+        // Показываем прогресс только для 2+ слов
         if (keywordIds.length > 1) {
           setSerpProgress({
             show: true,
             current: 0,
             total: keywordIds.length,
-            currentKeyword: ''
+            currentKeyword: 'Подготовка...'
           });
         }
         
-        const response = await api.applySerp({
-          ...params,
-          keyword_ids: keywordIds,
-          // Добавляем колбек для обновления прогресса
-          onProgress: (current, total, keyword) => {
-            setSerpProgress({
-              show: true,
-              current,
-              total,
-              currentKeyword: keyword
-            });
+        try {
+          const response = await api.applySerp({
+            ...params,
+            keyword_ids: keywordIds,
+            onProgress: (current, total, keyword) => {
+              console.log(`📊 Progress: ${current}/${total} - ${keyword}`);
+              // Обновляем прогресс только если модалка показана
+              if (keywordIds.length > 1) {
+                setSerpProgress({
+                  show: true,
+                  current,
+                  total,
+                  currentKeyword: keyword || 'Обработка...'
+                });
+              }
+            }
+          });
+          
+          console.log('✅ SERP response:', response);
+          
+          // Скрываем прогресс
+          setSerpProgress(prev => ({ ...prev, show: false }));
+          
+          if (response.success) {
+            toast.success(response.message || 'SERP анализ завершен');
+            
+            if (response.warning) {
+              toast.warning(response.warning);
+            }
+            
+            if (response.errors && response.errors.length > 0) {
+              response.errors.slice(0, 3).forEach(err => toast.warning(err));
+            }
+            
+            // Перезагружаем ключевые слова
+            if (selectedAdGroup) {
+              await loadKeywords(selectedAdGroup.id);
+            }
+          } else {
+            toast.error(response.error || 'Ошибка SERP анализа');
           }
-        });
-        
-        // Скрываем прогресс
-        setSerpProgress(prev => ({ ...prev, show: false }));
-        
-        if (response.success) {
-          toast.success(response.message);
-          if (response.errors && response.errors.length > 0) {
-            response.errors.forEach(err => toast.warning(err));
+          
+        } catch (apiError) {
+          console.error('❌ API Error:', apiError);
+          setSerpProgress(prev => ({ ...prev, show: false }));
+          
+          let errorMessage = 'Ошибка применения SERP анализа';
+          
+          if (apiError.response) {
+            console.error('   Response status:', apiError.response.status);
+            console.error('   Response data:', apiError.response.data);
+            
+            errorMessage = apiError.response.data?.error 
+              || apiError.response.data?.message
+              || `Ошибка сервера (${apiError.response.status})`;
+          } else if (apiError.request) {
+            errorMessage = 'Нет ответа от сервера';
+          } else {
+            errorMessage = apiError.message || 'Неизвестная ошибка';
           }
-          loadKeywords(selectedAdGroup.id);
+          
+          toast.error(errorMessage);
         }
+        
       } catch (error) {
+        console.error('❌ Unexpected error:', error);
         setSerpProgress(prev => ({ ...prev, show: false }));
-        toast.error('Ошибка применения SERP анализа');
+        toast.error('Неожиданная ошибка: ' + error.message);
       }
     };
 
@@ -636,89 +625,65 @@ function App() {
         
         <div className={`content-area ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
           <div className="action-buttons">
-          <button 
-            className="btn btn-purple" 
-            onClick={() => setShowAddKeywords(true)}
-            disabled={!selectedAdGroup}
-          >
-            Добавить новые слова
-          </button>
-          <button 
-            className="btn btn-pink" 
-            onClick={() => setShowAddNewOutput(true)}
-            disabled={!selectedAdGroup}
-          >
-            Добавить новую выдачу ($)
-          </button>
-          <button 
-            className="btn btn-blue" 
-            onClick={() => setShowApplySerp(true)}
-            disabled={!selectedAdGroup || selectedKeywordIds.length === 0}
-          >
-            Применить SERP ($)
-          </button>
-          <button 
-          className="btn btn-yellow" 
-          onClick={() => setShowSerpLogs(true)}
-        >
-          📊 SERP Логи
-        </button>
-          <button 
-            className="btn btn-dark-blue" 
-            onClick={() => setShowApplyFilters(true)}
-            disabled={!selectedAdGroup}
-          >
-            Применить фильтры
-          </button>
-          <button 
-            className="btn btn-green" 
-            onClick={handleLoadFromDB}
-            disabled={!selectedAdGroup}
-            style={{ display: 'none' }}
-          >
-            Загрузить данные из БД
-          </button>
-          <button 
-            className="btn btn-red" 
-            onClick={handleSaveToDB}
-            disabled={!selectedAdGroup}
-            style={{ display: 'none' }}
-          >
-            Выгрузить данные в БД
-          </button>
-          
-          <button 
-            className="btn btn-green" 
-            onClick={handleAcceptChanges}
-            disabled={!selectedAdGroup || keywordsStats.newChanges === 0}
-            title={keywordsStats.newChanges > 0 
-              ? `Принять ${keywordsStats.newChanges} новых изменений`
-              : 'Нет новых изменений'
-            }
-          >
-            Принять изменения {keywordsStats.newChanges > 0 && `(${keywordsStats.newChanges})`}
-          </button>
-          
-          <button 
-            className="btn btn-red" 
-            onClick={handleRejectChanges}
-            disabled={!selectedAdGroup || keywordsStats.newChanges === 0}
-            title={keywordsStats.newChanges > 0 
-              ? `Отклонить ${keywordsStats.newChanges} новых изменений`
-              : 'Нет новых изменений'
-            }
-          >
-            Отклонить изменения {keywordsStats.newChanges > 0 && `(${keywordsStats.newChanges})`}
-          </button>
-          <button 
-            className="btn btn-yellow" 
-            onClick={() => setShowTrash(true)}
-            disabled={!selectedAdGroup}
-            title="Корзина удаленных ключевых слов"
-          >
-          Корзина
-          </button>
-        </div>
+            <button 
+              className="btn btn-purple" 
+              onClick={() => setShowAddKeywords(true)}
+              disabled={!selectedAdGroup}
+            >
+              Добавить новые слова
+            </button>
+            <button 
+              className="btn btn-pink" 
+              onClick={() => setShowAddNewOutput(true)}
+              disabled={!selectedAdGroup}
+            >
+              Добавить новую выдачу ($)
+            </button>
+            <button 
+              className="btn btn-blue" 
+              onClick={() => setShowApplySerp(true)}
+              disabled={!selectedAdGroup || selectedKeywordIds.length === 0}
+            >
+              Применить SERP ($)
+            </button>
+            <button 
+              className="btn btn-yellow" 
+              onClick={() => setShowSerpLogs(true)}
+            >
+              📊 SERP Логи
+            </button>
+            <button 
+              className="btn btn-dark-blue" 
+              onClick={() => setShowApplyFilters(true)}
+              disabled={!selectedAdGroup}
+            >
+              Применить фильтры
+            </button>
+            
+            <button 
+              className="btn btn-green" 
+              onClick={handleAcceptChanges}
+              disabled={!selectedAdGroup || keywordsStats.newChanges === 0}
+            >
+              Принять изменения {keywordsStats.newChanges > 0 && `(${keywordsStats.newChanges})`}
+            </button>
+            
+            <button 
+              className="btn btn-red" 
+              onClick={handleRejectChanges}
+              disabled={!selectedAdGroup || keywordsStats.newChanges === 0}
+            >
+              Отклонить изменения {keywordsStats.newChanges > 0 && `(${keywordsStats.newChanges})`}
+            </button>
+            
+            <button 
+              className="btn btn-yellow" 
+              onClick={() => setShowTrash(true)}
+              disabled={!selectedAdGroup}
+            >
+              Корзина
+            </button>
+          </div>
           
           {selectedAdGroup ? (
             <KeywordsTable 
@@ -767,25 +732,18 @@ function App() {
               Всего слов: {keywordsStats.total} | 
               Коммерч.: {keywordsStats.commercial} / {((keywordsStats.commercial / keywordsStats.total) * 100 || 0).toFixed(0)}% | 
               Дублей: {keywordsStats.duplicates}
-              {/* ДОБАВЛЕНО: показываем новые изменения в статистике */}
               {keywordsStats.newChanges > 0 && ` | Новых: ${keywordsStats.newChanges}`}
             </div>
           </div>
         </div>
       </div>
 
-      {/* ИСПРАВЛЕНО: все модальные окна правильно подключены */}
+      {/* Модальные окна */}
       <SettingsModal 
-          show={showSettings} 
-          onHide={() => setShowSettings(false)}
-          onSettingsChange={(newSettings) => {
-            // Обновляем видимые колонки при изменении настроек
-            if (newSettings.visible_columns) {
-              console.log('📊 Applying new column visibility settings:', newSettings.visible_columns);
-              setVisibleColumns(newSettings.visible_columns);
-            }
-          }}
-        />
+        show={showSettings} 
+        onHide={() => setShowSettings(false)}
+        onSettingsChange={handleSettingsChange}
+      />
       
       {showAddKeywords && (
         <AddKeywordsModal
@@ -796,11 +754,11 @@ function App() {
       )}
       
       {showSerpLogs && (
-          <SerpLogsModal
-            show={showSerpLogs}
-            onHide={() => setShowSerpLogs(false)}
-          />
-        )}
+        <SerpLogsModal
+          show={showSerpLogs}
+          onHide={() => setShowSerpLogs(false)}
+        />
+      )}
       
       {showAddNewOutput && (
         <AddNewOutputModal
@@ -841,26 +799,25 @@ function App() {
       )}
       
       <SerpProgressModal 
-      show={serpProgress.show}
-      current={serpProgress.current}
-      total={serpProgress.total}
-      currentKeyword={serpProgress.currentKeyword}
-    />
+        show={serpProgress.show}
+        current={serpProgress.current}
+        total={serpProgress.total}
+        currentKeyword={serpProgress.currentKeyword}
+      />
       
       {showTrash && (
-      <TrashModal
-        show={showTrash}
-        onHide={() => setShowTrash(false)}
-        adGroupId={selectedAdGroup?.id}
-        onRestore={() => {
-          // Перезагружаем ключевые слова после восстановления
-          if (selectedAdGroup) {
-            loadKeywords(selectedAdGroup.id);
-            loadAdGroupsStats();
-          }
-        }}
-      />
-    )}
+        <TrashModal
+          show={showTrash}
+          onHide={() => setShowTrash(false)}
+          adGroupId={selectedAdGroup?.id}
+          onRestore={() => {
+            if (selectedAdGroup) {
+              loadKeywords(selectedAdGroup.id);
+              loadAdGroupsStats();
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
