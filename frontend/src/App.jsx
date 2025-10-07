@@ -518,6 +518,8 @@ function App() {
           // ✅ ДЛЯ 1 СЛОВА: Показываем LiveProgressModal
           const keyword = keywords.find(k => k.id === params.keyword_ids[0])?.keyword || '';
           
+          console.log('🟢 Opening LiveProgressModal for keyword:', keyword);
+          
           setLiveProgress({
             show: true,
             keyword: keyword
@@ -526,12 +528,12 @@ function App() {
           try {
             const response = await api.applySerp(params);
             
-            // Завершаем прогресс (устанавливаем 100%)
+            console.log('✅ LIVE SERP response:', response);
+            
+            // Завершаем прогресс после небольшой задержки
             setTimeout(() => {
               setLiveProgress({ show: false, keyword: '' });
-            }, 300);
-            
-            console.log('✅ LIVE SERP response:', response);
+            }, 500);
             
             if (response.success) {
               toast.success(response.message || 'SERP анализ завершен');
@@ -565,6 +567,8 @@ function App() {
           }
         } else {
           // ✅ ДЛЯ 2+ СЛОВ: Используем SSE с SerpProgressModal
+          console.log('🔵 Opening SerpProgressModal for', params.keyword_ids.length, 'keywords');
+          
           setSerpProgress({
             show: true,
             current: 0,
