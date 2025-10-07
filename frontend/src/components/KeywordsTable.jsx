@@ -1,4 +1,4 @@
-// frontend/src/components/KeywordsTable.jsx - С СОХРАНЕНИЕМ ШИРИНЫ СТОЛБЦОВ
+// frontend/src/components/KeywordsTable.jsx - ИСПРАВЛЕННОЕ SHIFT-ВЫДЕЛЕНИЕ
 import React, { useRef, useEffect, useState } from 'react';
 import { HotTable } from '@handsontable/react';
 import { registerAllModules } from 'handsontable/registry';
@@ -18,6 +18,7 @@ const KeywordsTable = ({
   const hotTableRef = useRef(null);
   const [tableData, setTableData] = useState([]);
   const [columnWidths, setColumnWidths] = useState({});
+  const lastClickedRowRef = useRef(null);
 
   // Все доступные колонки с их настройками
   const allColumns = {
@@ -63,6 +64,84 @@ const KeywordsTable = ({
     'labels': { data: 'labels', title: 'Labels', type: 'text', width: 150, readOnly: false }
   };
 
+  // ✅ НОВЫЙ ПОДХОД: Перехватываем клики по чекбоксам напрямую через DOM
+  useEffect(() => {
+    if (!hotTableRef.current?.hotInstance) return;
+
+    const handleMouseDown = (e) => {
+      // Проверяем, что клик по чекбоксу
+      const checkbox = e.target.closest('input[type="checkbox"]');
+      if (!checkbox) return;
+
+      // Проверяем, что это чекбокс из нашей таблицы
+      const td = checkbox.closest('td');
+      if (!td) return;
+
+      const instance = hotTableRef.current.hotInstance;
+      const coords = instance.getCoords(td);
+      
+      if (!coords || coords.col !== 0) return; // Только первая колонка (чекбоксы)
+
+      const currentRow = coords.row;
+
+      // ✅ SHIFT-ВЫДЕЛЕНИЕ
+      if (e.shiftKey && lastClickedRowRef.current !== null) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const startRow = Math.min(lastClickedRowRef.current, currentRow);
+        const endRow = Math.max(lastClickedRowRef.current, currentRow);
+
+        console.log(`✅ Shift-click: selecting rows ${startRow} to ${endRow}`);
+
+        // Определяем, выделяем или снимаем выделение
+        const shouldSelect = !checkbox.checked;
+
+        // Собираем ID для выделения
+        const rangeIds = [];
+        for (let i = startRow; i <= endRow; i++) {
+          if (tableData[i]) {
+            rangeIds.push(tableData[i].id);
+          }
+        }
+
+        let newSelectedIds;
+        if (shouldSelect) {
+          // Добавляем все ID из диапазона
+          newSelectedIds = [...new Set([...selectedIds, ...rangeIds])];
+        } else {
+          // Убираем все ID из диапазона
+          newSelectedIds = selectedIds.filter(id => !rangeIds.includes(id));
+        }
+
+        // Обновляем состояние
+        onSelectionChange(newSelectedIds);
+
+        // Обновляем чекбоксы в таблице
+        const newData = tableData.map((row, idx) => {
+          if (idx >= startRow && idx <= endRow) {
+            return { ...row, selected: shouldSelect };
+          }
+          return row;
+        });
+        
+        instance.loadData(newData);
+        
+        return;
+      }
+
+      // Сохраняем последний кликнутый ряд
+      lastClickedRowRef.current = currentRow;
+    };
+
+    const tableElement = hotTableRef.current.hotInstance.rootElement;
+    tableElement.addEventListener('mousedown', handleMouseDown, true);
+
+    return () => {
+      tableElement.removeEventListener('mousedown', handleMouseDown, true);
+    };
+  }, [tableData, selectedIds, onSelectionChange]);
+
   // Загрузка сохраненных ширин столбцов при монтировании
   useEffect(() => {
     const savedWidths = localStorage.getItem('keywordsTableColumnWidths');
@@ -79,107 +158,64 @@ const KeywordsTable = ({
 
   // Формируем колонки на основе настроек видимости и сохраненных ширин
   const getVisibleColumns = () => {
-      // Порядок колонок должен соответствовать порядку в настройках
-      const columnOrder = [
-        'selected',  // Чекбокс всегда первый
-        'id',
-        'keyword',
-        'criterion_type',
-        'max_cpc',
-        'max_cpm',
-        'max_cpv',
-        'first_page_bid',
-        'top_of_page_bid',
-        'first_position_bid',
-        'quality_score',
-        'landing_page_experience',
-        'expected_ctr',
-        'ad_relevance',
-        'final_url',
-        'final_mobile_url',
-        'tracking_template',
-        'final_url_suffix',
-        'custom_parameters',
-        'status',
-        'approval_status',
-        'comment',
-        'has_ads',
-        'has_school_sites',
-        'has_google_maps',
-        'has_our_site',
-        'intent_type',
-        'recommendation',
-        'avg_monthly_searches',
-        'three_month_change',
-        'yearly_change',
-        'competition',
-        'competition_percent',
-        'min_top_of_page_bid',
-        'max_top_of_page_bid',
-        'ad_impression_share',
-        'organic_average_position',
-        'organic_impression_share',
-        'labels'
-      ];
+    const columnOrder = [
+      'selected', 'id', 'keyword', 'criterion_type', 'max_cpc', 'max_cpm', 'max_cpv',
+      'first_page_bid', 'top_of_page_bid', 'first_position_bid', 'quality_score',
+      'landing_page_experience', 'expected_ctr', 'ad_relevance', 'final_url',
+      'final_mobile_url', 'tracking_template', 'final_url_suffix', 'custom_parameters',
+      'status', 'approval_status', 'comment', 'has_ads', 'has_school_sites',
+      'has_google_maps', 'has_our_site', 'intent_type', 'recommendation',
+      'avg_monthly_searches', 'three_month_change', 'yearly_change', 'competition',
+      'competition_percent', 'min_top_of_page_bid', 'max_top_of_page_bid',
+      'ad_impression_share', 'organic_average_position', 'organic_impression_share',
+      'labels'
+    ];
     
-      // Дефолтные колонки если настройки не заданы
-      const defaultColumns = [
-        'selected', 'id', 'keyword', 'criterion_type', 'max_cpc', 'status', 'comment',
-        'has_ads', 'has_school_sites', 'has_google_maps', 'has_our_site',
-        'intent_type', 'recommendation', 'avg_monthly_searches',
-        'three_month_change', 'yearly_change', 'competition',
-        'competition_percent', 'min_top_of_page_bid', 'max_top_of_page_bid'
-      ];
-      
-      // Определяем какие колонки показывать
-      let columnsToShow;
-      
-      if (visibleColumns && visibleColumns.length > 0) {
-        // Если есть настройки видимости, используем их
-        // Но сохраняем порядок из columnOrder
-        columnsToShow = columnOrder.filter(key => {
-          // 'selected' всегда показываем
-          if (key === 'selected') return true;
-          // Остальные колонки показываем если они в visibleColumns
-          return visibleColumns.includes(key);
-        });
-      } else {
-        // Если настроек нет, используем дефолтные колонки
-        columnsToShow = defaultColumns;
-      }
-      
-      // Преобразуем в объекты колонок с применением сохраненных ширин
-      return columnsToShow
-        .filter(key => allColumns[key]) // Проверяем что колонка существует
-        .map(key => {
-          const column = { ...allColumns[key] };
-          // Применяем сохраненную ширину если есть
-          if (columnWidths[key]) {
-            column.width = columnWidths[key];
-          }
-          return column;
-        });
-    };
+    const defaultColumns = [
+      'selected', 'id', 'keyword', 'criterion_type', 'max_cpc', 'status', 'comment',
+      'has_ads', 'has_school_sites', 'has_google_maps', 'has_our_site',
+      'intent_type', 'recommendation', 'avg_monthly_searches',
+      'three_month_change', 'yearly_change', 'competition',
+      'competition_percent', 'min_top_of_page_bid', 'max_top_of_page_bid'
+    ];
+    
+    let columnsToShow;
+    
+    if (visibleColumns && visibleColumns.length > 0) {
+      columnsToShow = columnOrder.filter(key => {
+        if (key === 'selected') return true;
+        return visibleColumns.includes(key);
+      });
+    } else {
+      columnsToShow = defaultColumns;
+    }
+    
+    return columnsToShow
+      .filter(key => allColumns[key])
+      .map(key => {
+        const column = { ...allColumns[key] };
+        if (columnWidths[key]) {
+          column.width = columnWidths[key];
+        }
+        return column;
+      });
+  };
 
   // Обработчик изменения ширины столбца
-  const handleAfterColumnResize = (newSize, column, isDoubleClick) => {
+  const handleAfterColumnResize = (newSize, column) => {
     const instance = hotTableRef.current?.hotInstance;
     if (!instance) return;
 
-    // Получаем текущие колонки
     const columns = getVisibleColumns();
     const columnKey = columns[column]?.data;
     
     if (columnKey) {
-      // Обновляем сохраненные ширины
       const newWidths = {
         ...columnWidths,
         [columnKey]: newSize
       };
       
       setColumnWidths(newWidths);
-      
-      // Сохраняем в localStorage
       localStorage.setItem('keywordsTableColumnWidths', JSON.stringify(newWidths));
       console.log(`📏 Saved column width: ${columnKey} = ${newSize}px`);
     }
@@ -240,7 +276,7 @@ const KeywordsTable = ({
     const instance = hotTableRef.current.hotInstance;
     
     instance.updateSettings({
-      cells: function(row, col) {
+      cells: function(row) {
         const cellProperties = {};
         const rowData = this.instance.getSourceDataAtRow(row);
         
@@ -274,16 +310,15 @@ const KeywordsTable = ({
     const instance = hotTableRef.current.hotInstance;
     const newColumns = getVisibleColumns();
     
-    // Обновляем настройки колонок
     instance.updateSettings({
       columns: newColumns,
       colHeaders: newColumns.map(col => col.title || '')
     });
     
     console.log('📊 Updated visible columns:', newColumns.map(c => c.data));
-  }, [visibleColumns, columnWidths]); // Добавили columnWidths в зависимости
+  }, [visibleColumns, columnWidths]);
 
-  // Обработка изменений в таблице
+  // Обработка обычных изменений (без Shift)
   const handleAfterChange = (changes, source) => {
     if (source === 'loadData' || !changes) return;
     
