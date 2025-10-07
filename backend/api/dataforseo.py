@@ -1639,9 +1639,12 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
                 # Добавляем органическую позицию в item_parsed
                 item_parsed['organic_position'] = organic_position_counter
                 
+                # ИСПРАВЛЕНО: rank_absolute от API - это фактическая позиция!
+                rank_absolute = item.get('rank_absolute', actual_position_counter)
+                
                 organic_results.append({
-                    'position': actual_position_counter,  # Фактическая позиция
-                    'organic_position': organic_position_counter,  # Органическая позиция
+                    'actual_position': rank_absolute,  # ИСПРАВЛЕНО: Фактическая позиция от API
+                    'organic_position': organic_position_counter,  # Органическая позиция (наш счетчик)
                     'domain': clean_domain,
                     'title': title[:100] if title else '',
                     'url': url,

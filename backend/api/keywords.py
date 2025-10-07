@@ -233,7 +233,8 @@ def get_keywords(ad_group_id):
                 has_our_site, intent_type, recommendation,
                 avg_monthly_searches, three_month_change, yearly_change,
                 competition, competition_percent, min_top_of_page_bid,
-                max_top_of_page_bid, is_new, batch_color
+                max_top_of_page_bid, is_new, batch_color,
+                our_organic_position, our_actual_position, last_serp_check
             FROM keywords 
             WHERE ad_group_id = %s 
             AND status != 'Removed'
@@ -269,7 +270,10 @@ def get_keywords(ad_group_id):
                 'min_top_of_page_bid': float(row['min_top_of_page_bid']) if row['min_top_of_page_bid'] else None,
                 'max_top_of_page_bid': float(row['max_top_of_page_bid']) if row['max_top_of_page_bid'] else None,
                 'is_new': bool(row.get('is_new', False)),
-                'batch_color': row.get('batch_color')
+                'batch_color': row.get('batch_color'),
+                'our_organic_position': row.get('our_organic_position'),
+                'our_actual_position': row.get('our_actual_position'),
+                'last_serp_check': row['last_serp_check'].isoformat() if row.get('last_serp_check') else None
             }
             keywords_data.append(keyword_dict)
         

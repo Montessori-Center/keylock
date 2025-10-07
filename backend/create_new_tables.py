@@ -1,26 +1,26 @@
 #!/usr/bin/env python3
-# backend/migrations/check_serp_logs.py
+# backend/database/migrate_serp_positions.py
 """
-Проверка и исправление структуры таблицы serp_logs
+Миграция для добавления полей SERP позиций
+Запуск: python3 migrate_serp_positions.py
 """
 
-import sys
-import os
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from config import Config
 import pymysql
+import sys
+from config import Config
 
-def check_and_fix_serp_logs():
-    """Проверка и исправление структуры таблицы serp_logs"""
-    
-    print("=" * 60)
-    print("🔍 ПРОВЕРКА СТРУКТУРЫ ТАБЛИЦЫ serp_logs")
-    print("=" * 60)
-    
+def log(message):
+    """Логирование с flush"""
+    print(message)
+    sys.stdout.flush()
+
+def run_migration():
+    """Выполняет миграцию БД"""
     connection = None
+    
     try:
+        # Подключаемся к БД
+        log("📡 Подключение к БД...")
         connection = pymysql.connect(
             host=Config.DB_HOST,
             port=Config.DB_PORT,
@@ -31,133 +31,144 @@ def check_and_fix_serp_logs():
         )
         
         cursor = connection.cursor()
+        log("✅ Подключено к БД")
         
-        print(f"\n✅ Подключение к БД: {Config.DB_NAME}")
-        
-        # Проверяем существование таблицы
+        # Проверяем, существуют ли уже поля
+        log("\n🔍 Проверка существующих полей...")
         cursor.execute("""
-            SELECT COUNT(*) as count
-            FROM INFORMATION_SCHEMA.TABLES 
+            SELECT COLUMN_NAME 
+            FROM INFORMATION_SCHEMA.COLUMNS 
             WHERE TABLE_SCHEMA = %s 
-            AND TABLE_NAME = 'serp_logs'
+            AND TABLE_NAME = 'keywords'
+            AND COLUMN_NAME IN ('our_organic_position', 'our_actual_position', 'last_serp_check')
         """, (Config.DB_NAME,))
         
-        table_exists = cursor.fetchone()['count'] > 0
+        existing_columns = [row['COLUMN_NAME'] for row in cursor.fetchall()]
+        log(f"   Существующие поля: {existing_columns if existing_columns else 'нет'}")
         
-        if not table_exists:
-            print("\n❌ Таблица serp_logs НЕ СУЩЕСТВУЕТ!")
-            print("Создаём таблицу...")
-            
+        # Добавляем поля в таблицу keywords
+        log("\n📝 Добавление полей в таблицу keywords...")
+        
+        if 'our_organic_position' not in existing_columns:
+            log("   ➕ Добавляем our_organic_position...")
             cursor.execute("""
-                CREATE TABLE serp_logs (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    keyword_id INT NOT NULL,
-                    keyword_text VARCHAR(500),
-                    raw_response LONGTEXT,
-                    parsed_items LONGTEXT,
-                    analysis_result TEXT,
-                    cost DECIMAL(10, 4) DEFAULT 0,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    INDEX idx_keyword_id (keyword_id),
-                    INDEX idx_created_at (created_at)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                ALTER TABLE keywords
+                ADD COLUMN our_organic_position INT DEFAULT NULL 
+                COMMENT 'Органическая позиция нашего сайта (среди органических результатов)'
             """)
-            
-            connection.commit()
-            print("✅ Таблица serp_logs создана")
+            log("   ✅ our_organic_position добавлен")
         else:
-            print("\n✅ Таблица serp_logs существует")
+            log("   ⏭️  our_organic_position уже существует")
         
-        # Получаем структуру таблицы
+        if 'our_actual_position' not in existing_columns:
+            log("   ➕ Добавляем our_actual_position...")
+            cursor.execute("""
+                ALTER TABLE keywords
+                ADD COLUMN our_actual_position INT DEFAULT NULL 
+                COMMENT 'Фактическая позиция на странице (с учетом рекламы и карт)'
+            """)
+            log("   ✅ our_actual_position добавлен")
+        else:
+            log("   ⏭️  our_actual_position уже существует")
+        
+        if 'last_serp_check' not in existing_columns:
+            log("   ➕ Добавляем last_serp_check...")
+            cursor.execute("""
+                ALTER TABLE keywords
+                ADD COLUMN last_serp_check DATETIME DEFAULT NULL 
+                COMMENT 'Дата последней SERP проверки'
+            """)
+            log("   ✅ last_serp_check добавлен")
+        else:
+            log("   ⏭️  last_serp_check уже существует")
+        
+        # Проверяем поле analysis_result в serp_logs
+        log("\n🔍 Проверка таблицы serp_logs...")
         cursor.execute("""
-            SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT
+            SELECT COLUMN_NAME 
             FROM INFORMATION_SCHEMA.COLUMNS 
             WHERE TABLE_SCHEMA = %s 
             AND TABLE_NAME = 'serp_logs'
-            ORDER BY ORDINAL_POSITION
+            AND COLUMN_NAME = 'analysis_result'
         """, (Config.DB_NAME,))
         
-        columns = cursor.fetchall()
+        has_analysis_result = cursor.fetchone()
         
-        print("\n📋 Текущие колонки:")
-        existing_columns = []
-        for col in columns:
-            existing_columns.append(col['COLUMN_NAME'])
-            print(f"   - {col['COLUMN_NAME']}: {col['COLUMN_TYPE']}")
-        
-        # Проверяем необходимые колонки
-        required_columns = {
-            'id': 'INT AUTO_INCREMENT PRIMARY KEY',
-            'keyword_id': 'INT NOT NULL',
-            'keyword_text': 'VARCHAR(500)',
-            'raw_response': 'LONGTEXT',
-            'parsed_items': 'LONGTEXT',
-            'analysis_result': 'TEXT',
-            'cost': 'DECIMAL(10, 4) DEFAULT 0',
-            'created_at': 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP'
-        }
-        
-        missing_columns = []
-        for col_name in required_columns:
-            if col_name not in existing_columns:
-                missing_columns.append(col_name)
-        
-        if missing_columns:
-            print(f"\n⚠️  Отсутствуют колонки: {', '.join(missing_columns)}")
-            print("Добавляем недостающие колонки...")
-            
-            for col_name in missing_columns:
-                if col_name == 'id':
-                    continue  # ID не добавляем отдельно
-                
-                col_type = required_columns[col_name]
-                print(f"   ➕ Добавление {col_name}...")
-                
-                try:
-                    cursor.execute(f"ALTER TABLE serp_logs ADD COLUMN {col_name} {col_type}")
-                    print(f"      ✅ Колонка {col_name} добавлена")
-                except Exception as e:
-                    print(f"      ⚠️  Ошибка: {str(e)}")
-            
-            connection.commit()
-            print("\n✅ Структура таблицы обновлена")
-        else:
-            print("\n✅ Все необходимые колонки присутствуют")
-        
-        # Проверяем количество записей
-        cursor.execute("SELECT COUNT(*) as count FROM serp_logs")
-        count = cursor.fetchone()['count']
-        print(f"\n📊 Всего записей в serp_logs: {count}")
-        
-        if count > 0:
-            # Показываем последние 3 записи
+        if not has_analysis_result:
+            log("   ➕ Добавляем analysis_result в serp_logs...")
             cursor.execute("""
-                SELECT id, keyword_id, keyword_text, 
-                       CHAR_LENGTH(analysis_result) as analysis_len,
-                       created_at
-                FROM serp_logs 
-                ORDER BY created_at DESC 
-                LIMIT 3
+                ALTER TABLE serp_logs
+                ADD COLUMN analysis_result JSON DEFAULT NULL 
+                COMMENT 'Результаты анализа в JSON формате'
             """)
-            recent = cursor.fetchall()
-            
-            print("\n📋 Последние записи:")
-            for row in recent:
-                print(f"   ID: {row['id']}, "
-                      f"Keyword: {row['keyword_text']}, "
-                      f"Analysis: {row['analysis_len']} bytes, "
-                      f"Date: {row['created_at']}")
+            log("   ✅ analysis_result добавлен")
+        else:
+            log("   ⏭️  analysis_result уже существует")
+        
+        # Создаем индексы для быстрого поиска
+        log("\n📇 Создание индексов...")
+        
+        try:
+            cursor.execute("""
+                CREATE INDEX idx_our_organic_position ON keywords(our_organic_position)
+            """)
+            log("   ✅ Индекс idx_our_organic_position создан")
+        except pymysql.err.OperationalError as e:
+            if "Duplicate key name" in str(e):
+                log("   ⏭️  Индекс idx_our_organic_position уже существует")
+            else:
+                raise
+        
+        try:
+            cursor.execute("""
+                CREATE INDEX idx_last_serp_check ON keywords(last_serp_check)
+            """)
+            log("   ✅ Индекс idx_last_serp_check создан")
+        except pymysql.err.OperationalError as e:
+            if "Duplicate key name" in str(e):
+                log("   ⏭️  Индекс idx_last_serp_check уже существует")
+            else:
+                raise
+        
+        try:
+            cursor.execute("""
+                CREATE INDEX idx_keyword_id ON serp_logs(keyword_id)
+            """)
+            log("   ✅ Индекс idx_keyword_id создан")
+        except pymysql.err.OperationalError as e:
+            if "Duplicate key name" in str(e):
+                log("   ⏭️  Индекс idx_keyword_id уже существует")
+            else:
+                raise
+        
+        # Применяем изменения
+        connection.commit()
+        
+        # Проверяем финальную структуру
+        log("\n🔍 Проверка финальной структуры таблицы keywords...")
+        cursor.execute("""
+            SELECT COLUMN_NAME, COLUMN_TYPE, COLUMN_COMMENT
+            FROM INFORMATION_SCHEMA.COLUMNS 
+            WHERE TABLE_SCHEMA = %s 
+            AND TABLE_NAME = 'keywords'
+            AND COLUMN_NAME IN ('our_organic_position', 'our_actual_position', 'last_serp_check')
+            ORDER BY COLUMN_NAME
+        """, (Config.DB_NAME,))
+        
+        columns_info = cursor.fetchall()
+        for col in columns_info:
+            log(f"   ✅ {col['COLUMN_NAME']}: {col['COLUMN_TYPE']} - {col['COLUMN_COMMENT']}")
         
         cursor.close()
         
-        print("\n" + "=" * 60)
-        print("✅ ПРОВЕРКА ЗАВЕРШЕНА")
-        print("=" * 60)
+        log("\n" + "="*50)
+        log("🎉 Миграция успешно завершена!")
+        log("="*50)
         
         return True
         
     except Exception as e:
-        print(f"\n❌ ОШИБКА: {str(e)}")
+        log(f"\n❌ Ошибка миграции: {str(e)}")
         import traceback
         traceback.print_exc()
         return False
@@ -165,11 +176,17 @@ def check_and_fix_serp_logs():
     finally:
         if connection:
             connection.close()
+            log("\n🔌 Подключение к БД закрыто")
 
-if __name__ == "__main__":
-    try:
-        success = check_and_fix_serp_logs()
-        sys.exit(0 if success else 1)
-    except KeyboardInterrupt:
-        print("\n\n⚠️  Проверка прервана")
+
+if __name__ == '__main__':
+    log("="*50)
+    log("🚀 Запуск миграции SERP позиций")
+    log("="*50)
+    
+    success = run_migration()
+    
+    if success:
+        sys.exit(0)
+    else:
         sys.exit(1)

@@ -318,25 +318,37 @@ const SerpLogsModal = ({ show, onHide, selectedKeywordIds = [] }) => {
               </thead>
               <tbody>
                 {selectedLog.organic_results && selectedLog.organic_results.length > 0 ? (
-                  selectedLog.organic_results.map((item, idx) => (
-                    <tr key={idx}>
-                      <td className="text-center">
-                        <Badge bg="secondary">{item.organic_position || (idx + 1)}</Badge>
-                      </td>
-                      <td className="text-center">
-                        <Badge bg="primary">{item.position || item.actual_position || 'N/A'}</Badge>
-                      </td>
-                      <td>
-                        <strong>{item.domain}</strong>
-                        {item.domain === selectedLog.our_domain && 
-                          <Badge bg="success" className="ms-2">Наш сайт</Badge>
-                        }
-                      </td>
-                      <td>
-                        <small>{item.title}</small>
-                      </td>
-                    </tr>
-                  ))
+                  selectedLog.organic_results.map((item, idx) => {
+                    // Проверяем, является ли это нашим сайтом
+                    const isOurSite = selectedLog.analysis_result.has_our_site && 
+                                     item.organic_position === selectedLog.analysis_result.our_organic_position;
+                    
+                    return (
+                      <tr 
+                        key={idx}
+                        style={isOurSite ? {
+                          backgroundColor: '#d4edda',
+                          fontWeight: '500'
+                        } : {}}
+                      >
+                        <td className="text-center">
+                          <Badge bg="secondary">{item.organic_position || (idx + 1)}</Badge>
+                        </td>
+                        <td className="text-center">
+                          <Badge bg="primary">{item.actual_position || 'N/A'}</Badge>
+                        </td>
+                        <td>
+                          <strong>{item.domain}</strong>
+                          {isOurSite && 
+                            <Badge bg="success" className="ms-2">Наш сайт</Badge>
+                          }
+                        </td>
+                        <td>
+                          <small>{item.title}</small>
+                        </td>
+                      </tr>
+                    );
+                  })
                 ) : (
                   <tr>
                     <td colSpan="4" className="text-center text-muted">
