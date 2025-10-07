@@ -926,17 +926,18 @@ def _process_serp_live(keywords_data, serp_params, connection, dataforseo_client
             
 @dataforseo_bp.route('/serp-logs', methods=['GET'])
 def get_serp_logs():
-    """Получение последних SERP анализов для отладки"""
+    """Получение последних SERP анализов"""
     connection = None
     try:
-        limit = request.args.get('limit', 20, type=int)
+        limit = request.args.get('limit', 50, type=int)
         keyword_id = request.args.get('keyword_id', None, type=int)
+        
+        log_print(f"📊 get_serp_logs called: limit={limit}, keyword_id={keyword_id}")
         
         connection = get_db_connection()
         cursor = connection.cursor()
         
         if keyword_id:
-            # Логи для конкретного ключевого слова
             cursor.execute("""
                 SELECT * FROM serp_logs 
                 WHERE keyword_id = %s 
@@ -944,7 +945,6 @@ def get_serp_logs():
                 LIMIT %s
             """, (keyword_id, limit))
         else:
-            # Последние логи
             cursor.execute("""
                 SELECT * FROM serp_logs 
                 ORDER BY created_at DESC 
@@ -952,52 +952,61 @@ def get_serp_logs():
             """, (limit,))
         
         logs = cursor.fetchall()
+        log_print(f"📋 Found {len(logs)} logs in DB")
         
-        # Форматируем для удобного просмотра
+        # Форматируем логи для фронтенда
         formatted_logs = []
         for log in logs:
             try:
-                # Безопасный парсинг JSON
-                raw_response = {}
-                parsed_items = {}
+                # Парсим JSON поля
+                analysis_result = {}
+                organic_results = []
+                paid_results = []
                 
-                if log.get('raw_response'):
+                if log.get('analysis_result'):
                     try:
-                        raw_response = json.loads(log['raw_response'])
+                        analysis_result = json.loads(log['analysis_result'])
                     except:
-                        raw_response = {}
+                        log_print(f"⚠️ Не удалось распарсить analysis_result для log_id={log['id']}")
                 
                 if log.get('parsed_items'):
                     try:
                         parsed_items = json.loads(log['parsed_items'])
+                        organic_results = parsed_items.get('organic', [])
+                        paid_results = parsed_items.get('paid', [])
                     except:
-                        parsed_items = {}
+                        log_print(f"⚠️ Не удалось распарсить parsed_items для log_id={log['id']}")
                 
                 formatted_log = {
                     'id': log['id'],
-                    'keyword': log.get('keyword_text', ''),
+                    'keyword_id': log['keyword_id'],
+                    'keyword_text': log['keyword_text'],
                     'created_at': log['created_at'].isoformat() if log.get('created_at') else None,
-                    'summary': {
-                        'total_items': log.get('total_items', 0),
-                        'organic': log.get('organic_count', 0),
-                        'paid': log.get('paid_count', 0),
-                        'maps': log.get('maps_count', 0)
-                    },
-                    'flags': {
-                        'has_ads': bool(log.get('has_ads')),
-                        'has_maps': bool(log.get('has_maps')),
-                        'has_our_site': bool(log.get('has_our_site')),
-                        'has_school_sites': bool(log.get('has_school_sites'))
-                    },
-                    'intent': log.get('intent_type', 'Информационный'),
-                    'school_percentage': float(log.get('school_percentage', 0)),
                     'cost': float(log.get('cost', 0)),
-                    'raw_response': raw_response,
-                    'parsed_items': parsed_items
+                    'analysis_result': {
+                        'has_ads': analysis_result.get('has_ads', False),
+                        'has_google_maps': analysis_result.get('has_google_maps', False),
+                        'has_our_site': analysis_result.get('has_our_site', False),
+                        'our_organic_position': analysis_result.get('our_organic_position'),
+                        'our_actual_position': analysis_result.get('our_actual_position'),
+                        'has_school_sites': analysis_result.get('has_school_sites', False),
+                        'school_percentage': analysis_result.get('school_percentage', 0),
+                        'intent_type': analysis_result.get('intent_type', 'Информационный'),
+                        'total_organic': analysis_result.get('total_organic', 0),
+                        'paid_count': analysis_result.get('paid_count', 0),
+                        'maps_count': analysis_result.get('maps_count', 0)
+                    },
+                    'organic_results': organic_results,
+                    'paid_results': paid_results,
+                    'our_domain': None  # Можно добавить если нужно
                 }
+                
                 formatted_logs.append(formatted_log)
+                
             except Exception as e:
                 log_print(f"⚠️ Error formatting log {log.get('id')}: {str(e)}")
+                import traceback
+                traceback.print_exc()
                 continue
         
         cursor.close()
@@ -1018,7 +1027,6 @@ def get_serp_logs():
     finally:
         if connection:
             connection.close()
-
 
 @dataforseo_bp.route('/serp-logs/<int:log_id>', methods=['GET'])
 def get_serp_log_details(log_id):
