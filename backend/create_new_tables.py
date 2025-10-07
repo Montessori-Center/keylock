@@ -1,192 +1,180 @@
 #!/usr/bin/env python3
-# backend/database/migrate_serp_positions.py
+# -*- coding: utf-8 -*-
 """
-Миграция для добавления полей SERP позиций
-Запуск: python3 migrate_serp_positions.py
+Исправление структуры таблицы serp_logs
+Добавление/проверка правильных типов для JSON-полей
 """
 
-import pymysql
 import sys
+import os
+import pymysql
+
+# Добавляем путь к backend для импорта модулей
+sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
+
 from config import Config
 
-def log(message):
-    """Логирование с flush"""
-    print(message)
-    sys.stdout.flush()
+def get_db_connection():
+    """Подключение к БД"""
+    return pymysql.connect(
+        host=Config.DB_HOST,
+        user=Config.DB_USER,
+        password=Config.DB_PASSWORD,
+        database=Config.DB_NAME,
+        port=Config.DB_PORT,
+        cursorclass=pymysql.cursors.DictCursor,
+        charset='utf8mb4'
+    )
 
-def run_migration():
-    """Выполняет миграцию БД"""
-    connection = None
+def fix_serp_logs_table():
+    """Исправление таблицы serp_logs"""
+    
+    print("=" * 80)
+    print("🔧 ИСПРАВЛЕНИЕ ТАБЛИЦЫ serp_logs")
+    print("=" * 80)
+    
+    connection = get_db_connection()
+    cursor = connection.cursor()
     
     try:
-        # Подключаемся к БД
-        log("📡 Подключение к БД...")
-        connection = pymysql.connect(
-            host=Config.DB_HOST,
-            port=Config.DB_PORT,
-            user=Config.DB_USER,
-            password=Config.DB_PASSWORD,
-            database=Config.DB_NAME,
-            cursorclass=pymysql.cursors.DictCursor
-        )
+        # 1. Проверяем текущую структуру
+        print("\n1️⃣ Проверка текущей структуры таблицы...")
+        cursor.execute("DESCRIBE serp_logs")
+        columns = cursor.fetchall()
         
-        cursor = connection.cursor()
-        log("✅ Подключено к БД")
+        print("\n📋 Текущие колонки:")
+        for col in columns:
+            print(f"   - {col['Field']}: {col['Type']} (Null: {col['Null']})")
         
-        # Проверяем, существуют ли уже поля
-        log("\n🔍 Проверка существующих полей...")
-        cursor.execute("""
-            SELECT COLUMN_NAME 
-            FROM INFORMATION_SCHEMA.COLUMNS 
-            WHERE TABLE_SCHEMA = %s 
-            AND TABLE_NAME = 'keywords'
-            AND COLUMN_NAME IN ('our_organic_position', 'our_actual_position', 'last_serp_check')
-        """, (Config.DB_NAME,))
+        # 2. Изменяем типы JSON-полей на LONGTEXT
+        print("\n2️⃣ Изменение типов JSON-полей на LONGTEXT...")
         
-        existing_columns = [row['COLUMN_NAME'] for row in cursor.fetchall()]
-        log(f"   Существующие поля: {existing_columns if existing_columns else 'нет'}")
+        changes = [
+            ('analysis_result', 'LONGTEXT'),
+            ('parsed_items', 'LONGTEXT'),
+            ('raw_response', 'LONGTEXT')
+        ]
         
-        # Добавляем поля в таблицу keywords
-        log("\n📝 Добавление полей в таблицу keywords...")
+        for column_name, column_type in changes:
+            try:
+                alter_query = f"""
+                    ALTER TABLE serp_logs 
+                    MODIFY COLUMN {column_name} {column_type} 
+                    CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL
+                """
+                cursor.execute(alter_query)
+                print(f"   ✅ {column_name} -> {column_type}")
+            except pymysql.err.OperationalError as e:
+                if "Duplicate column name" in str(e) or "Unknown column" in str(e):
+                    print(f"   ⚠️ {column_name}: колонка уже существует или не найдена")
+                else:
+                    raise
         
-        if 'our_organic_position' not in existing_columns:
-            log("   ➕ Добавляем our_organic_position...")
-            cursor.execute("""
-                ALTER TABLE keywords
-                ADD COLUMN our_organic_position INT DEFAULT NULL 
-                COMMENT 'Органическая позиция нашего сайта (среди органических результатов)'
-            """)
-            log("   ✅ our_organic_position добавлен")
-        else:
-            log("   ⏭️  our_organic_position уже существует")
-        
-        if 'our_actual_position' not in existing_columns:
-            log("   ➕ Добавляем our_actual_position...")
-            cursor.execute("""
-                ALTER TABLE keywords
-                ADD COLUMN our_actual_position INT DEFAULT NULL 
-                COMMENT 'Фактическая позиция на странице (с учетом рекламы и карт)'
-            """)
-            log("   ✅ our_actual_position добавлен")
-        else:
-            log("   ⏭️  our_actual_position уже существует")
-        
-        if 'last_serp_check' not in existing_columns:
-            log("   ➕ Добавляем last_serp_check...")
-            cursor.execute("""
-                ALTER TABLE keywords
-                ADD COLUMN last_serp_check DATETIME DEFAULT NULL 
-                COMMENT 'Дата последней SERP проверки'
-            """)
-            log("   ✅ last_serp_check добавлен")
-        else:
-            log("   ⏭️  last_serp_check уже существует")
-        
-        # Проверяем поле analysis_result в serp_logs
-        log("\n🔍 Проверка таблицы serp_logs...")
-        cursor.execute("""
-            SELECT COLUMN_NAME 
-            FROM INFORMATION_SCHEMA.COLUMNS 
-            WHERE TABLE_SCHEMA = %s 
-            AND TABLE_NAME = 'serp_logs'
-            AND COLUMN_NAME = 'analysis_result'
-        """, (Config.DB_NAME,))
-        
-        has_analysis_result = cursor.fetchone()
-        
-        if not has_analysis_result:
-            log("   ➕ Добавляем analysis_result в serp_logs...")
-            cursor.execute("""
-                ALTER TABLE serp_logs
-                ADD COLUMN analysis_result JSON DEFAULT NULL 
-                COMMENT 'Результаты анализа в JSON формате'
-            """)
-            log("   ✅ analysis_result добавлен")
-        else:
-            log("   ⏭️  analysis_result уже существует")
-        
-        # Создаем индексы для быстрого поиска
-        log("\n📇 Создание индексов...")
-        
-        try:
-            cursor.execute("""
-                CREATE INDEX idx_our_organic_position ON keywords(our_organic_position)
-            """)
-            log("   ✅ Индекс idx_our_organic_position создан")
-        except pymysql.err.OperationalError as e:
-            if "Duplicate key name" in str(e):
-                log("   ⏭️  Индекс idx_our_organic_position уже существует")
-            else:
-                raise
-        
-        try:
-            cursor.execute("""
-                CREATE INDEX idx_last_serp_check ON keywords(last_serp_check)
-            """)
-            log("   ✅ Индекс idx_last_serp_check создан")
-        except pymysql.err.OperationalError as e:
-            if "Duplicate key name" in str(e):
-                log("   ⏭️  Индекс idx_last_serp_check уже существует")
-            else:
-                raise
-        
-        try:
-            cursor.execute("""
-                CREATE INDEX idx_keyword_id ON serp_logs(keyword_id)
-            """)
-            log("   ✅ Индекс idx_keyword_id создан")
-        except pymysql.err.OperationalError as e:
-            if "Duplicate key name" in str(e):
-                log("   ⏭️  Индекс idx_keyword_id уже существует")
-            else:
-                raise
-        
-        # Применяем изменения
         connection.commit()
         
-        # Проверяем финальную структуру
-        log("\n🔍 Проверка финальной структуры таблицы keywords...")
+        # 3. Проверяем результат
+        print("\n3️⃣ Проверка после изменений...")
+        cursor.execute("DESCRIBE serp_logs")
+        columns = cursor.fetchall()
+        
+        print("\n📋 Обновлённые колонки:")
+        for col in columns:
+            if col['Field'] in ['analysis_result', 'parsed_items', 'raw_response']:
+                print(f"   ✅ {col['Field']}: {col['Type']} (Null: {col['Null']})")
+        
+        # 4. Проверяем состояние данных
+        print("\n4️⃣ Проверка состояния данных...")
         cursor.execute("""
-            SELECT COLUMN_NAME, COLUMN_TYPE, COLUMN_COMMENT
-            FROM INFORMATION_SCHEMA.COLUMNS 
-            WHERE TABLE_SCHEMA = %s 
-            AND TABLE_NAME = 'keywords'
-            AND COLUMN_NAME IN ('our_organic_position', 'our_actual_position', 'last_serp_check')
-            ORDER BY COLUMN_NAME
-        """, (Config.DB_NAME,))
+            SELECT 
+                COUNT(*) as total,
+                SUM(CASE WHEN analysis_result IS NULL OR analysis_result = '' THEN 1 ELSE 0 END) as empty_analysis,
+                SUM(CASE WHEN parsed_items IS NULL OR parsed_items = '' THEN 1 ELSE 0 END) as empty_parsed
+            FROM serp_logs
+        """)
+        stats = cursor.fetchone()
         
-        columns_info = cursor.fetchall()
-        for col in columns_info:
-            log(f"   ✅ {col['COLUMN_NAME']}: {col['COLUMN_TYPE']} - {col['COLUMN_COMMENT']}")
+        print(f"\n📊 Статистика данных:")
+        print(f"   Всего записей: {stats['total']}")
+        print(f"   С пустым analysis_result: {stats['empty_analysis']}")
+        print(f"   С пустым parsed_items: {stats['empty_parsed']}")
         
-        cursor.close()
+        # 5. Спрашиваем об удалении некорректных записей
+        if stats['empty_analysis'] > 0 or stats['empty_parsed'] > 0:
+            print("\n⚠️ Обнаружены записи с пустыми JSON-полями")
+            response = input("❓ Удалить некорректные записи? (yes/no): ").strip().lower()
+            
+            if response == 'yes':
+                cursor.execute("""
+                    DELETE FROM serp_logs 
+                    WHERE analysis_result IS NULL 
+                       OR analysis_result = ''
+                       OR parsed_items IS NULL
+                       OR parsed_items = ''
+                """)
+                deleted = cursor.rowcount
+                connection.commit()
+                print(f"   ✅ Удалено некорректных записей: {deleted}")
+            else:
+                print("   ℹ️ Некорректные записи оставлены без изменений")
         
-        log("\n" + "="*50)
-        log("🎉 Миграция успешно завершена!")
-        log("="*50)
+        # 6. Показываем последние записи
+        print("\n5️⃣ Проверка последних записей...")
+        cursor.execute("""
+            SELECT 
+                id,
+                keyword_text,
+                created_at,
+                CHAR_LENGTH(parsed_items) as parsed_len,
+                CHAR_LENGTH(analysis_result) as analysis_len,
+                CASE 
+                    WHEN analysis_result IS NULL THEN '❌ NULL'
+                    WHEN analysis_result = '' THEN '⚠️ EMPTY'
+                    ELSE '✅ OK'
+                END as status
+            FROM serp_logs 
+            ORDER BY created_at DESC 
+            LIMIT 5
+        """)
+        records = cursor.fetchall()
         
-        return True
+        print("\n📝 Последние 5 записей:")
+        for rec in records:
+            print(f"   ID {rec['id']}: {rec['keyword_text']}")
+            print(f"      Дата: {rec['created_at']}")
+            print(f"      parsed_items: {rec['parsed_len'] or 0} байт")
+            print(f"      analysis_result: {rec['analysis_len'] or 0} байт")
+            print(f"      Статус: {rec['status']}")
+            print()
+        
+        print("=" * 80)
+        print("✅ ИСПРАВЛЕНИЕ ЗАВЕРШЕНО УСПЕШНО")
+        print("=" * 80)
+        print("\n📌 Следующие шаги:")
+        print("   1. Обновите код функции parse_serp_response в backend/api/dataforseo.py")
+        print("   2. Перезапустите backend-сервер")
+        print("   3. Запустите SERP анализ заново для тестовых ключевых слов")
+        print("   4. Проверьте результат через debug_serp_logs.py")
+        print()
         
     except Exception as e:
-        log(f"\n❌ Ошибка миграции: {str(e)}")
+        connection.rollback()
+        print(f"\n❌ Ошибка при исправлении: {str(e)}")
         import traceback
         traceback.print_exc()
         return False
         
     finally:
-        if connection:
-            connection.close()
-            log("\n🔌 Подключение к БД закрыто")
-
-
-if __name__ == '__main__':
-    log("="*50)
-    log("🚀 Запуск миграции SERP позиций")
-    log("="*50)
+        cursor.close()
+        connection.close()
     
-    success = run_migration()
-    
-    if success:
-        sys.exit(0)
-    else:
+    return True
+
+if __name__ == "__main__":
+    try:
+        success = fix_serp_logs_table()
+        sys.exit(0 if success else 1)
+    except Exception as e:
+        print(f"\n❌ Критическая ошибка: {e}")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
