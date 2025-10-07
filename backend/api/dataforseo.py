@@ -31,7 +31,7 @@ def get_db_connection():
         database=Config.DB_NAME,
         cursorclass=pymysql.cursors.DictCursor
     )
-    
+
 def update_progress(task_id: str, current: int, total: int, keyword: str = '', status: str = 'processing'):
     """Обновляет прогресс задачи"""
     SERP_PROGRESS[task_id] = {
@@ -56,6 +56,7 @@ def cleanup_progress(task_id: str):
     """Очищает прогресс задачи"""
     if task_id in SERP_PROGRESS:
         del SERP_PROGRESS[task_id]
+        log_print(f"🧹 Progress cleaned up for task {task_id}")
         
 @dataforseo_bp.route('/apply-serp-sse', methods=['GET'])
 def apply_serp_sse():
@@ -107,7 +108,7 @@ def apply_serp_sse():
                 elif progress['status'] == 'complete':
                     event_data = {
                         'type': 'complete',
-                        'message': progress.get('message', 'Завершено'),
+                        'message': progress.get('message', 'Completed'),
                         'result': progress.get('result', {})
                     }
                     yield f"data: {json.dumps(event_data)}\n\n"
@@ -123,15 +124,16 @@ def apply_serp_sse():
                     cleanup_progress(task_id)
                     break
             
-            time.sleep(0.5)  # Проверяем каждые 0.5 сек
+            time.sleep(0.5)  # Проверяем каждые 0.5 секунды
+        
+        log_print(f"🔚 SSE stream ended for task {task_id}")
     
     return Response(
         stream_with_context(generate()),
         mimetype='text/event-stream',
         headers={
             'Cache-Control': 'no-cache',
-            'X-Accel-Buffering': 'no',
-            'Connection': 'keep-alive'
+            'X-Accel-Buffering': 'no'
         }
     )
 
@@ -464,7 +466,10 @@ def apply_serp_analysis():
         }), 500
             
 def process_serp_sync(task_id: str, keyword_ids: list, params: dict) -> dict:
-    """Синхронная обработка SERP с обновлением прогресса"""
+    """
+    Синхронная обработка SERP с обновлением прогресса
+    ИСПРАВЛЕНО: Добавлено сохранение our_organic_position и our_actual_position
+    """
     connection = None
     cursor = None
     
@@ -472,6 +477,7 @@ def process_serp_sync(task_id: str, keyword_ids: list, params: dict) -> dict:
         connection = get_db_connection()
         cursor = connection.cursor()
         
+        # Получаем данные ключевых слов
         placeholders = ','.join(['%s'] * len(keyword_ids))
         cursor.execute(f"""
             SELECT k.id, k.keyword, k.campaign_id 
@@ -483,11 +489,13 @@ def process_serp_sync(task_id: str, keyword_ids: list, params: dict) -> dict:
         if not keywords_data:
             return {'success': False, 'error': 'Keywords not found'}
         
+        # Получаем клиент DataForSeo
         try:
             dataforseo_client = get_dataforseo_client()
         except ValueError as e:
             return {'success': False, 'error': f'DataForSeo API не настроен: {str(e)}'}
         
+        # Параметры SERP запроса
         serp_params = {
             'location_code': params.get('location_code', 2804),
             'language_code': params.get('language_code', 'ru'),
@@ -503,20 +511,29 @@ def process_serp_sync(task_id: str, keyword_ids: list, params: dict) -> dict:
         updated_count = 0
         errors = []
         total_cost = 0.0
+        results_summary = {
+            'with_ads': 0,
+            'with_maps': 0,
+            'with_our_site': 0,
+            'with_school_sites': 0,
+            'commercial_intent': 0
+        }
         
-        # ✅ ИСПРАВЛЕНИЕ: Обрабатываем ключевые слова с обновлением прогресса
+        # Обрабатываем ключевые слова с обновлением прогресса
         for idx, kw in enumerate(keywords_data):
             try:
                 log_print(f"\n🔍 Анализ [{idx+1}/{len(keywords_data)}]: {kw['keyword']}")
                 
-                # ✅ КРИТИЧНО: Обновляем прогресс ПЕРЕД обработкой каждого слова
+                # Обновляем прогресс ПЕРЕД обработкой каждого слова
                 update_progress(task_id, idx, len(keywords_data), kw['keyword'], 'processing')
                 
+                # Выполняем SERP запрос
                 serp_response = dataforseo_client.get_serp(
                     keyword=kw['keyword'],
                     **serp_params
                 )
                 
+                # Парсим результаты (используем исправленную parse_serp_response)
                 serp_data = parse_serp_response(
                     serp_response, 
                     kw['campaign_id'], 
@@ -526,6 +543,7 @@ def process_serp_sync(task_id: str, keyword_ids: list, params: dict) -> dict:
                 )
                 
                 if serp_data:
+                    # ИСПРАВЛЕНО: Обновляем данные С ПОЗИЦИЯМИ
                     cursor.execute("""
                         UPDATE keywords 
                         SET 
@@ -534,6 +552,8 @@ def process_serp_sync(task_id: str, keyword_ids: list, params: dict) -> dict:
                             has_google_maps = %s,
                             has_our_site = %s,
                             intent_type = %s,
+                            our_organic_position = %s,
+                            our_actual_position = %s,
                             last_serp_check = NOW(),
                             updated_at = NOW()
                         WHERE id = %s
@@ -543,35 +563,68 @@ def process_serp_sync(task_id: str, keyword_ids: list, params: dict) -> dict:
                         serp_data['has_google_maps'],
                         serp_data['has_our_site'],
                         serp_data['intent_type'],
+                        serp_data.get('our_organic_position'),  # НОВОЕ
+                        serp_data.get('our_actual_position'),   # НОВОЕ
                         kw['id']
                     ))
+                    
                     updated_count += 1
+                    
+                    # Логируем результаты
                     log_print(f"   ✅ Обновлено в БД")
+                    if serp_data.get('has_our_site'):
+                        log_print(f"   📍 Позиции: органическая={serp_data.get('our_organic_position')}, фактическая={serp_data.get('our_actual_position')}")
+                    
+                    # Обновляем статистику
+                    if serp_data['has_ads']:
+                        results_summary['with_ads'] += 1
+                    if serp_data['has_google_maps']:
+                        results_summary['with_maps'] += 1
+                    if serp_data['has_our_site']:
+                        results_summary['with_our_site'] += 1
+                    if serp_data['has_school_sites']:
+                        results_summary['with_school_sites'] += 1
+                    if serp_data['intent_type'] == 'Коммерческий':
+                        results_summary['commercial_intent'] += 1
+                    
+                    # Считаем стоимость
+                    if serp_response.get('tasks'):
+                        task_cost = serp_response['tasks'][0].get('cost', 0)
+                        total_cost += task_cost
+                        log_print(f"   💰 Стоимость: ${task_cost:.4f}")
+                else:
+                    error_msg = f"Нет данных для '{kw['keyword']}'"
+                    errors.append(error_msg)
+                    log_print(f"   ⚠️ {error_msg}")
                 
-                # Считаем стоимость
-                if serp_response.get('tasks'):
-                    task_cost = serp_response['tasks'][0].get('cost', 0)
-                    total_cost += task_cost
-                    log_print(f"   💰 Стоимость: ${task_cost:.4f}")
-                
-                # ✅ КРИТИЧНО: Обновляем прогресс ПОСЛЕ обработки
+                # Обновляем прогресс ПОСЛЕ обработки
                 update_progress(task_id, idx + 1, len(keywords_data), kw['keyword'], 'processing')
                 
             except Exception as e:
                 error_msg = f"Ошибка для '{kw['keyword']}': {str(e)}"
                 log_print(f"   ❌ {error_msg}")
                 errors.append(error_msg)
+                import traceback
+                traceback.print_exc()
                 
-                # ✅ КРИТИЧНО: Всё равно обновляем прогресс при ошибке
+                # Всё равно обновляем прогресс при ошибке
                 update_progress(task_id, idx + 1, len(keywords_data), kw['keyword'], 'processing')
         
+        # Сохраняем изменения
         connection.commit()
         
+        # Формируем итоговое сообщение
         message = f'SERP анализ завершен! Обработано: {updated_count} из {len(keywords_data)} слов'
         
         log_print(f"\n📊 Результаты:")
         log_print(f"   Обработано: {updated_count}/{len(keywords_data)}")
+        log_print(f"   Ошибок: {len(errors)}")
         log_print(f"   Стоимость: ${total_cost:.4f}")
+        log_print(f"   С рекламой: {results_summary['with_ads']}")
+        log_print(f"   С картами: {results_summary['with_maps']}")
+        log_print(f"   С нашим сайтом: {results_summary['with_our_site']}")
+        log_print(f"   С сайтами школ: {results_summary['with_school_sites']}")
+        log_print(f"   Коммерческий интент: {results_summary['commercial_intent']}")
         
         return {
             'success': True,
@@ -579,7 +632,8 @@ def process_serp_sync(task_id: str, keyword_ids: list, params: dict) -> dict:
             'updated': updated_count,
             'total': len(keywords_data),
             'errors': errors[:10] if errors else [],
-            'cost': round(total_cost, 4)
+            'cost': round(total_cost, 4),
+            'summary': results_summary
         }
         
     except Exception as e:
@@ -606,8 +660,11 @@ def process_serp_sync(task_id: str, keyword_ids: list, params: dict) -> dict:
                 pass
             
 def process_serp_async(task_id: str, keyword_ids: list, params: dict):
-    """Асинхронная обработка SERP для больших объемов"""
+    """Асинхронная обработка SERP для больших объемов (2+ слов)"""
     try:
+        log_print(f"🔄 Async SERP processing started for task {task_id}")
+        
+        # Вызываем синхронную функцию в отдельном потоке
         result = process_serp_sync(task_id, keyword_ids, params)
         
         # Обновляем финальный статус
@@ -617,11 +674,17 @@ def process_serp_async(task_id: str, keyword_ids: list, params: dict):
             'message': result.get('message', 'Completed')
         })
         
+        log_print(f"✅ Async SERP processing completed for task {task_id}")
+        
     except Exception as e:
-        log_print(f"❌ Async SERP error: {str(e)}")
+        log_print(f"❌ Async SERP error for task {task_id}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
         SERP_PROGRESS[task_id].update({
             'status': 'error',
-            'error': str(e)
+            'error': str(e),
+            'message': f'Error: {str(e)}'
         })
         
 
@@ -926,25 +989,70 @@ def _process_serp_live(keywords_data, serp_params, connection, dataforseo_client
             
 @dataforseo_bp.route('/serp-logs', methods=['GET'])
 def get_serp_logs():
-    """Получение последних SERP анализов"""
+    """
+    Получение SERP логов с расширенной фильтрацией
+    
+    Parameters:
+    - limit: количество записей (по умолчанию 50)
+    - keyword_id: фильтр по конкретному keyword_id
+    - keyword_ids: список keyword_id через запятую (для фильтрации нескольких слов)
+    - latest_only: если true, возвращает только последний лог для каждого keyword_id
+    """
     connection = None
     try:
+        # Получаем параметры
         limit = request.args.get('limit', 50, type=int)
         keyword_id = request.args.get('keyword_id', None, type=int)
+        keyword_ids_str = request.args.get('keyword_ids', None, type=str)
+        latest_only = request.args.get('latest_only', 'false', type=str).lower() == 'true'
         
-        log_print(f"📊 get_serp_logs called: limit={limit}, keyword_id={keyword_id}")
+        log_print(f"📊 get_serp_logs called: limit={limit}, keyword_id={keyword_id}, keyword_ids={keyword_ids_str}, latest_only={latest_only}")
         
         connection = get_db_connection()
         cursor = connection.cursor()
         
-        if keyword_id:
+        # Формируем SQL запрос
+        if latest_only and keyword_ids_str:
+            # Получаем только последние логи для указанных слов
+            keyword_ids_list = [int(kid.strip()) for kid in keyword_ids_str.split(',') if kid.strip()]
+            
+            # Подзапрос для получения MAX(id) для каждого keyword_id
+            placeholders = ','.join(['%s'] * len(keyword_ids_list))
+            query = f"""
+                SELECT sl.* FROM serp_logs sl
+                INNER JOIN (
+                    SELECT keyword_id, MAX(id) as max_id
+                    FROM serp_logs
+                    WHERE keyword_id IN ({placeholders})
+                    GROUP BY keyword_id
+                ) latest ON sl.id = latest.max_id
+                ORDER BY sl.created_at DESC
+            """
+            cursor.execute(query, tuple(keyword_ids_list))
+            
+        elif keyword_ids_str:
+            # Все логи для указанных слов
+            keyword_ids_list = [int(kid.strip()) for kid in keyword_ids_str.split(',') if kid.strip()]
+            placeholders = ','.join(['%s'] * len(keyword_ids_list))
+            query = f"""
+                SELECT * FROM serp_logs 
+                WHERE keyword_id IN ({placeholders})
+                ORDER BY created_at DESC 
+                LIMIT %s
+            """
+            cursor.execute(query, tuple(keyword_ids_list + [limit]))
+            
+        elif keyword_id:
+            # Все логи для одного слова
             cursor.execute("""
                 SELECT * FROM serp_logs 
                 WHERE keyword_id = %s 
                 ORDER BY created_at DESC 
                 LIMIT %s
             """, (keyword_id, limit))
+            
         else:
+            # Все последние логи
             cursor.execute("""
                 SELECT * FROM serp_logs 
                 ORDER BY created_at DESC 
@@ -963,12 +1071,30 @@ def get_serp_logs():
                 organic_results = []
                 paid_results = []
                 
+                # Сначала пробуем получить из analysis_result (новый формат)
                 if log.get('analysis_result'):
                     try:
                         analysis_result = json.loads(log['analysis_result'])
                     except:
                         log_print(f"⚠️ Не удалось распарсить analysis_result для log_id={log['id']}")
                 
+                # Если analysis_result пустой, пытаемся восстановить из старых полей
+                if not analysis_result:
+                    analysis_result = {
+                        'has_ads': log.get('has_ads', False),
+                        'has_google_maps': log.get('has_maps', False),
+                        'has_our_site': log.get('has_our_site', False),
+                        'our_organic_position': None,  # В старых записях может не быть
+                        'our_actual_position': None,
+                        'has_school_sites': log.get('has_school_sites', False),
+                        'school_percentage': log.get('school_percentage', 0),
+                        'intent_type': log.get('intent_type', 'Информационный'),
+                        'total_organic': log.get('organic_count', 0),
+                        'paid_count': log.get('paid_count', 0),
+                        'maps_count': log.get('maps_count', 0)
+                    }
+                
+                # Парсим parsed_items
                 if log.get('parsed_items'):
                     try:
                         parsed_items = json.loads(log['parsed_items'])
@@ -1016,7 +1142,12 @@ def get_serp_logs():
         return jsonify({
             'success': True,
             'count': len(formatted_logs),
-            'logs': formatted_logs
+            'logs': formatted_logs,
+            'filters_applied': {
+                'keyword_id': keyword_id,
+                'keyword_ids': keyword_ids_str,
+                'latest_only': latest_only
+            }
         })
         
     except Exception as e:
@@ -1380,6 +1511,7 @@ def get_languages():
 def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keyword_id: int = None, keyword_text: str = None) -> Dict:
     """
     Парсинг SERP ответа с детальным логированием и сохранением в БД
+    ИСПРАВЛЕНО: Добавлено вычисление our_organic_position и our_actual_position
     """
     try:
         if not serp_response.get('tasks'):
@@ -1419,6 +1551,10 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
         has_our_site = False
         has_school_sites = False
         
+        # НОВОЕ: Переменные для позиций
+        our_organic_position = None
+        our_actual_position = None
+        
         # Детальные счетчики и данные для сохранения
         organic_results = []
         paid_results = []
@@ -1429,6 +1565,8 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
         total_organic_sites = 0
         school_sites_count = 0
         school_domains_found = []
+        organic_position_counter = 0  # Счетчик для органических позиций
+        actual_position_counter = 0   # Счетчик для фактических позиций
         
         # Получаем домен нашего сайта
         our_domain = get_campaign_domain(campaign_id, connection)
@@ -1448,9 +1586,13 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
             item_type = item.get('type', '')
             position = item.get('rank_absolute', idx + 1)
             
+            # Увеличиваем счетчик фактической позиции для ВСЕХ элементов
+            actual_position_counter += 1
+            
             # Сохраняем ВСЕ элементы для полной картины
             item_parsed = {
                 'position': position,
+                'actual_position': actual_position_counter,  # НОВОЕ
                 'type': item_type,
                 'domain': item.get('domain', ''),
                 'url': item.get('url', ''),
@@ -1460,24 +1602,30 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
             # Добавляем в общий список ВСЕГДА
             all_items_parsed.append(item_parsed)
             
-            # Далее идет специфичная обработка по типам...
             # РЕКЛАМНЫЕ БЛОКИ
             if item_type in ['paid', 'google_ads', 'shopping', 'commercial_units']:
                 has_ads = True
-                paid_results.append(item_parsed)
-                log_print(f"   #{position} [РЕКЛАМА] {item.get('domain', 'unknown')}")
+                paid_results.append({
+                    'position': actual_position_counter,  # ИСПРАВЛЕНО: используем actual_position
+                    'domain': item.get('domain', ''),
+                    'title': (item.get('title', '') or '')[:100],
+                    'url': item.get('url', '')
+                })
+                log_print(f"   #{actual_position_counter} [РЕКЛАМА] {item.get('domain', 'unknown')}")
                 log_print(f"        URL: {(item.get('url', '') or '')[:80]}")
             
             # GOOGLE MAPS
             elif item_type in ['local_pack', 'maps', 'map', 'google_maps']:
                 has_google_maps = True
                 maps_results.append(item_parsed)
-                log_print(f"   #{position} [КАРТЫ] Google Maps блок")
+                log_print(f"   #{actual_position_counter} [КАРТЫ] Google Maps блок")
                 if item.get('items'):
                     log_print(f"        Мест в блоке: {len(item.get('items', []))}")
             
             # ОРГАНИЧЕСКИЕ РЕЗУЛЬТАТЫ
             elif item_type == 'organic':
+                # Увеличиваем счетчик органических позиций
+                organic_position_counter += 1
                 total_organic_sites += 1
                 
                 url = (item.get('url', '') or '').lower()
@@ -1485,26 +1633,45 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
                 title = item.get('title') or ''
                 description = item.get('description') or ''
                 
-                # Очищаем домен
+                # Очищаем домен от www.
                 clean_domain = domain.replace('www.', '') if domain else ''
                 
+                # Добавляем органическую позицию в item_parsed
+                item_parsed['organic_position'] = organic_position_counter
+                
                 organic_results.append({
-                    'position': position,
+                    'position': actual_position_counter,  # Фактическая позиция
+                    'organic_position': organic_position_counter,  # Органическая позиция
                     'domain': clean_domain,
                     'title': title[:100] if title else '',
                     'url': url,
                     'description': description[:200] if description else ''
                 })
                 
-                log_print(f"   #{position} [ОРГАНИКА] {clean_domain}")
+                log_print(f"   #{actual_position_counter} [ОРГАНИКА #{organic_position_counter}] {clean_domain}")
                 log_print(f"        Title: {title[:60] if title else 'No title'}")
                 log_print(f"        URL: {url[:80]}")
                 
-                # Проверяем наш сайт
+                # ИСПРАВЛЕНО: Проверяем наш сайт с улучшенной логикой
                 if our_domain:
-                    if our_domain in url or our_domain == clean_domain:
+                    # Очищаем наш домен от www.
+                    clean_our_domain = our_domain.replace('www.', '').strip()
+                    
+                    # Проверяем все варианты сравнения
+                    is_our_site = (
+                        clean_our_domain in url or 
+                        clean_our_domain == clean_domain or
+                        clean_domain in clean_our_domain or
+                        (clean_our_domain in domain)
+                    )
+                    
+                    if is_our_site:
                         has_our_site = True
-                        log_print(f"        ✅ ЭТО НАШ САЙТ!")
+                        # Сохраняем позиции при первом нахождении
+                        if our_organic_position is None:
+                            our_organic_position = organic_position_counter
+                            our_actual_position = actual_position_counter
+                        log_print(f"        ✅ ЭТО НАШ САЙТ! Органическая поз: {organic_position_counter}, Фактическая поз: {actual_position_counter}")
                 
                 # Проверка сайтов школ
                 if clean_domain in school_domains:
@@ -1512,98 +1679,59 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
                     school_domains_found.append(clean_domain)
                     has_school_sites = True
                     log_print(f"        🏫 ЭТО САЙТ ШКОЛЫ-КОНКУРЕНТА!")
-            
-            # ДРУГИЕ ТИПЫ - тоже логируем подробнее
-            else:
-                log_print(f"   #{position} [{item_type.upper()}]")
-                
-                # Специфичная информация по типам
-                if item_type == 'people_also_ask':
-                    questions = item.get('items', [])
-                    log_print(f"        Вопросов: {len(questions)}")
-                    if questions:
-                        for q in questions[:3]:  # Первые 3 вопроса
-                            log_print(f"        - {q.get('title', '')[:60]}")
-                            
-                elif item_type == 'video':
-                    videos = item.get('items', [])
-                    log_print(f"        Видео блок ({len(videos)} видео)")
-                    if videos:
-                        for v in videos[:2]:  # Первые 2 видео
-                            log_print(f"        - {v.get('title', '')[:50]}")
-                            
-                elif item_type == 'ai_overview':
-                    log_print(f"        AI Overview блок")
-                    text = item.get('text', '')
-                    if text:
-                        log_print(f"        Текст: {text[:100]}...")
-                        
-                elif item_type == 'images':
-                    log_print(f"        Блок изображений")
-                    
-                elif item_type == 'related_searches':
-                    searches = item.get('items', [])
-                    log_print(f"        Похожие запросы: {len(searches)}")
-                    if searches:
-                        for s in searches[:3]:  # Первые 3 запроса
-                            log_print(f"        - {s.get('title', '')}")
-                            
-                elif item_type == 'people_also_search':
-                    log_print(f"        Люди также ищут")
-                    
-                elif item_type == 'knowledge_graph':
-                    log_print(f"        Knowledge Graph")
-                    kg_title = item.get('title', '')
-                    if kg_title:
-                        log_print(f"        Title: {kg_title}")
-                        
-                elif item_type == 'featured_snippet':
-                    log_print(f"        Featured Snippet")
-                    domain = item.get('domain', '')
-                    if domain:
-                        log_print(f"        Источник: {domain}")
         
-        log_print("-" * 50)
-        
-        # Определение интента
+        # Определяем интент
         intent_type = 'Информационный'
-        school_percentage = 0
+        if has_ads:
+            intent_type = 'Коммерческий'
         
-        if has_school_sites and total_organic_sites > 0:
-            school_percentage = (school_sites_count / total_organic_sites) * 100
-            log_print(f"\n📊 Анализ интента:")
-            log_print(f"   Органических сайтов: {total_organic_sites}")
-            log_print(f"   Сайтов школ: {school_sites_count}")
-            log_print(f"   Процент школ: {school_percentage:.1f}%")
-            
-            if school_percentage >= 60:
-                intent_type = 'Коммерческий'
-                log_print(f"   → Интент: КОММЕРЧЕСКИЙ (школ >= 60%)")
-            else:
-                log_print(f"   → Интент: ИНФОРМАЦИОННЫЙ (школ < 60%)")
+        # Считаем процент школ
+        school_percentage = (school_sites_count / total_organic_sites * 100) if total_organic_sites > 0 else 0
         
-        # СОХРАНЯЕМ В БД для отладки
-        if keyword_id and connection:
+        log_print("\n" + "=" * 50)
+        log_print(f"📊 ИТОГИ SERP АНАЛИЗА:")
+        log_print(f"   Органика: {total_organic_sites}")
+        log_print(f"   Реклама: {len(paid_results)}")
+        log_print(f"   Карты: {len(maps_results)}")
+        log_print(f"   Наш сайт: {'ДА' if has_our_site else 'НЕТ'}")
+        if has_our_site:
+            log_print(f"   📍 Наша органическая позиция: {our_organic_position}")
+            log_print(f"   📍 Наша фактическая позиция: {our_actual_position}")
+        log_print(f"   Сайты школ: {'ДА' if has_school_sites else 'НЕТ'} ({school_percentage:.1f}%)")
+        log_print(f"   Интент: {intent_type}")
+        log_print("=" * 50)
+        
+        # Сохраняем в БД (serp_logs)
+        if connection and keyword_id:
             try:
                 cursor = connection.cursor()
                 
-                # Подготавливаем JSON данные
-                import json
-                raw_response_json = json.dumps({
-                    'status_code': task.get('status_code'),
-                    'items_count': items_count,
-                    'se_results_count': se_results_count,
-                    'item_types': item_types
-                }, ensure_ascii=False)
-                
+                # Формируем JSON структуры
                 parsed_items_json = json.dumps({
                     'organic': organic_results,
                     'paid': paid_results,
                     'maps': maps_results,
-                    'all_items': all_items_parsed
+                    'all': all_items_parsed
                 }, ensure_ascii=False)
                 
-                # Получаем параметры запроса из data
+                # НОВОЕ: Добавляем позиции в analysis_result
+                analysis_result_json = json.dumps({
+                    'has_ads': has_ads,
+                    'has_google_maps': has_google_maps,
+                    'has_our_site': has_our_site,
+                    'our_organic_position': our_organic_position,
+                    'our_actual_position': our_actual_position,
+                    'has_school_sites': has_school_sites,
+                    'school_percentage': round(school_percentage, 1),
+                    'intent_type': intent_type,
+                    'total_organic': total_organic_sites,
+                    'paid_count': len(paid_results),
+                    'maps_count': len(maps_results)
+                }, ensure_ascii=False)
+                
+                raw_response_json = json.dumps(serp_response, ensure_ascii=False)
+                
+                # Получаем параметры запроса
                 request_data = task.get('data', {})
                 if isinstance(request_data, list) and len(request_data) > 0:
                     request_params = request_data[0]
@@ -1617,10 +1745,11 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
                         device, depth, total_items, organic_count, paid_count,
                         maps_count, shopping_count, has_ads, has_maps,
                         has_our_site, has_school_sites, intent_type,
-                        school_percentage, cost, raw_response, parsed_items
+                        school_percentage, cost, raw_response, parsed_items,
+                        analysis_result
                     ) VALUES (
                         %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s, %s
+                        %s, %s, %s, %s, %s, %s, %s, %s
                     )
                 """
                 
@@ -1644,7 +1773,8 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
                     school_percentage,
                     task.get('cost', 0),
                     raw_response_json,
-                    parsed_items_json
+                    parsed_items_json,
+                    analysis_result_json  # НОВОЕ
                 )
                 
                 cursor.execute(insert_query, insert_values)
@@ -1659,22 +1789,14 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
                 import traceback
                 traceback.print_exc()
         
-        # Итоговая сводка
-        log_print("\n" + "=" * 50)
-        log_print(f"📊 ИТОГИ SERP АНАЛИЗА:")
-        log_print(f"   Органика: {total_organic_sites}")
-        log_print(f"   Реклама: {len(paid_results)}")
-        log_print(f"   Карты: {len(maps_results)}")
-        log_print(f"   Наш сайт: {'ДА' if has_our_site else 'НЕТ'}")
-        log_print(f"   Сайты школ: {'ДА' if has_school_sites else 'НЕТ'}")
-        log_print(f"   Интент: {intent_type}")
-        log_print("=" * 50)
-        
+        # ИСПРАВЛЕНО: Возвращаем структуру с позициями
         return {
             'has_ads': has_ads,
             'has_school_sites': has_school_sites,
             'has_google_maps': has_google_maps,
             'has_our_site': has_our_site,
+            'our_organic_position': our_organic_position,
+            'our_actual_position': our_actual_position,
             'intent_type': intent_type,
             'stats': {
                 'total_organic': total_organic_sites,

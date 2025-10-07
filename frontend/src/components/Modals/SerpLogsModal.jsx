@@ -1,7 +1,7 @@
-// frontend/src/components/Modals/SerpLogsModal.jsx
+// frontend/src/components/Modals/SerpLogsModal.jsx - УЛУЧШЕННАЯ ВЕРСИЯ
 import React, { useState, useEffect } from 'react';
-import { Modal, Button, Table, Badge, Alert, Tabs, Tab, Card } from 'react-bootstrap';
-import { FaSearch, FaCheckCircle, FaTimesCircle, FaMapMarkerAlt, FaDollarSign, FaTimes } from 'react-icons/fa';
+import { Modal, Button, Table, Badge, Alert, Tabs, Tab, Card, ButtonGroup } from 'react-bootstrap';
+import { FaSearch, FaCheckCircle, FaTimesCircle, FaMapMarkerAlt, FaDollarSign, FaTimes, FaClock, FaHistory } from 'react-icons/fa';
 import api from '../../services/api';
 
 const SerpLogsModal = ({ show, onHide, selectedKeywordIds = [] }) => {
@@ -12,31 +12,30 @@ const SerpLogsModal = ({ show, onHide, selectedKeywordIds = [] }) => {
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('list');
   const [isFiltered, setIsFiltered] = useState(false);
+  const [historyMode, setHistoryMode] = useState('latest'); // 'latest' или 'all'
 
   useEffect(() => {
     if (show) {
-      loadLogs();
-      
       // Автоматически применяем фильтр если есть выбранные слова
       if (selectedKeywordIds && selectedKeywordIds.length > 0) {
         setIsFiltered(true);
+        setHistoryMode('latest'); // По умолчанию показываем последние
+        loadLogsForSelected('latest');
+      } else {
+        loadAllLogs();
       }
     }
   }, [show]);
 
-  // Применяем фильтр когда загружаются логи или меняется выбор
-  useEffect(() => {
-    applyFilter();
-  }, [logs, isFiltered, selectedKeywordIds]);
-
-  const loadLogs = async () => {
+  const loadAllLogs = async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await api.getSerpLogs();
+      const response = await api.getSerpLogs({ limit: 50 });
       
       if (response.success) {
         setLogs(response.logs || []);
+        setFilteredLogs(response.logs || []);
       } else {
         setError(response.error || 'Ошибка загрузки логов');
       }
@@ -48,20 +47,52 @@ const SerpLogsModal = ({ show, onHide, selectedKeywordIds = [] }) => {
     }
   };
 
-  const applyFilter = () => {
+  const loadLogsForSelected = async (mode = 'latest') => {
+    if (!selectedKeywordIds || selectedKeywordIds.length === 0) {
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await api.getSerpLogs({
+        keywordIds: selectedKeywordIds,
+        latestOnly: mode === 'latest',
+        limit: mode === 'all' ? 200 : 50
+      });
+      
+      if (response.success) {
+        setLogs(response.logs || []);
+        setFilteredLogs(response.logs || []);
+        console.log(`📊 Loaded ${response.logs.length} logs for selected keywords (mode: ${mode})`);
+      } else {
+        setError(response.error || 'Ошибка загрузки логов');
+      }
+    } catch (err) {
+      console.error('Error loading SERP logs:', err);
+      setError('Ошибка загрузки данных');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleHistoryModeChange = (mode) => {
+    setHistoryMode(mode);
     if (isFiltered && selectedKeywordIds && selectedKeywordIds.length > 0) {
-      // Фильтруем логи по выбранным keyword_id
-      const filtered = logs.filter(log => selectedKeywordIds.includes(log.keyword_id));
-      setFilteredLogs(filtered);
-      console.log(`🔍 Filtered logs: ${filtered.length} из ${logs.length}`);
-    } else {
-      // Показываем все логи
-      setFilteredLogs(logs);
+      loadLogsForSelected(mode);
     }
   };
 
   const clearFilter = () => {
     setIsFiltered(false);
+    setHistoryMode('latest');
+    loadAllLogs();
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleString('ru-RU');
   };
 
   const renderLogsTable = () => {
@@ -71,89 +102,123 @@ const SerpLogsModal = ({ show, onHide, selectedKeywordIds = [] }) => {
       return (
         <Alert variant="info">
           {isFiltered ? 
-            'Нет SERP анализов для выбранных ключевых слов' : 
-            'Нет данных SERP анализа'
-          }
+            'Нет анализов для выбранных слов' : 
+            'Нет данных SERP анализа'}
         </Alert>
       );
     }
 
     return (
-      <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-        <Table striped hover size="sm">
-          <thead className="sticky-top bg-white">
-            <tr>
-              <th width="50">#</th>
-              <th>Ключевое слово</th>
-              <th>Дата</th>
-              <th width="80">Реклама</th>
-              <th width="80">Карты</th>
-              <th width="100">Наш сайт</th>
-              <th width="120">Позиции</th>
-              <th width="120">Интент</th>
-              <th width="80">Стоимость</th>
-            </tr>
-          </thead>
-          <tbody>
-            {displayLogs.map((log, idx) => (
-              <tr 
-                key={log.id} 
-                onClick={() => {
-                  setSelectedLog(log);
-                  setActiveTab('details');
-                }}
-                style={{ cursor: 'pointer' }}
-              >
-                <td>{idx + 1}</td>
-                <td>
-                  <strong>{log.keyword_text}</strong>
-                  {isFiltered && selectedKeywordIds.includes(log.keyword_id) && (
-                    <Badge bg="primary" className="ms-1">Выбрано</Badge>
-                  )}
-                </td>
-                <td>{new Date(log.created_at).toLocaleString('ru-RU')}</td>
-                <td className="text-center">
-                  {log.analysis_result?.has_ads ? 
-                    <FaCheckCircle className="text-danger" /> : 
-                    <FaTimesCircle className="text-muted" />
-                  }
-                </td>
-                <td className="text-center">
-                  {log.analysis_result?.has_google_maps ? 
-                    <FaMapMarkerAlt className="text-primary" /> : 
-                    <FaTimesCircle className="text-muted" />
-                  }
-                </td>
-                <td className="text-center">
-                  {log.analysis_result?.has_our_site ? 
-                    <Badge bg="success">Есть</Badge> : 
-                    <Badge bg="secondary">Нет</Badge>
-                  }
-                </td>
-                <td>
-                  {log.analysis_result?.has_our_site ? (
+      <Table striped hover size="sm">
+        <thead>
+          <tr>
+            <th width="50">#</th>
+            <th width="250">Ключевое слово</th>
+            <th width="150">Дата</th>
+            <th width="80" className="text-center">Реклама</th>
+            <th width="80" className="text-center">Карты</th>
+            <th width="100" className="text-center">Наш сайт</th>
+            <th width="100" className="text-center">Школы</th>
+            <th width="100">Интент</th>
+            <th width="100" className="text-center">Позиции</th>
+            <th width="80" className="text-right">Стоимость</th>
+          </tr>
+        </thead>
+        <tbody>
+          {displayLogs.map((log, idx) => (
+            <tr 
+              key={log.id}
+              onClick={() => {
+                setSelectedLog(log);
+                setActiveTab('details');
+              }}
+              style={{ cursor: 'pointer' }}
+            >
+              <td>{idx + 1}</td>
+              <td>
+                <strong>{log.keyword_text}</strong>
+                <br />
+                <small className="text-muted">ID: {log.keyword_id}</small>
+              </td>
+              <td><small>{formatDate(log.created_at)}</small></td>
+              
+              {/* Реклама */}
+              <td className="text-center">
+                {log.analysis_result.has_ads ? (
+                  <Badge bg="danger">Да ({log.analysis_result.paid_count})</Badge>
+                ) : (
+                  <Badge bg="secondary">Нет</Badge>
+                )}
+              </td>
+              
+              {/* Карты */}
+              <td className="text-center">
+                {log.analysis_result.has_google_maps ? (
+                  <Badge bg="info">
+                    <FaMapMarkerAlt /> Да
+                  </Badge>
+                ) : (
+                  <Badge bg="secondary">Нет</Badge>
+                )}
+              </td>
+              
+              {/* Наш сайт */}
+              <td className="text-center">
+                {log.analysis_result.has_our_site ? (
+                  <Badge bg="success">
+                    <FaCheckCircle /> Да
+                  </Badge>
+                ) : (
+                  <Badge bg="danger">
+                    <FaTimesCircle /> Нет
+                  </Badge>
+                )}
+              </td>
+              
+              {/* Школы */}
+              <td className="text-center">
+                {log.analysis_result.has_school_sites ? (
+                  <Badge bg="warning">
+                    Да ({log.analysis_result.school_percentage.toFixed(0)}%)
+                  </Badge>
+                ) : (
+                  <Badge bg="secondary">Нет</Badge>
+                )}
+              </td>
+              
+              {/* Интент */}
+              <td>
+                <Badge bg={log.analysis_result.intent_type === 'Коммерческий' ? 'success' : 'info'}>
+                  {log.analysis_result.intent_type}
+                </Badge>
+              </td>
+              
+              {/* ИСПРАВЛЕНО: Позиции */}
+              <td className="text-center">
+                {log.analysis_result.has_our_site ? (
+                  <div>
                     <small>
                       Орг: <strong>{log.analysis_result.our_organic_position || 'N/A'}</strong>
                       <br />
                       Факт: <strong>{log.analysis_result.our_actual_position || 'N/A'}</strong>
                     </small>
-                  ) : (
-                    <small className="text-muted">-</small>
-                  )}
-                </td>
-                <td>
-                  <Badge bg={log.analysis_result?.intent_type === 'Коммерческий' ? 'success' : 'info'}>
-                    {log.analysis_result?.intent_type || 'N/A'}
-                  </Badge>
-                </td>
-                <td className="text-end">
-                  <small>${log.cost?.toFixed(4)}</small>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
-      </div>
+                  </div>
+                ) : (
+                  <small className="text-muted">—</small>
+                )}
+              </td>
+              
+              {/* Стоимость */}
+              <td className="text-right">
+                <small>
+                  <FaDollarSign />
+                  {log.cost.toFixed(4)}
+                </small>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
     );
   };
 
@@ -166,58 +231,77 @@ const SerpLogsModal = ({ show, onHide, selectedKeywordIds = [] }) => {
       );
     }
 
-    return (
-      <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
-        <Card className="mb-3">
-          <Card.Body>
-            <h5>📊 Результаты анализа</h5>
-            <div className="mb-3">
-              <strong>Ключевое слово:</strong> {selectedLog.keyword_text}
-              <br />
-              <strong>Дата анализа:</strong> {new Date(selectedLog.created_at).toLocaleString('ru-RU')}
-            </div>
+    const isCommercial = selectedLog.analysis_result.intent_type === 'Коммерческий';
 
-            <div className="mb-3">
-              <h6>🎯 Основные показатели:</h6>
-              <ul>
-                <li>
-                  {selectedLog.analysis_result.has_ads ? 
-                    <FaCheckCircle className="text-danger" /> : 
-                    <FaTimesCircle className="text-muted" />
-                  } Реклама ({selectedLog.analysis_result.paid_count || 0})
-                </li>
-                <li>
-                  {selectedLog.analysis_result.has_google_maps ? 
-                    <FaMapMarkerAlt className="text-primary" /> : 
-                    <FaTimesCircle className="text-muted" />
-                  } Google Maps
-                </li>
-                <li>
-                  {selectedLog.analysis_result.has_our_site ? 
-                    <FaCheckCircle className="text-success" /> : 
-                    <FaTimesCircle className="text-danger" />
-                  } Наш сайт
-                  {selectedLog.analysis_result.has_our_site && (
-                    <span className="ms-2">
-                      <Badge bg="info">Орг: {selectedLog.analysis_result.our_organic_position}</Badge>
-                      {' '}
-                      <Badge bg="primary">Факт: {selectedLog.analysis_result.our_actual_position}</Badge>
-                    </span>
-                  )}
-                </li>
-                <li>
-                  {selectedLog.analysis_result.has_school_sites ? 
-                    <FaCheckCircle className="text-warning" /> : 
-                    <FaTimesCircle className="text-muted" />
-                  } Сайты школ ({selectedLog.analysis_result.school_percentage?.toFixed(1)}%)
-                </li>
-                <li>
-                  <strong>Интент:</strong> 
-                  <Badge bg={selectedLog.analysis_result.intent_type === 'Коммерческий' ? 'success' : 'info'} className="ms-2">
-                    {selectedLog.analysis_result.intent_type}
-                  </Badge>
-                </li>
-              </ul>
+    return (
+      <div>
+        <Card className="mb-3">
+          <Card.Header className="bg-primary text-white">
+            <h5 className="mb-0">
+              <FaSearch className="me-2" />
+              {selectedLog.keyword_text}
+            </h5>
+          </Card.Header>
+          <Card.Body>
+            <div className="row">
+              <div className="col-md-6">
+                <h6>Основная информация:</h6>
+                <ul className="list-unstyled">
+                  <li>
+                    <strong>Дата анализа:</strong> {formatDate(selectedLog.created_at)}
+                  </li>
+                  <li>
+                    <strong>Интент:</strong>{' '}
+                    <Badge bg={isCommercial ? 'success' : 'info'} className="ms-2">
+                      {selectedLog.analysis_result.intent_type}
+                    </Badge>
+                  </li>
+                  <li>
+                    <strong>Стоимость:</strong> ${selectedLog.cost.toFixed(4)}
+                  </li>
+                </ul>
+              </div>
+              <div className="col-md-6">
+                <h6>Флаги:</h6>
+                <ul className="list-unstyled">
+                  <li>
+                    <strong>Реклама:</strong>{' '}
+                    <Badge bg={selectedLog.analysis_result.has_ads ? 'danger' : 'secondary'}>
+                      {selectedLog.analysis_result.has_ads ? `Да (${selectedLog.analysis_result.paid_count})` : 'Нет'}
+                    </Badge>
+                  </li>
+                  <li>
+                    <strong>Google Maps:</strong>{' '}
+                    <Badge bg={selectedLog.analysis_result.has_google_maps ? 'info' : 'secondary'}>
+                      {selectedLog.analysis_result.has_google_maps ? 'Да' : 'Нет'}
+                    </Badge>
+                  </li>
+                  <li>
+                    <strong>Наш сайт:</strong>{' '}
+                    <Badge bg={selectedLog.analysis_result.has_our_site ? 'success' : 'danger'}>
+                      {selectedLog.analysis_result.has_our_site ? 'Да' : 'Нет'}
+                    </Badge>
+                    {selectedLog.analysis_result.has_our_site && (
+                      <div className="mt-2">
+                        <small>
+                          Органическая позиция: <strong>{selectedLog.analysis_result.our_organic_position || 'N/A'}</strong>
+                          <br />
+                          Фактическая позиция: <strong>{selectedLog.analysis_result.our_actual_position || 'N/A'}</strong>
+                        </small>
+                      </div>
+                    )}
+                  </li>
+                  <li>
+                    <strong>Сайты школ:</strong>{' '}
+                    <Badge bg={selectedLog.analysis_result.has_school_sites ? 'warning' : 'secondary'}>
+                      {selectedLog.analysis_result.has_school_sites ? 
+                        `Да (${selectedLog.analysis_result.school_percentage.toFixed(0)}%)` : 
+                        'Нет'
+                      }
+                    </Badge>
+                  </li>
+                </ul>
+              </div>
             </div>
 
             <hr />
@@ -233,25 +317,33 @@ const SerpLogsModal = ({ show, onHide, selectedKeywordIds = [] }) => {
                 </tr>
               </thead>
               <tbody>
-                {selectedLog.organic_results && selectedLog.organic_results.map((item, idx) => (
-                  <tr key={idx}>
-                    <td className="text-center">
-                      <Badge bg="secondary">{item.organic_position}</Badge>
-                    </td>
-                    <td className="text-center">
-                      <Badge bg="primary">{item.actual_position}</Badge>
-                    </td>
-                    <td>
-                      <strong>{item.domain}</strong>
-                      {item.domain === selectedLog.our_domain && 
-                        <Badge bg="success" className="ms-2">Наш сайт</Badge>
-                      }
-                    </td>
-                    <td>
-                      <small>{item.title}</small>
+                {selectedLog.organic_results && selectedLog.organic_results.length > 0 ? (
+                  selectedLog.organic_results.map((item, idx) => (
+                    <tr key={idx}>
+                      <td className="text-center">
+                        <Badge bg="secondary">{item.organic_position || (idx + 1)}</Badge>
+                      </td>
+                      <td className="text-center">
+                        <Badge bg="primary">{item.position || item.actual_position || 'N/A'}</Badge>
+                      </td>
+                      <td>
+                        <strong>{item.domain}</strong>
+                        {item.domain === selectedLog.our_domain && 
+                          <Badge bg="success" className="ms-2">Наш сайт</Badge>
+                        }
+                      </td>
+                      <td>
+                        <small>{item.title}</small>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="4" className="text-center text-muted">
+                      Нет органических результатов
                     </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </Table>
 
@@ -281,12 +373,6 @@ const SerpLogsModal = ({ show, onHide, selectedKeywordIds = [] }) => {
                 </Table>
               </>
             )}
-
-            <div className="mt-3 text-end">
-              <small className="text-muted">
-                💵 Стоимость анализа: ${selectedLog.cost?.toFixed(4)}
-              </small>
-            </div>
           </Card.Body>
         </Card>
       </div>
@@ -322,9 +408,27 @@ const SerpLogsModal = ({ show, onHide, selectedKeywordIds = [] }) => {
           <>
             {isFiltered && selectedKeywordIds.length > 0 && (
               <Alert variant="info" className="d-flex justify-content-between align-items-center">
-                <span>
-                  <strong>Фильтр активен:</strong> Показаны только анализы для {selectedKeywordIds.length} выбранных слов
-                </span>
+                <div>
+                  <strong>Фильтр активен:</strong> Показаны анализы для {selectedKeywordIds.length} выбранных слов
+                  <div className="mt-2">
+                    <ButtonGroup size="sm">
+                      <Button 
+                        variant={historyMode === 'latest' ? 'primary' : 'outline-primary'}
+                        onClick={() => handleHistoryModeChange('latest')}
+                      >
+                        <FaClock className="me-1" />
+                        Только последние
+                      </Button>
+                      <Button 
+                        variant={historyMode === 'all' ? 'primary' : 'outline-primary'}
+                        onClick={() => handleHistoryModeChange('all')}
+                      >
+                        <FaHistory className="me-1" />
+                        Вся история
+                      </Button>
+                    </ButtonGroup>
+                  </div>
+                </div>
                 <Button 
                   variant="outline-secondary" 
                   size="sm" 
@@ -348,7 +452,17 @@ const SerpLogsModal = ({ show, onHide, selectedKeywordIds = [] }) => {
         )}
       </Modal.Body>
       <Modal.Footer>
-        <Button variant="primary" onClick={loadLogs} disabled={loading}>
+        <Button 
+          variant="primary" 
+          onClick={() => {
+            if (isFiltered && selectedKeywordIds.length > 0) {
+              loadLogsForSelected(historyMode);
+            } else {
+              loadAllLogs();
+            }
+          }} 
+          disabled={loading}
+        >
           🔄 Обновить
         </Button>
         <Button variant="secondary" onClick={onHide}>
