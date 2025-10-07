@@ -61,7 +61,28 @@ const KeywordsTable = ({
     'ad_impression_share': { data: 'ad_impression_share', title: 'Ad impression share', type: 'numeric', numericFormat: { pattern: '0.00' }, width: 150, readOnly: true },
     'organic_average_position': { data: 'organic_average_position', title: 'Organic average position', type: 'numeric', numericFormat: { pattern: '0.00' }, width: 180, readOnly: true },
     'organic_impression_share': { data: 'organic_impression_share', title: 'Organic impression share', type: 'numeric', numericFormat: { pattern: '0.00' }, width: 180, readOnly: true },
-    'labels': { data: 'labels', title: 'Labels', type: 'text', width: 150, readOnly: false }
+    'labels': { data: 'labels', title: 'Labels', type: 'text', width: 150, readOnly: false },
+    'our_organic_position': { 
+      data: 'our_organic_position', 
+      title: 'Наша орг. позиция', 
+      type: 'numeric', 
+      width: 130, 
+      readOnly: true 
+    },
+    'our_actual_position': { 
+      data: 'our_actual_position', 
+      title: 'Наша факт. позиция', 
+      type: 'numeric', 
+      width: 140, 
+      readOnly: true 
+    },
+    'last_serp_check': { 
+      data: 'last_serp_check', 
+      title: 'Последняя проверка SERP', 
+      type: 'text', 
+      width: 170, 
+      readOnly: true 
+    },
   };
 
   // ✅ НОВЫЙ ПОДХОД: Перехватываем клики по чекбоксам напрямую через DOM
@@ -264,7 +285,10 @@ const KeywordsTable = ({
       organic_impression_share: keyword.organic_impression_share,
       labels: keyword.labels,
       is_new: keyword.is_new || false,
-      batch_color: keyword.batch_color
+      batch_color: keyword.batch_color,
+      our_organic_position: keyword.our_organic_position,
+      our_actual_position: keyword.our_actual_position,
+      last_serp_check: keyword.last_serp_check ? new Date(keyword.last_serp_check).toLocaleString('ru-RU') : null
     }));
     setTableData(data);
   }, [keywords, selectedIds]);

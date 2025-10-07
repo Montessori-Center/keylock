@@ -806,11 +806,12 @@ function App() {
       )}
       
       {showSerpLogs && (
-        <SerpLogsModal
-          show={showSerpLogs}
-          onHide={() => setShowSerpLogs(false)}
-        />
-      )}
+          <SerpLogsModal
+            show={showSerpLogs}
+            onHide={() => setShowSerpLogs(false)}
+            selectedKeywordIds={selectedKeywordIds}
+          />
+        )}
       
       {showAddNewOutput && (
         <AddNewOutputModal
