@@ -1507,11 +1507,11 @@ def get_languages():
         return jsonify({'success': False, 'error': f'DataForSeo API не настроен: {str(e)}'}), 400
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
-        
+
 def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keyword_id: int = None, keyword_text: str = None) -> Dict:
     """
     Парсинг SERP ответа с детальным логированием и сохранением в БД
-    ИСПРАВЛЕНО: Добавлено вычисление our_organic_position и our_actual_position
+    КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Правильное использование rank_absolute и rank_group
     """
     try:
         if not serp_response.get('tasks'):
@@ -1551,9 +1551,9 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
         has_our_site = False
         has_school_sites = False
         
-        # НОВОЕ: Переменные для позиций
-        our_organic_position = None
-        our_actual_position = None
+        # КРИТИЧНО: Переменные для позиций
+        our_organic_position = None  # Позиция среди органики (1, 2, 3...)
+        our_actual_position = None   # rank_absolute от API (реальная позиция на странице)
         
         # Детальные счетчики и данные для сохранения
         organic_results = []
@@ -1565,8 +1565,7 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
         total_organic_sites = 0
         school_sites_count = 0
         school_domains_found = []
-        organic_position_counter = 0  # Счетчик для органических позиций
-        actual_position_counter = 0   # Счетчик для фактических позиций
+        organic_position_counter = 0  # Счетчик только для органики
         
         # Получаем домен нашего сайта
         our_domain = get_campaign_domain(campaign_id, connection)
@@ -1579,52 +1578,50 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
             log_print(f"   Домены школ: {', '.join(list(school_domains)[:5])}")
         
         # ДЕТАЛЬНЫЙ АНАЛИЗ каждого элемента
-        log_print("\n🔍 ДЕТАЛЬНЫЙ АНАЛИЗ ВЫДАЧИ:")
+        log_print("\\n🔍 ДЕТАЛЬНЫЙ АНАЛИЗ ВЫДАЧИ:")
         log_print("-" * 50)
         
         for idx, item in enumerate(items):
             item_type = item.get('type', '')
-            position = item.get('rank_absolute', idx + 1)
             
-            # Увеличиваем счетчик фактической позиции для ВСЕХ элементов
-            actual_position_counter += 1
+            # КРИТИЧНО: rank_absolute - это ФАКТИЧЕСКАЯ позиция от API
+            rank_absolute = item.get('rank_absolute', idx + 1)
+            rank_group = item.get('rank_group', idx + 1)
             
             # Сохраняем ВСЕ элементы для полной картины
             item_parsed = {
-                'position': position,
-                'actual_position': actual_position_counter,  # НОВОЕ
+                'rank_absolute': rank_absolute,  # Фактическая позиция от API
+                'rank_group': rank_group,
                 'type': item_type,
                 'domain': item.get('domain', ''),
                 'url': item.get('url', ''),
                 'title': (item.get('title', '') or '')[:100]
             }
             
-            # Добавляем в общий список ВСЕГДА
             all_items_parsed.append(item_parsed)
             
             # РЕКЛАМНЫЕ БЛОКИ
             if item_type in ['paid', 'google_ads', 'shopping', 'commercial_units']:
                 has_ads = True
                 paid_results.append({
-                    'position': actual_position_counter,  # ИСПРАВЛЕНО: используем actual_position
+                    'actual_position': rank_absolute,
                     'domain': item.get('domain', ''),
                     'title': (item.get('title', '') or '')[:100],
                     'url': item.get('url', '')
                 })
-                log_print(f"   #{actual_position_counter} [РЕКЛАМА] {item.get('domain', 'unknown')}")
-                log_print(f"        URL: {(item.get('url', '') or '')[:80]}")
+                log_print(f"   [РЕКЛАМА] rank_absolute={rank_absolute}, domain={item.get('domain', 'unknown')}")
             
             # GOOGLE MAPS
             elif item_type in ['local_pack', 'maps', 'map', 'google_maps']:
                 has_google_maps = True
                 maps_results.append(item_parsed)
-                log_print(f"   #{actual_position_counter} [КАРТЫ] Google Maps блок")
+                log_print(f"   [КАРТЫ] rank_absolute={rank_absolute}, Google Maps блок")
                 if item.get('items'):
                     log_print(f"        Мест в блоке: {len(item.get('items', []))}")
             
             # ОРГАНИЧЕСКИЕ РЕЗУЛЬТАТЫ
             elif item_type == 'organic':
-                # Увеличиваем счетчик органических позиций
+                # Увеличиваем счетчик ТОЛЬКО для органики
                 organic_position_counter += 1
                 total_organic_sites += 1
                 
@@ -1634,47 +1631,61 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
                 description = item.get('description') or ''
                 
                 # Очищаем домен от www.
-                clean_domain = domain.replace('www.', '') if domain else ''
+                clean_domain = domain.replace('www.', '').strip() if domain else ''
                 
-                # Добавляем органическую позицию в item_parsed
-                item_parsed['organic_position'] = organic_position_counter
-                
-                # ИСПРАВЛЕНО: rank_absolute от API - это фактическая позиция!
-                rank_absolute = item.get('rank_absolute', actual_position_counter)
-                
+                # КРИТИЧНО: Правильно сохраняем обе позиции
                 organic_results.append({
-                    'actual_position': rank_absolute,  # ИСПРАВЛЕНО: Фактическая позиция от API
-                    'organic_position': organic_position_counter,  # Органическая позиция (наш счетчик)
+                    'actual_position': rank_absolute,  # ФАКТИЧЕСКАЯ от API
+                    'organic_position': organic_position_counter,  # ОРГАНИЧЕСКАЯ (наш счетчик)
                     'domain': clean_domain,
                     'title': title[:100] if title else '',
                     'url': url,
                     'description': description[:200] if description else ''
                 })
                 
-                log_print(f"   #{actual_position_counter} [ОРГАНИКА #{organic_position_counter}] {clean_domain}")
+                log_print(f"   [ОРГАНИКА #{organic_position_counter}] rank_absolute={rank_absolute}, domain={clean_domain}")
                 log_print(f"        Title: {title[:60] if title else 'No title'}")
                 log_print(f"        URL: {url[:80]}")
                 
-                # ИСПРАВЛЕНО: Проверяем наш сайт с улучшенной логикой
+                # КРИТИЧНО: Улучшенная проверка нашего сайта
                 if our_domain:
-                    # Очищаем наш домен от www.
-                    clean_our_domain = our_domain.replace('www.', '').strip()
+                    clean_our_domain = our_domain.replace('www.', '').strip().lower()
                     
-                    # Проверяем все варианты сравнения
-                    is_our_site = (
-                        clean_our_domain in url or 
-                        clean_our_domain == clean_domain or
-                        clean_domain in clean_our_domain or
-                        (clean_our_domain in domain)
-                    )
+                    # Множественные проверки для точного определения
+                    is_our_site = False
+                    
+                    # Проверка 1: Точное совпадение домена
+                    if clean_our_domain == clean_domain:
+                        is_our_site = True
+                        log_print(f"        ✅ MATCH 1: Точное совпадение домена")
+                    
+                    # Проверка 2: Домен содержится в URL
+                    elif clean_our_domain in url:
+                        is_our_site = True
+                        log_print(f"        ✅ MATCH 2: Домен найден в URL")
+                    
+                    # Проверка 3: Домен является частью другого (subdomain)
+                    elif clean_domain.endswith('.' + clean_our_domain) or clean_our_domain.endswith('.' + clean_domain):
+                        is_our_site = True
+                        log_print(f"        ✅ MATCH 3: Subdomain match")
+                    
+                    # Проверка 4: Содержание одного в другом
+                    elif (clean_our_domain in clean_domain) or (clean_domain in clean_our_domain):
+                        # Дополнительная проверка: должны быть похожи по длине
+                        if abs(len(clean_our_domain) - len(clean_domain)) <= 4:
+                            is_our_site = True
+                            log_print(f"        ✅ MATCH 4: Partial match с проверкой длины")
                     
                     if is_our_site:
                         has_our_site = True
-                        # Сохраняем позиции при первом нахождении
+                        # КРИТИЧНО: Сохраняем позиции при первом нахождении
                         if our_organic_position is None:
-                            our_organic_position = organic_position_counter
-                            our_actual_position = actual_position_counter
-                        log_print(f"        ✅ ЭТО НАШ САЙТ! Органическая поз: {organic_position_counter}, Фактическая поз: {actual_position_counter}")
+                            our_organic_position = organic_position_counter  # Счетчик органики
+                            our_actual_position = rank_absolute  # КРИТИЧНО: rank_absolute от API!
+                            
+                        log_print(f"        🎯 ЭТО НАШ САЙТ!")
+                        log_print(f"        📍 Органическая позиция: {organic_position_counter}")
+                        log_print(f"        📍 Фактическая позиция (rank_absolute): {rank_absolute}")
                 
                 # Проверка сайтов школ
                 if clean_domain in school_domains:
@@ -1691,15 +1702,18 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
         # Считаем процент школ
         school_percentage = (school_sites_count / total_organic_sites * 100) if total_organic_sites > 0 else 0
         
-        log_print("\n" + "=" * 50)
+        log_print("\\n" + "=" * 50)
         log_print(f"📊 ИТОГИ SERP АНАЛИЗА:")
         log_print(f"   Органика: {total_organic_sites}")
         log_print(f"   Реклама: {len(paid_results)}")
         log_print(f"   Карты: {len(maps_results)}")
         log_print(f"   Наш сайт: {'ДА' if has_our_site else 'НЕТ'}")
         if has_our_site:
-            log_print(f"   📍 Наша органическая позиция: {our_organic_position}")
-            log_print(f"   📍 Наша фактическая позиция: {our_actual_position}")
+            log_print(f"   📍 Наша органическая позиция (счетчик): {our_organic_position}")
+            log_print(f"   📍 Наша фактическая позиция (rank_absolute): {our_actual_position}")
+        else:
+            log_print(f"   ⚠️ Домен '{our_domain}' не найден в органической выдаче")
+            log_print(f"   🔍 Найденные домены: {[r['domain'] for r in organic_results[:5]]}")
         log_print(f"   Сайты школ: {'ДА' if has_school_sites else 'НЕТ'} ({school_percentage:.1f}%)")
         log_print(f"   Интент: {intent_type}")
         log_print("=" * 50)
@@ -1717,13 +1731,13 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
                     'all': all_items_parsed
                 }, ensure_ascii=False)
                 
-                # НОВОЕ: Добавляем позиции в analysis_result
+                # КРИТИЧНО: Правильные позиции в analysis_result
                 analysis_result_json = json.dumps({
                     'has_ads': has_ads,
                     'has_google_maps': has_google_maps,
                     'has_our_site': has_our_site,
-                    'our_organic_position': our_organic_position,
-                    'our_actual_position': our_actual_position,
+                    'our_organic_position': our_organic_position,  # Счетчик органики
+                    'our_actual_position': our_actual_position,    # rank_absolute от API
                     'has_school_sites': has_school_sites,
                     'school_percentage': round(school_percentage, 1),
                     'intent_type': intent_type,
@@ -1777,7 +1791,7 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
                     task.get('cost', 0),
                     raw_response_json,
                     parsed_items_json,
-                    analysis_result_json  # НОВОЕ
+                    analysis_result_json
                 )
                 
                 cursor.execute(insert_query, insert_values)
@@ -1792,14 +1806,14 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
                 import traceback
                 traceback.print_exc()
         
-        # ИСПРАВЛЕНО: Возвращаем структуру с позициями
+        # КРИТИЧНО: Возвращаем правильные позиции
         return {
             'has_ads': has_ads,
             'has_school_sites': has_school_sites,
             'has_google_maps': has_google_maps,
             'has_our_site': has_our_site,
-            'our_organic_position': our_organic_position,
-            'our_actual_position': our_actual_position,
+            'our_organic_position': our_organic_position,  # Счетчик органики
+            'our_actual_position': our_actual_position,    # rank_absolute от API
             'intent_type': intent_type,
             'stats': {
                 'total_organic': total_organic_sites,

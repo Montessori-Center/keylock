@@ -332,10 +332,10 @@ const SerpLogsModal = ({ show, onHide, selectedKeywordIds = [] }) => {
                         } : {}}
                       >
                         <td className="text-center">
-                          <Badge bg="secondary">{item.organic_position || (idx + 1)}</Badge>
+                          <Badge bg="secondary">{item.organic_position}</Badge>
                         </td>
                         <td className="text-center">
-                          <Badge bg="primary">{item.actual_position || 'N/A'}</Badge>
+                          <Badge bg="primary">{item.actual_position}</Badge>
                         </td>
                         <td>
                           <strong>{item.domain}</strong>
