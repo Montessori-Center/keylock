@@ -308,7 +308,7 @@ class DataForSeoClient:
     
     def get_task_result(self, task_id: str) -> Dict:
         """Получение результата конкретной задачи"""
-        endpoint = f"/serp/google/organic/task_get/regular/{task_id}"
+        endpoint = f"/serp/google/organic/task_get/advanced/{task_id}"
         return self._make_request("GET", endpoint)
             
     def get_serp(
@@ -324,7 +324,7 @@ class DataForSeoClient:
         browser_screen_height: int = 1080,
         se_domain: str = "google.com.ua"
     ) -> Dict:
-        endpoint = "/serp/google/organic/live/regular"
+        endpoint = "/serp/google/organic/live/advanced"
         
         data = [{
             "keyword": keyword,

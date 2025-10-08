@@ -119,7 +119,7 @@ const ApplySerpModal = ({ show, onHide, onApply, selectedKeywords }) => {
 
   const calculateCost = () => {
     // Базовая стоимость за 1 ключевое слово
-    const baseCost = 0.003; // $0.003 за SERP regular
+    const baseCost = 0.006; // $0.006 за SERP advanced
     const keywordsCount = params.keyword_ids.length;
     const depthMultiplier = params.depth <= 20 ? 1 : params.depth <= 50 ? 1.5 : 2;
     return (baseCost * keywordsCount * depthMultiplier).toFixed(4);
@@ -286,7 +286,7 @@ const ApplySerpModal = ({ show, onHide, onApply, selectedKeywords }) => {
             • Примерная стоимость: <strong>${calculateCost()}</strong>
             <br />
             <small className="text-muted">
-              Тариф: $0.003 за SERP regular (до 100 результатов)
+              Тариф: $0.005 за SERP advanced (до 100 результатов)
             </small>
           </Alert>
 
