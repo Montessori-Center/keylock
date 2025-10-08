@@ -260,16 +260,32 @@ const SerpLogsModal = ({ show, onHide, selectedKeywordIds = null }) => {
               <h6>📊 Статистика:</h6>
               <div className="d-flex flex-wrap gap-2">
                 <div>
-                  <strong>Всего элементов:</strong> {selectedLog.analysis_result.total_organic + selectedLog.analysis_result.paid_count + selectedLog.analysis_result.maps_count}
+                  <strong>Всего элементов:</strong> {(() => {
+                    // Считаем из raw_response если есть
+                    if (selectedLog.raw_response) {
+                      try {
+                        const raw = typeof selectedLog.raw_response === 'string' 
+                          ? JSON.parse(selectedLog.raw_response) 
+                          : selectedLog.raw_response;
+                        return raw.tasks?.[0]?.result?.[0]?.items?.length || 0;
+                      } catch (e) {
+                        console.error('Error parsing raw_response:', e);
+                      }
+                    }
+                    // Фолбэк: считаем из массивов
+                    return (selectedLog.organic_results?.length || 0) + 
+                           (selectedLog.paid_results?.length || 0) + 
+                           (selectedLog.analysis_result?.maps_count || 0);
+                  })()}
                 </div>
                 <div>
-                  <strong>Органика:</strong> {selectedLog.analysis_result.total_organic}
+                  <strong>Органика:</strong> {selectedLog.organic_results?.length || 0}
                 </div>
                 <div>
-                  <strong>Реклама:</strong> {selectedLog.analysis_result.paid_count}
+                  <strong>Реклама:</strong> {selectedLog.paid_results?.length || 0}
                 </div>
                 <div>
-                  <strong>Карты:</strong> {selectedLog.analysis_result.maps_count}
+                  <strong>Карты:</strong> {selectedLog.analysis_result?.maps_count || 0}
                 </div>
               </div>
             </div>

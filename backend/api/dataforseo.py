@@ -1410,16 +1410,7 @@ def get_locations():
         locations = dataforseo_client.get_locations(country)
         
         popular = [
-            {'code': 2804, 'name': 'Ukraine', 'name_ru': 'Украина'},
-            {'code': 2840, 'name': 'United States', 'name_ru': 'США'},
-            {'code': 2643, 'name': 'Russia', 'name_ru': 'Россия'},
-            {'code': 2276, 'name': 'Germany', 'name_ru': 'Германия'},
-            {'code': 2826, 'name': 'United Kingdom', 'name_ru': 'Великобритания'},
-            {'code': 2250, 'name': 'France', 'name_ru': 'Франция'},
-            {'code': 2616, 'name': 'Poland', 'name_ru': 'Польша'},
-            {'code': 2724, 'name': 'Spain', 'name_ru': 'Испания'},
-            {'code': 2380, 'name': 'Italy', 'name_ru': 'Италия'},
-            {'code': 2124, 'name': 'Canada', 'name_ru': 'Канада'},
+            {'code': 1012852, 'name': 'Kyiv, Kyiv city, Ukraine', 'name_ru': 'Киев, Украина', 'se_domain': 'google.com.ua'},
         ]
         
         return jsonify({
@@ -1553,21 +1544,153 @@ def get_languages():
         languages = dataforseo_client.get_languages()
         
         main_languages = [
+            {'code': 'uk', 'name': 'Українська'},
             {'code': 'ru', 'name': 'Русский'},
-            {'code': 'uk', 'name': 'Украинский'},
-            {'code': 'en', 'name': 'Английский'},
-            {'code': 'de', 'name': 'Немецкий'},
-            {'code': 'fr', 'name': 'Французский'},
-            {'code': 'es', 'name': 'Испанский'},
-            {'code': 'it', 'name': 'Итальянский'},
-            {'code': 'pl', 'name': 'Польский'},
+            {'code': 'en', 'name': 'English'},
+            {'code': 'de', 'name': 'Deutsch'},
+            {'code': 'fr', 'name': 'Français'},
+            {'code': 'es', 'name': 'Español'},
+            {'code': 'it', 'name': 'Italiano'},
+            {'code': 'pl', 'name': 'Polski'},
+        ]
+        
+        # Полный список всех языков
+        all_languages = [
+            {'code': 'af', 'name': 'Afrikaans'},
+            {'code': 'ak', 'name': 'Akan'},
+            {'code': 'sq', 'name': 'Albanian'},
+            {'code': 'am', 'name': 'Amharic'},
+            {'code': 'ar', 'name': 'Arabic'},
+            {'code': 'hy', 'name': 'Armenian'},
+            {'code': 'az', 'name': 'Azeri'},
+            {'code': 'ban', 'name': 'Balinese'},
+            {'code': 'eu', 'name': 'Basque'},
+            {'code': 'be', 'name': 'Belarusian'},
+            {'code': 'bn', 'name': 'Bengali'},
+            {'code': 'bs', 'name': 'Bosnian'},
+            {'code': 'bg', 'name': 'Bulgarian'},
+            {'code': 'my', 'name': 'Burmese'},
+            {'code': 'ca', 'name': 'Catalan'},
+            {'code': 'ceb', 'name': 'Cebuano'},
+            {'code': 'ny', 'name': 'Chichewa'},
+            {'code': 'zh-CN', 'name': 'Chinese (Simplified)'},
+            {'code': 'zh-TW', 'name': 'Chinese (Traditional)'},
+            {'code': 'hr', 'name': 'Croatian'},
+            {'code': 'cs', 'name': 'Czech'},
+            {'code': 'da', 'name': 'Danish'},
+            {'code': 'nl', 'name': 'Dutch'},
+            {'code': 'en', 'name': 'English'},
+            {'code': 'es-419', 'name': 'Español (Latinoamérica)'},
+            {'code': 'et', 'name': 'Estonian'},
+            {'code': 'ee', 'name': 'Ewe'},
+            {'code': 'fo', 'name': 'Faroese'},
+            {'code': 'fa', 'name': 'Farsi'},
+            {'code': 'fil', 'name': 'Filipino'},
+            {'code': 'fi', 'name': 'Finnish'},
+            {'code': 'fr', 'name': 'Français'},
+            {'code': 'fy', 'name': 'Frisian'},
+            {'code': 'gaa', 'name': 'Ga'},
+            {'code': 'gl', 'name': 'Galician'},
+            {'code': 'lg', 'name': 'Ganda'},
+            {'code': 'ka', 'name': 'Georgian'},
+            {'code': 'de', 'name': 'Deutsch'},
+            {'code': 'el', 'name': 'Greek'},
+            {'code': 'gu', 'name': 'Gujarati'},
+            {'code': 'ht', 'name': 'Haitian'},
+            {'code': 'ha', 'name': 'Hausa'},
+            {'code': 'he', 'name': 'Hebrew'},
+            {'code': 'iw', 'name': 'Hebrew (old)'},
+            {'code': 'hi', 'name': 'Hindi'},
+            {'code': 'hu', 'name': 'Hungarian'},
+            {'code': 'is', 'name': 'Icelandic'},
+            {'code': 'bem', 'name': 'IciBemba'},
+            {'code': 'ig', 'name': 'Igbo'},
+            {'code': 'id', 'name': 'Indonesian'},
+            {'code': 'ga', 'name': 'Irish'},
+            {'code': 'it', 'name': 'Italiano'},
+            {'code': 'ja', 'name': 'Japanese'},
+            {'code': 'kn', 'name': 'Kannada'},
+            {'code': 'kk', 'name': 'Kazakh'},
+            {'code': 'km', 'name': 'Khmer'},
+            {'code': 'rw', 'name': 'Kinyarwanda'},
+            {'code': 'rn', 'name': 'Kirundi'},
+            {'code': 'kg', 'name': 'Kongo'},
+            {'code': 'ko', 'name': 'Korean'},
+            {'code': 'mfe', 'name': 'Kreol morisien'},
+            {'code': 'crs', 'name': 'Kreol Seselwa'},
+            {'code': 'kri', 'name': 'Krio'},
+            {'code': 'ckb', 'name': 'Kurdish'},
+            {'code': 'ky', 'name': 'Kyrgyz'},
+            {'code': 'lo', 'name': 'Lao'},
+            {'code': 'lv', 'name': 'Latvian'},
+            {'code': 'ln', 'name': 'Lingala'},
+            {'code': 'lt', 'name': 'Lithuanian'},
+            {'code': 'ach', 'name': 'Luo'},
+            {'code': 'mk', 'name': 'Macedonian'},
+            {'code': 'mg', 'name': 'Malagasy'},
+            {'code': 'ms', 'name': 'Malay'},
+            {'code': 'ml', 'name': 'Malayam'},
+            {'code': 'mt', 'name': 'Maltese'},
+            {'code': 'mi', 'name': 'Maori'},
+            {'code': 'mr', 'name': 'Marathi'},
+            {'code': 'mn', 'name': 'Mongolian'},
+            {'code': 'sr-ME', 'name': 'Montenegro'},
+            {'code': 'ne', 'name': 'Nepali'},
+            {'code': 'nso', 'name': 'Northern Sotho'},
+            {'code': 'no', 'name': 'Norwegian'},
+            {'code': 'nyn', 'name': 'Nyankole'},
+            {'code': 'om', 'name': 'Oromo'},
+            {'code': 'ps', 'name': 'Pashto'},
+            {'code': 'pcm', 'name': 'Pidgin'},
+            {'code': 'pl', 'name': 'Polski'},
+            {'code': 'pt', 'name': 'Português'},
+            {'code': 'pt-BR', 'name': 'Português (Brasil)'},
+            {'code': 'pt-PT', 'name': 'Português (Portugal)'},
+            {'code': 'pa', 'name': 'Punjabi'},
+            {'code': 'qu', 'name': 'Quechua'},
+            {'code': 'ro', 'name': 'Romanian'},
+            {'code': 'rm', 'name': 'Romansh'},
+            {'code': 'ru', 'name': 'Русский'},
+            {'code': 'sr', 'name': 'Serbian'},
+            {'code': 'sr-Latn', 'name': 'Serbian (Latin)'},
+            {'code': 'st', 'name': 'Sesotho'},
+            {'code': 'sn', 'name': 'Shona'},
+            {'code': 'loz', 'name': 'Silozi'},
+            {'code': 'sd', 'name': 'Sindhi'},
+            {'code': 'si', 'name': 'Sinhalese'},
+            {'code': 'sk', 'name': 'Slovak'},
+            {'code': 'sl', 'name': 'Slovenian'},
+            {'code': 'so', 'name': 'Somali'},
+            {'code': 'es', 'name': 'Español'},
+            {'code': 'sw', 'name': 'Swahili'},
+            {'code': 'sv', 'name': 'Swedish'},
+            {'code': 'tg', 'name': 'Tajik'},
+            {'code': 'ta', 'name': 'Tamil'},
+            {'code': 'te', 'name': 'Telugu'},
+            {'code': 'th', 'name': 'Thai'},
+            {'code': 'ti', 'name': 'Tigrinya'},
+            {'code': 'to', 'name': 'Tonga (Tonga Islands)'},
+            {'code': 'lua', 'name': 'Tshiluba'},
+            {'code': 'tn', 'name': 'Tswana'},
+            {'code': 'tum', 'name': 'Tumbuka'},
+            {'code': 'tr', 'name': 'Turkish'},
+            {'code': 'tk', 'name': 'Turkmen'},
+            {'code': 'uk', 'name': 'Українська'},
+            {'code': 'ur', 'name': 'Urdu'},
+            {'code': 'uz', 'name': 'Uzbek'},
+            {'code': 'vi', 'name': 'Vietnamese'},
+            {'code': 'wo', 'name': 'Wolof'},
+            {'code': 'xh', 'name': 'Xhosa'},
+            {'code': 'yo', 'name': 'Yoruba'},
+            {'code': 'zu', 'name': 'Zulu'},
         ]
         
         return jsonify({
             'success': True,
             'main': main_languages,
-            'all': languages.get('tasks', [{}])[0].get('result', []) if languages else []
+            'all': all_languages
         })
+
     except ValueError as e:
         return jsonify({'success': False, 'error': f'DataForSeo API не настроен: {str(e)}'}), 400
     except Exception as e:
@@ -1654,12 +1777,6 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
             title = item.get('title') or ''
             
             log_print(f"#{idx+1:2d} | Type: {item_type:20s} | rank_abs: {rank_absolute:3d} | rank_group: {rank_group:3d}")
-            
-            # 🔍 DEBUG: Выводим ВСЕ типы элементов
-            log_print(f"\n🔍 DEBUG: Типы элементов в raw response:")
-            for item_type, count in type_counter.most_common():
-                log_print(f"   {item_type}: {count}")
-            log_print()
             
             # РЕКЛАМНЫЕ БЛОКИ
             # Согласно документации: paid, shopping, google_flights, google_hotels

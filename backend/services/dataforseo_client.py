@@ -314,7 +314,7 @@ class DataForSeoClient:
     def get_serp(
         self,
         keyword: str,
-        location_code: int = 2804,
+        location_code: int = 1012852,
         language_code: str = "ru",
         device: str = "desktop",
         os: str = "windows",

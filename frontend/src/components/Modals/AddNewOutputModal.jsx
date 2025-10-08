@@ -19,7 +19,7 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
   const [params, setParams] = useState({
     seed_keywords: [],
     location_name: 'Ukraine',
-    location_code: 2804,
+    location_code: 1012852,
     language_code: 'ru',
     limit: 700,
     search_partners: false,
@@ -61,26 +61,7 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
     try {
       // Популярные локации
       const popularLocations = [
-        { code: 2804, name: 'Ukraine', name_ru: 'Украина' },
-        { code: 2840, name: 'United States', name_ru: 'США' },
-        { code: 2643, name: 'Russia', name_ru: 'Россия' },
-        { code: 2276, name: 'Germany', name_ru: 'Германия' },
-        { code: 2826, name: 'United Kingdom', name_ru: 'Великобритания' },
-        { code: 2250, name: 'France', name_ru: 'Франция' },
-        { code: 2616, name: 'Poland', name_ru: 'Польша' },
-        { code: 2724, name: 'Spain', name_ru: 'Испания' },
-        { code: 2380, name: 'Italy', name_ru: 'Италия' },
-        { code: 2124, name: 'Canada', name_ru: 'Канада' },
-        { code: 2036, name: 'Australia', name_ru: 'Австралия' },
-        { code: 2528, name: 'Netherlands', name_ru: 'Нидерланды' },
-        { code: 2752, name: 'Sweden', name_ru: 'Швеция' },
-        { code: 2756, name: 'Switzerland', name_ru: 'Швейцария' },
-        { code: 2040, name: 'Austria', name_ru: 'Австрия' },
-        { code: 2112, name: 'Belarus', name_ru: 'Беларусь' },
-        { code: 2398, name: 'Kazakhstan', name_ru: 'Казахстан' },
-        { code: 2792, name: 'Turkey', name_ru: 'Турция' },
-        { code: 2376, name: 'Israel', name_ru: 'Израиль' },
-        { code: 2784, name: 'United Arab Emirates', name_ru: 'ОАЭ' }
+        { code: 1012852, name: 'Kyiv, Kyiv city, Ukraine', se_domain: 'google.com.ua' }
       ];
       setLocations(popularLocations);
     } catch (error) {
@@ -93,17 +74,21 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
   const loadLanguages = () => {
     // Список языков
     const languagesList = [
+      { code: 'uk', name: 'Українська' },
       { code: 'ru', name: 'Русский' },
-      { code: 'uk', name: 'Украинский' },
-      { code: 'en', name: 'Английский' },
-      { code: 'de', name: 'Немецкий' },
-      { code: 'fr', name: 'Французский' },
-      { code: 'es', name: 'Испанский' },
-      { code: 'it', name: 'Итальянский' },
-      { code: 'pl', name: 'Польский' },
-      { code: 'tr', name: 'Турецкий' },
-      { code: 'ar', name: 'Арабский' },
-      { code: 'he', name: 'Иврит' }
+      { code: 'en', name: 'English' },
+      { code: 'de', name: 'Deutsch' },
+      { code: 'fr', name: 'Français' },
+      { code: 'es', name: 'Español' },
+      { code: 'it', name: 'Italiano' },
+      { code: 'pl', name: 'Polski' },
+      { code: 'pt', name: 'Português' },
+      { code: 'zh-CN', name: 'Chinese (Simplified)' },
+      { code: 'ja', name: 'Japanese' },
+      { code: 'ar', name: 'Arabic' },
+      { code: 'hi', name: 'Hindi' },
+      { code: 'tr', name: 'Turkish' },
+      { code: 'ko', name: 'Korean' }
     ];
     setLanguages(languagesList);
   };

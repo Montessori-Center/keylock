@@ -5,8 +5,8 @@ import { Modal, Button, Form, Row, Col, Alert } from 'react-bootstrap';
 const ApplySerpModal = ({ show, onHide, onApply, selectedKeywords }) => {
   const [params, setParams] = useState({
     keyword_ids: [],
-    location_code: 2804,     // Ukraine
-    location_name: 'Ukraine',
+    location_code: 1012852,  // ← Kyiv
+    location_name: 'Kyiv, Kyiv city, Ukraine',  // ← ИЗМЕНЕНО
     language_code: 'ru',
     language_name: 'Russian',
     device: 'desktop',
@@ -20,29 +20,27 @@ const ApplySerpModal = ({ show, onHide, onApply, selectedKeywords }) => {
 
   // Список популярных локаций
   const locations = [
-    { code: 2804, name: 'Ukraine', se_domain: 'google.com.ua' },
-    { code: 2840, name: 'United States', se_domain: 'google.com' },
-    { code: 2643, name: 'Russia', se_domain: 'google.ru' },
-    { code: 2276, name: 'Germany', se_domain: 'google.de' },
-    { code: 2826, name: 'United Kingdom', se_domain: 'google.co.uk' },
-    { code: 2250, name: 'France', se_domain: 'google.fr' },
-    { code: 2616, name: 'Poland', se_domain: 'google.pl' },
-    { code: 2356, name: 'India', se_domain: 'google.co.in' },
-    { code: 2124, name: 'Canada', se_domain: 'google.ca' },
-    { code: 2036, name: 'Australia', se_domain: 'google.com.au' }
+    { code: 1012852, name: 'Kyiv, Kyiv city, Ukraine', se_domain: 'google.com.ua' },
   ];
 
   // Список языков
   const languages = [
-    { code: 'ru', name: 'Russian' },
-    { code: 'uk', name: 'Ukrainian' },
-    { code: 'en', name: 'English' },
-    { code: 'de', name: 'German' },
-    { code: 'fr', name: 'French' },
-    { code: 'es', name: 'Spanish' },
-    { code: 'pl', name: 'Polish' },
-    { code: 'it', name: 'Italian' }
-  ];
+      { code: 'uk', name: 'Українська' },
+      { code: 'ru', name: 'Русский' },
+      { code: 'en', name: 'English' },
+      { code: 'de', name: 'Deutsch' },
+      { code: 'fr', name: 'Français' },
+      { code: 'es', name: 'Español' },
+      { code: 'it', name: 'Italiano' },
+      { code: 'pl', name: 'Polski' },
+      { code: 'pt', name: 'Português' },
+      { code: 'zh-CN', name: 'Chinese (Simplified)' },
+      { code: 'ja', name: 'Japanese' },
+      { code: 'ar', name: 'Arabic' },
+      { code: 'hi', name: 'Hindi' },
+      { code: 'tr', name: 'Turkish' },
+      { code: 'ko', name: 'Korean' },
+    ];
 
   // Конфигурации устройств
   const deviceConfigs = {
