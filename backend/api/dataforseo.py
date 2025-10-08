@@ -1124,7 +1124,9 @@ def get_serp_logs():
                     },
                     'organic_results': organic_results,
                     'paid_results': paid_results,
-                    'our_domain': None  # Можно добавить если нужно
+                    'raw_response': log.get('raw_response'),
+                    'parsed_items': parsed_items,
+                    'our_domain': None
                 }
                 
                 formatted_logs.append(formatted_log)
@@ -1335,6 +1337,69 @@ def check_balance():
             'success': False,
             'error': str(e)
         }), 500
+        
+@dataforseo_bp.route('/debug-serp/<int:log_id>', methods=['GET'])
+def debug_serp_log(log_id):
+    """DEBUG: Полный дамп raw_response для диагностики"""
+    connection = None
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        cursor.execute("SELECT raw_response FROM serp_logs WHERE id = %s", (log_id,))
+        log = cursor.fetchone()
+        
+        if not log:
+            return jsonify({'success': False, 'error': 'Log not found'}), 404
+        
+        raw_response = log.get('raw_response')
+        
+        if not raw_response:
+            return jsonify({'success': False, 'error': 'No raw_response'}), 404
+        
+        # Парсим и анализируем
+        if isinstance(raw_response, str):
+            raw_response = json.loads(raw_response)
+        
+        items = raw_response['tasks'][0]['result'][0]['items']
+        
+        # Собираем статистику по типам
+        type_stats = {}
+        for item in items:
+            item_type = item.get('type', 'unknown')
+            if item_type not in type_stats:
+                type_stats[item_type] = {
+                    'count': 0,
+                    'examples': []
+                }
+            type_stats[item_type]['count'] += 1
+            
+            # Сохраняем первые 2 примера каждого типа
+            if len(type_stats[item_type]['examples']) < 2:
+                type_stats[item_type]['examples'].append({
+                    'rank_absolute': item.get('rank_absolute'),
+                    'domain': item.get('domain'),
+                    'title': item.get('title', '')[:80]
+                })
+        
+        cursor.close()
+        
+        return jsonify({
+            'success': True,
+            'log_id': log_id,
+            'total_items': len(items),
+            'type_statistics': type_stats,
+            'full_items': items[:5]  # Первые 5 элементов полностью
+        })
+        
+    except Exception as e:
+        log_print(f"❌ Debug error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if connection:
+            connection.close()
 
 @dataforseo_bp.route('/locations', methods=['GET'])
 def get_locations():
@@ -1590,9 +1655,15 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
             
             log_print(f"#{idx+1:2d} | Type: {item_type:20s} | rank_abs: {rank_absolute:3d} | rank_group: {rank_group:3d}")
             
+            # 🔍 DEBUG: Выводим ВСЕ типы элементов
+            log_print(f"\n🔍 DEBUG: Типы элементов в raw response:")
+            for item_type, count in type_counter.most_common():
+                log_print(f"   {item_type}: {count}")
+            log_print()
+            
             # РЕКЛАМНЫЕ БЛОКИ
             # Согласно документации: paid, shopping, google_flights, google_hotels
-            if item_type in ['paid', 'shopping', 'google_flights', 'google_hotels', 'ads']:
+            if item_type in ['paid', 'shopping', 'google_flights', 'google_hotels', 'ads', 'ad']:
                 has_ads = True
                 clean_domain = domain.replace('www.', '').strip()
                 
@@ -1600,9 +1671,10 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
                     'actual_position': rank_absolute,
                     'domain': clean_domain,
                     'title': title[:100] if title else '',
-                    'url': url
+                    'url': url,
+                    'ad_type': item_type  # Сохраняем тип для debug
                 })
-                log_print(f"     💰 [РЕКЛАМА] Domain: {clean_domain}")
+                log_print(f"     💰 [РЕКЛАМА type={item_type}] Domain: {clean_domain}")
                 log_print(f"     Title: {title[:60]}")
             
             # GOOGLE MAPS / LOCAL PACK

@@ -491,11 +491,11 @@ const getItemTitle = (item, type) => {
   
   switch (type) {
     case 'people_also_ask':
-      return 'Похожие вопросы';
+      return 'Люди также спрашивают';
     case 'featured_snippet':
       return 'Избранный сниппет';
     case 'local_pack':
-      return 'Локальные результаты';
+      return 'Локальные бизнесы'; // ← ИЗМЕНЕНО
     case 'map':
       return 'Google Maps';
     case 'shopping':
@@ -508,6 +508,8 @@ const getItemTitle = (item, type) => {
       return 'График знаний';
     case 'refinement_chips':
       return 'Уточнение поиска';
+    case 'related_searches':
+      return 'Похожие запросы'; // ← ДОБАВЛЕНО
     default:
       return `[${type}]`;
   }
@@ -518,15 +520,16 @@ const getTypeBadge = (type) => {
   const badges = {
     'paid': <Badge bg="danger">💰 Реклама</Badge>,
     'organic': <Badge bg="primary">🌐 Органика</Badge>,
-    'map': <Badge bg="info">🗺️ Карты</Badge>,
-    'local_pack': <Badge bg="info">📍 Местные</Badge>,
+    'map': <Badge bg="info">🗺️ Google Maps</Badge>,
+    'local_pack': <Badge bg="info">📍 Локальные бизнесы</Badge>, // ← ИЗМЕНЕНО
     'people_also_ask': <Badge bg="secondary">❓ Похожие вопросы</Badge>,
     'featured_snippet': <Badge bg="warning">⭐ Сниппет</Badge>,
     'shopping': <Badge bg="success">🛒 Покупки</Badge>,
     'images': <Badge bg="secondary">🖼️ Изображения</Badge>,
     'video': <Badge bg="danger">🎥 Видео</Badge>,
     'knowledge_graph': <Badge bg="dark">📚 График знаний</Badge>,
-    'refinement_chips': <Badge bg="light" text="dark">🔍 Уточнение</Badge>
+    'refinement_chips': <Badge bg="light" text="dark">🔍 Уточнение</Badge>,
+    'related_searches': <Badge bg="light" text="dark">🔗 Похожие запросы</Badge> // ← ДОБАВЛЕНО
   };
 
   return badges[type] || <Badge bg="secondary">{type}</Badge>;
