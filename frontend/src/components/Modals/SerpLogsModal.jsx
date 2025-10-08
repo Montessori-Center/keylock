@@ -295,55 +295,83 @@ const SerpLogsModal = ({ show, onHide, selectedKeywordIds = null }) => {
               </div>
               
               {/* НОВОЕ: Расширенные параметры (скрываемые) */}
-              <details>
-                <summary style={{ cursor: 'pointer', color: '#0d6efd', fontWeight: '500' }}>
-                  🔧 Параметры запроса
-                </summary>
-                <div className="mt-2 p-2" style={{ backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
-                  <Row>
-                    <Col md={6}>
-                      <small>
-                        <strong>Глубина поиска:</strong> {selectedLog.depth || 'N/A'} результатов
-                      </small>
-                    </Col>
-                    <Col md={6}>
-                      <small>
-                        <strong>Язык:</strong> {selectedLog.language_code || 'N/A'}
-                      </small>
-                    </Col>
-                  </Row>
-                  <Row className="mt-1">
-                    <Col md={12}>
-                      <small>
-                        <strong>Локация:</strong> {(() => {
-                          // Получаем название локации
-                          const locationCode = selectedLog.location_code;
-                          if (locationCode === 1012852) return 'Kyiv, Kyiv city, Ukraine';
-                          if (locationCode === 2804) return 'Ukraine';
-                          return `Location code: ${locationCode}`;
-                        })()}
-                      </small>
-                    </Col>
-                  </Row>
-                  <Row className="mt-1">
-                    <Col md={4}>
-                      <small>
-                        <strong>Устройство:</strong> {selectedLog.device || 'N/A'}
-                      </small>
-                    </Col>
-                    <Col md={4}>
-                      <small>
-                        <strong>ОС:</strong> {selectedLog.os || 'N/A'}
-                      </small>
-                    </Col>
-                    <Col md={4}>
-                      <small>
-                        <strong>Размер экрана:</strong> {selectedLog.browser_screen_width || 'N/A'}×{selectedLog.browser_screen_height || 'N/A'}
-                      </small>
-                    </Col>
-                  </Row>
-                </div>
-              </details>
+              <details className="mt-2">
+                  <summary style={{ 
+                    cursor: 'pointer', 
+                    color: '#0d6efd', 
+                    fontWeight: '500',
+                    userSelect: 'none'
+                  }}>
+                    🔧 Параметры запроса
+                  </summary>
+                  <div className="mt-2 p-3" style={{ 
+                    backgroundColor: '#f8f9fa', 
+                    borderRadius: '4px',
+                    border: '1px solid #dee2e6'
+                  }}>
+                    <Row className="mb-2">
+                      <Col md={6}>
+                        <div className="mb-1">
+                          <strong style={{ fontSize: '0.9rem' }}>Глубина поиска:</strong>
+                          <div style={{ fontSize: '0.85rem', color: '#666' }}>
+                            {selectedLog.depth || 'N/A'} результатов
+                          </div>
+                        </div>
+                      </Col>
+                      <Col md={6}>
+                        <div className="mb-1">
+                          <strong style={{ fontSize: '0.9rem' }}>Язык:</strong>
+                          <div style={{ fontSize: '0.85rem', color: '#666' }}>
+                            {selectedLog.language_code || 'N/A'}
+                          </div>
+                        </div>
+                      </Col>
+                    </Row>
+                    
+                    <Row className="mb-2">
+                      <Col md={6}>
+                        <div className="mb-1">
+                          <strong style={{ fontSize: '0.9rem' }}>Локация:</strong>
+                          <div style={{ fontSize: '0.85rem', color: '#666' }}>
+                            {(() => {
+                              const locationCode = selectedLog.location_code;
+                              if (locationCode === 1012852) return 'Kyiv, Kyiv city, Ukraine';
+                              if (locationCode === 2804) return 'Ukraine';
+                              return `Location code: ${locationCode}`;
+                            })()}
+                          </div>
+                        </div>
+                      </Col>
+                      <Col md={6}>
+                        <div className="mb-1">
+                          <strong style={{ fontSize: '0.9rem' }}>Размер экрана:</strong>
+                          <div style={{ fontSize: '0.85rem', color: '#666' }}>
+                            {selectedLog.browser_screen_width || 'N/A'}×{selectedLog.browser_screen_height || 'N/A'}
+                          </div>
+                        </div>
+                      </Col>
+                    </Row>
+                    
+                    <Row>
+                      <Col md={6}>
+                        <div className="mb-1">
+                          <strong style={{ fontSize: '0.9rem' }}>Устройство:</strong>
+                          <div style={{ fontSize: '0.85rem', color: '#666' }}>
+                            {selectedLog.device || 'N/A'}
+                          </div>
+                        </div>
+                      </Col>
+                      <Col md={6}>
+                        <div className="mb-1">
+                          <strong style={{ fontSize: '0.9rem' }}>ОС:</strong>
+                          <div style={{ fontSize: '0.85rem', color: '#666' }}>
+                            {selectedLog.os || 'N/A'}
+                          </div>
+                        </div>
+                      </Col>
+                    </Row>
+                  </div>
+                </details>
             </div>
 
             <div className="mb-3">
@@ -624,9 +652,9 @@ const getTypeBadge = (type) => {
       <Table size="sm" striped hover>
         <thead>
           <tr>
-            <th width="80">Орг. поз.</th>
-            <th width="80">Факт. поз.</th>
-            <th width="200">Домен</th>
+            <th width="90">Орг. поз.</th>
+            <th width="90">Факт. поз.</th>
+            <th width="300">Домен</th>
             <th>Заголовок</th>
           </tr>
         </thead>

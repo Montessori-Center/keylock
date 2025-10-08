@@ -539,7 +539,8 @@ def process_serp_sync(task_id: str, keyword_ids: list, params: dict) -> dict:
                     kw['campaign_id'], 
                     connection,
                     keyword_id=kw['id'],
-                    keyword_text=kw['keyword']
+                    keyword_text=kw['keyword'],
+                    serp_params=serp_params
                 )
                 
                 if serp_data:
@@ -1703,13 +1704,16 @@ def get_languages():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keyword_id: int = None, keyword_text: str = None) -> Dict:
+def parse_serp_response(
+    serp_response: Dict, 
+    campaign_id: int, 
+    connection, 
+    keyword_id: int = None, 
+    keyword_text: str = None,
+    serp_params: Dict = None
+) -> Dict:
     """
     Парсинг SERP ответа с детальным логированием
-    ИСПРАВЛЕНО: 
-    - Правильное определение типов элементов
-    - Логирование ВСЕХ типов для диагностики
-    - Поддержка всех типов из документации DataForSEO
     """
     try:
         if not serp_response.get('tasks'):
@@ -1749,7 +1753,6 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
         organic_results = []
         paid_results = []
         maps_results = []
-        all_items_parsed = []
         
         # Счетчики
         total_organic_sites = 0
@@ -1786,7 +1789,6 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
             log_print(f"#{idx+1:2d} | Type: {item_type:20s} | rank_abs: {rank_absolute:3d} | rank_group: {rank_group:3d}")
             
             # РЕКЛАМНЫЕ БЛОКИ
-            # Согласно документации: paid, shopping, google_flights, google_hotels
             if item_type in ['paid', 'shopping', 'google_flights', 'google_hotels', 'ads', 'ad']:
                 has_ads = True
                 clean_domain = domain.replace('www.', '').strip()
@@ -1796,13 +1798,12 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
                     'domain': clean_domain,
                     'title': title[:100] if title else '',
                     'url': url,
-                    'ad_type': item_type  # Сохраняем тип для debug
+                    'ad_type': item_type
                 })
                 log_print(f"     💰 [РЕКЛАМА type={item_type}] Domain: {clean_domain}")
                 log_print(f"     Title: {title[:60]}")
             
             # GOOGLE MAPS / LOCAL PACK
-            # Согласно документации: local_pack
             elif item_type in ['local_pack', 'map', 'maps', 'google_maps']:
                 has_google_maps = True
                 maps_results.append({
@@ -1812,12 +1813,8 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
                 })
                 log_print(f"     🗺️ [КАРТЫ] Type: {item_type}")
                 
-                # Local pack может содержать несколько мест
                 if item.get('items'):
                     log_print(f"     📍 Мест в блоке: {len(item.get('items', []))}")
-                    for place_idx, place in enumerate(item.get('items', [])[:3], 1):
-                        place_title = place.get('title', 'No title')
-                        log_print(f"        {place_idx}. {place_title}")
             
             # ОРГАНИЧЕСКИЕ РЕЗУЛЬТАТЫ
             elif item_type == 'organic':
@@ -1827,7 +1824,6 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
                 clean_domain = domain.replace('www.', '').strip()
                 description = item.get('description') or ''
                 
-                # КРИТИЧНО: Создаём объект с гарантированными полями
                 organic_item = {
                     'organic_position': organic_position_counter,
                     'actual_position': rank_absolute,
@@ -1847,7 +1843,6 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
                     clean_our_domain = our_domain.replace('www.', '').strip().lower()
                     is_our_site = False
                     
-                    # Множественные проверки
                     if clean_our_domain == clean_domain:
                         is_our_site = True
                         log_print(f"        ✅ ТОЧНОЕ СОВПАДЕНИЕ ДОМЕНА")
@@ -1873,13 +1868,13 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
                     has_school_sites = True
                     log_print(f"        🏫 САЙТ ШКОЛЫ-КОНКУРЕНТА")
             
-            # ВСЕ ОСТАЛЬНЫЕ ТИПЫ (для информации)
+            # ВСЕ ОСТАЛЬНЫЕ ТИПЫ
             else:
                 log_print(f"     ℹ️ [{item_type.upper()}]")
                 if title:
                     log_print(f"     Title: {title[:60]}")
             
-            log_print()  # Пустая строка для разделения
+            log_print()
         
         # Определяем интент
         intent_type = 'Коммерческий' if has_ads else 'Информационный'
@@ -1908,7 +1903,7 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
         parsed_items_json = json.dumps({
             'organic': organic_results,
             'paid': paid_results,
-            'maps': maps_results  # ← ВОТ ОНО ЕСТЬ!
+            'maps': maps_results
         }, ensure_ascii=False)
         
         analysis_result_json = json.dumps({
@@ -1930,52 +1925,65 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
             try:
                 cursor = connection.cursor()
                 
-                request_data = task.get('data', {})
-                if isinstance(request_data, list) and len(request_data) > 0:
-                    request_params = request_data[0]
+                # Используем переданные параметры
+                if serp_params is None:
+                    request_data = task.get('data', {})
+                    if isinstance(request_data, list) and len(request_data) > 0:
+                        request_params = request_data[0]
+                    else:
+                        request_params = {}
                 else:
-                    request_params = {}
+                    request_params = serp_params
+                
+                # 🔍 DEBUG
+                log_print(f"\n🔍 DEBUG request_params:")
+                log_print(f"   location_code: {request_params.get('location_code')}")
+                log_print(f"   language_code: {request_params.get('language_code')}")
+                log_print(f"   device: {request_params.get('device')}")
+                log_print(f"   os: {request_params.get('os')}")
+                log_print(f"   depth: {request_params.get('depth')}")
+                log_print()
                 
                 insert_query = """
                     INSERT INTO serp_logs (
-                    keyword_id, keyword_text, location_code, language_code,
-                    device, os, depth, total_items, organic_count, paid_count,
-                    maps_count, shopping_count, has_ads, has_maps,
-                    has_our_site, has_school_sites, intent_type,
-                    school_percentage, cost, raw_response, parsed_items,
-                    analysis_result, browser_screen_width, browser_screen_height
-                ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s, %s, %s, %s
-                )
+                        keyword_id, keyword_text, location_code, language_code,
+                        device, os, depth, total_items, organic_count, paid_count,
+                        maps_count, shopping_count, has_ads, has_maps,
+                        has_our_site, has_school_sites, intent_type,
+                        school_percentage, cost, raw_response, parsed_items,
+                        analysis_result, browser_screen_width, browser_screen_height
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                    )
                 """
                 
                 insert_values = (
-                keyword_id,
-                keyword_text or '',
-                request_params.get('location_code', 0),
-                request_params.get('language_code', ''),
-                request_params.get('device', 'desktop'),
-                request_params.get('os', 'windows'),  # ← НОВОЕ
-                request_params.get('depth', 0),
-                len(items),
-                total_organic_sites,
-                len(paid_results),
-                len(maps_results),
-                0,  # shopping_count
-                has_ads,
-                has_google_maps,
-                has_our_site,
-                has_school_sites,
-                intent_type,
-                school_percentage,
-                task.get('cost', 0),
-                json.dumps(serp_response, ensure_ascii=False),
-                parsed_items_json,
-                analysis_result_json,
-                request_params.get('browser_screen_width', 1920),  # ← НОВОЕ
-                request_params.get('browser_screen_height', 1080)  # ← НОВОЕ
-            )
+                    keyword_id,
+                    keyword_text or '',
+                    request_params.get('location_code', 0),
+                    request_params.get('language_code', ''),
+                    request_params.get('device', 'desktop'),
+                    request_params.get('os', 'windows'),
+                    request_params.get('depth', 20),
+                    len(items),
+                    total_organic_sites,
+                    len(paid_results),
+                    len(maps_results),
+                    0,
+                    has_ads,
+                    has_google_maps,
+                    has_our_site,
+                    has_school_sites,
+                    intent_type,
+                    school_percentage,
+                    task.get('cost', 0),
+                    json.dumps(serp_response, ensure_ascii=False),
+                    parsed_items_json,
+                    analysis_result_json,
+                    request_params.get('browser_screen_width', 1920),
+                    request_params.get('browser_screen_height', 1080)
+                )
                 
                 cursor.execute(insert_query, insert_values)
                 inserted_id = cursor.lastrowid
