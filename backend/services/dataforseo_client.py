@@ -318,7 +318,7 @@ class DataForSeoClient:
         language_code: str = "ru",
         device: str = "desktop",
         os: str = "windows",
-        depth: int = 100,
+        depth: int = 20,
         calculate_rectangles: bool = False,
         browser_screen_width: int = 1920,
         browser_screen_height: int = 1080,

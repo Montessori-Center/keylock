@@ -11,7 +11,7 @@ const ApplySerpModal = ({ show, onHide, onApply, selectedKeywords }) => {
     language_name: 'Russian',
     device: 'desktop',
     os: 'windows',
-    depth: 100,               // Глубина до 100 результатов
+    depth: 20,               // Глубина до 20 результатов
     calculate_rectangles: false,
     browser_screen_width: 1920,
     browser_screen_height: 1080,
@@ -284,7 +284,7 @@ const ApplySerpModal = ({ show, onHide, onApply, selectedKeywords }) => {
             • Примерная стоимость: <strong>${calculateCost()}</strong>
             <br />
             <small className="text-muted">
-              Тариф: $0.005 за SERP advanced (до 100 результатов)
+              Тариф: $0.006 за SERP advanced (до 20 результатов)
             </small>
           </Alert>
 

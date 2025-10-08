@@ -205,10 +205,17 @@ const SerpLogsModal = ({ show, onHide, selectedKeywordIds = null }) => {
               </td>
               
               <td>
-                <Badge bg={log.analysis_result.intent_type === 'Коммерческий' ? 'warning' : 'info'}>
-                  {log.analysis_result.intent_type}
-                </Badge>
-              </td>
+                  <Badge bg={(() => {
+                    const intent = log.analysis_result.intent_type;
+                    if (intent === 'Коммерческий') return 'success';      // Зелёный
+                    if (intent === 'Информационный') return 'danger';     // Красный
+                    if (intent === 'Навигационный') return 'info';        // Голубой
+                    if (intent === 'Транзакционный') return 'warning';    // Жёлтый
+                    return 'secondary';
+                  })()}>
+                    {log.analysis_result.intent_type}
+                  </Badge>
+                </td>
               
               <td className="text-center">
                 {log.analysis_result.has_our_site ? (
@@ -258,10 +265,9 @@ const SerpLogsModal = ({ show, onHide, selectedKeywordIds = null }) => {
 
             <div className="mb-3">
               <h6>📊 Статистика:</h6>
-              <div className="d-flex flex-wrap gap-2">
+              <div className="d-flex flex-wrap gap-2 mb-2">
                 <div>
                   <strong>Всего элементов:</strong> {(() => {
-                    // Считаем из raw_response если есть
                     if (selectedLog.raw_response) {
                       try {
                         const raw = typeof selectedLog.raw_response === 'string' 
@@ -272,7 +278,6 @@ const SerpLogsModal = ({ show, onHide, selectedKeywordIds = null }) => {
                         console.error('Error parsing raw_response:', e);
                       }
                     }
-                    // Фолбэк: считаем из массивов
                     return (selectedLog.organic_results?.length || 0) + 
                            (selectedLog.paid_results?.length || 0) + 
                            (selectedLog.analysis_result?.maps_count || 0);
@@ -288,6 +293,57 @@ const SerpLogsModal = ({ show, onHide, selectedKeywordIds = null }) => {
                   <strong>Карты:</strong> {selectedLog.analysis_result?.maps_count || 0}
                 </div>
               </div>
+              
+              {/* НОВОЕ: Расширенные параметры (скрываемые) */}
+              <details>
+                <summary style={{ cursor: 'pointer', color: '#0d6efd', fontWeight: '500' }}>
+                  🔧 Параметры запроса
+                </summary>
+                <div className="mt-2 p-2" style={{ backgroundColor: '#f8f9fa', borderRadius: '4px' }}>
+                  <Row>
+                    <Col md={6}>
+                      <small>
+                        <strong>Глубина поиска:</strong> {selectedLog.depth || 'N/A'} результатов
+                      </small>
+                    </Col>
+                    <Col md={6}>
+                      <small>
+                        <strong>Язык:</strong> {selectedLog.language_code || 'N/A'}
+                      </small>
+                    </Col>
+                  </Row>
+                  <Row className="mt-1">
+                    <Col md={12}>
+                      <small>
+                        <strong>Локация:</strong> {(() => {
+                          // Получаем название локации
+                          const locationCode = selectedLog.location_code;
+                          if (locationCode === 1012852) return 'Kyiv, Kyiv city, Ukraine';
+                          if (locationCode === 2804) return 'Ukraine';
+                          return `Location code: ${locationCode}`;
+                        })()}
+                      </small>
+                    </Col>
+                  </Row>
+                  <Row className="mt-1">
+                    <Col md={4}>
+                      <small>
+                        <strong>Устройство:</strong> {selectedLog.device || 'N/A'}
+                      </small>
+                    </Col>
+                    <Col md={4}>
+                      <small>
+                        <strong>ОС:</strong> {selectedLog.os || 'N/A'}
+                      </small>
+                    </Col>
+                    <Col md={4}>
+                      <small>
+                        <strong>Размер экрана:</strong> {selectedLog.browser_screen_width || 'N/A'}×{selectedLog.browser_screen_height || 'N/A'}
+                      </small>
+                    </Col>
+                  </Row>
+                </div>
+              </details>
             </div>
 
             <div className="mb-3">
@@ -323,7 +379,14 @@ const SerpLogsModal = ({ show, onHide, selectedKeywordIds = null }) => {
                   }
                 </Badge>
                 
-                <Badge bg={selectedLog.analysis_result.intent_type === 'Коммерческий' ? 'warning' : 'info'}>
+                <Badge bg={(() => {
+                  const intent = selectedLog.analysis_result.intent_type;
+                  if (intent === 'Коммерческий') return 'success';      // Зелёный
+                  if (intent === 'Информационный') return 'danger';     // Красный
+                  if (intent === 'Навигационный') return 'info';        // Голубой
+                  if (intent === 'Транзакционный') return 'warning';    // Жёлтый
+                  return 'secondary';
+                })()}>
                   Интент: {selectedLog.analysis_result.intent_type}
                 </Badge>
               </div>

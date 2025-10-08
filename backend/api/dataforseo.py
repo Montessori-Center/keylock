@@ -501,7 +501,7 @@ def process_serp_sync(task_id: str, keyword_ids: list, params: dict) -> dict:
             'language_code': params.get('language_code', 'ru'),
             'device': params.get('device', 'desktop'),
             'os': params.get('os', 'windows'),
-            'depth': params.get('depth', 100),
+            'depth': params.get('depth', 20),
             'calculate_rectangles': params.get('calculate_rectangles', False),
             'browser_screen_width': params.get('browser_screen_width', 1920),
             'browser_screen_height': params.get('browser_screen_height', 1080),
@@ -849,7 +849,7 @@ def _process_serp_live(keywords_data, serp_params, connection, dataforseo_client
             'language_code': data.get('language_code', 'ru'),
             'device': data.get('device', 'desktop'),
             'os': data.get('os', 'windows'),
-            'depth': data.get('depth', 100),
+            'depth': data.get('depth', 20),
             'calculate_rectangles': data.get('calculate_rectangles', False),
             'browser_screen_width': data.get('browser_screen_width', 1920),
             'browser_screen_height': data.get('browser_screen_height', 1080),
@@ -1126,6 +1126,13 @@ def get_serp_logs():
                     'paid_results': paid_results,
                     'raw_response': log.get('raw_response'),
                     'parsed_items': parsed_items,
+                    'depth': log.get('depth'),
+                    'language_code': log.get('language_code'),
+                    'location_code': log.get('location_code'),
+                    'device': log.get('device'),
+                    'os': log.get('os'),
+                    'browser_screen_width': log.get('browser_screen_width'),
+                    'browser_screen_height': log.get('browser_screen_height'),
                     'our_domain': None
                 }
                 
@@ -1252,7 +1259,7 @@ def check_serp_cost():
     try:
         data = request.json
         keyword_ids = data.get('keyword_ids', [])
-        depth = data.get('depth', 100)
+        depth = data.get('depth', 20)
         
         # Расчет стоимости
         base_cost = 0.003  # $0.003 за SERP regular до 100 результатов
