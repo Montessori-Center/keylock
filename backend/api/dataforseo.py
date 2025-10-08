@@ -1938,41 +1938,44 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
                 
                 insert_query = """
                     INSERT INTO serp_logs (
-                        keyword_id, keyword_text, location_code, language_code,
-                        device, depth, total_items, organic_count, paid_count,
-                        maps_count, shopping_count, has_ads, has_maps,
-                        has_our_site, has_school_sites, intent_type,
-                        school_percentage, cost, raw_response, parsed_items,
-                        analysis_result
-                    ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                        %s, %s, %s, %s, %s, %s, %s, %s
-                    )
+                    keyword_id, keyword_text, location_code, language_code,
+                    device, os, depth, total_items, organic_count, paid_count,
+                    maps_count, shopping_count, has_ads, has_maps,
+                    has_our_site, has_school_sites, intent_type,
+                    school_percentage, cost, raw_response, parsed_items,
+                    analysis_result, browser_screen_width, browser_screen_height
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s
+                )
                 """
                 
                 insert_values = (
-                    keyword_id,
-                    keyword_text or '',
-                    request_params.get('location_code', 0),
-                    request_params.get('language_code', ''),
-                    request_params.get('device', 'desktop'),
-                    request_params.get('depth', 0),
-                    len(items),
-                    total_organic_sites,
-                    len(paid_results),
-                    len(maps_results),
-                    0,
-                    has_ads,
-                    has_google_maps,
-                    has_our_site,
-                    has_school_sites,
-                    intent_type,
-                    school_percentage,
-                    task.get('cost', 0),
-                    json.dumps(serp_response, ensure_ascii=False),
-                    parsed_items_json,
-                    analysis_result_json
-                )
+                keyword_id,
+                keyword_text or '',
+                request_params.get('location_code', 0),
+                request_params.get('language_code', ''),
+                request_params.get('device', 'desktop'),
+                request_params.get('os', 'windows'),  # ← НОВОЕ
+                request_params.get('depth', 0),
+                len(items),
+                total_organic_sites,
+                len(paid_results),
+                len(maps_results),
+                0,  # shopping_count
+                has_ads,
+                has_google_maps,
+                has_our_site,
+                has_school_sites,
+                intent_type,
+                school_percentage,
+                task.get('cost', 0),
+                json.dumps(serp_response, ensure_ascii=False),
+                parsed_items_json,
+                analysis_result_json,
+                request_params.get('browser_screen_width', 1920),  # ← НОВОЕ
+                request_params.get('browser_screen_height', 1080)  # ← НОВОЕ
+            )
                 
                 cursor.execute(insert_query, insert_values)
                 inserted_id = cursor.lastrowid
