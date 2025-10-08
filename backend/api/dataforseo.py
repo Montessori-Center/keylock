@@ -1712,7 +1712,7 @@ def parse_serp_response(serp_response: Dict, campaign_id: int, connection, keywo
         parsed_items_json = json.dumps({
             'organic': organic_results,
             'paid': paid_results,
-            'maps': maps_results
+            'maps': maps_results  # ← ВОТ ОНО ЕСТЬ!
         }, ensure_ascii=False)
         
         analysis_result_json = json.dumps({
