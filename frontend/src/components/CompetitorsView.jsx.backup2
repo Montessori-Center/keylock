@@ -1,22 +1,19 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Скрипт для исправления дублирования /api/ в CompetitorsView.jsx
-Запускать из корневой директории проекта: python fix_competitors_api.py
-"""
-
-import os
-from pathlib import Path
-
-# Исправленный код CompetitorsView.jsx БЕЗ дублирования /api/
-COMPETITORS_VIEW_FIXED = """// frontend/src/components/CompetitorsView.jsx
+// frontend/src/components/CompetitorsView.jsx
 import React, { useState, useEffect } from 'react';
 import CompetitorsTable from './CompetitorsTable';
 import AddCompetitorModal from './Modals/AddCompetitorModal';
 import ChangeFieldCompetitorModal from './Modals/ChangeFieldCompetitorModal';
 import ApplyFiltersModal from './Modals/ApplyFiltersModal';
-import api from '../services/api';
+import axios from 'axios';
 import { toast } from 'react-toastify';
+
+// Создаём axios instance для API запросов
+const apiClient = axios.create({
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000',
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
 
 const CompetitorsView = ({ onClose }) => {
   const [competitors, setCompetitors] = useState([]);
@@ -38,9 +35,9 @@ const CompetitorsView = ({ onClose }) => {
   const loadCompetitors = async () => {
     setLoading(true);
     try {
-      const response = await api.getCompetitors();
-      if (response.success) {
-        setCompetitors(response.competitors || []);
+      const response = await apiClient.get('/api/competitors/list');
+      if (response.data.success) {
+        setCompetitors(response.data.competitors || []);
       } else {
         toast.error('Ошибка загрузки конкурентов');
       }
@@ -54,9 +51,9 @@ const CompetitorsView = ({ onClose }) => {
 
   const loadStats = async () => {
     try {
-      const response = await api.getCompetitorsStats();
-      if (response.success) {
-        setStats(response.stats);
+      const response = await apiClient.get('/api/competitors/stats');
+      if (response.data.success) {
+        setStats(response.data.stats);
       }
     } catch (error) {
       console.error('Error loading stats:', error);
@@ -65,13 +62,13 @@ const CompetitorsView = ({ onClose }) => {
 
   const handleAdd = async (competitorData) => {
     try {
-      const response = await api.addCompetitor(competitorData);
-      if (response.success) {
+      const response = await apiClient.post('/api/competitors/add', competitorData);
+      if (response.data.success) {
         toast.success('Конкурент добавлен');
         loadCompetitors();
         loadStats();
       } else {
-        throw new Error(response.error || 'Ошибка добавления');
+        throw new Error(response.data.error || 'Ошибка добавления');
       }
     } catch (error) {
       throw error;
@@ -80,13 +77,17 @@ const CompetitorsView = ({ onClose }) => {
 
   const handleDataChange = async (id, field, value) => {
     try {
-      const response = await api.updateCompetitor(id, field, value);
+      const response = await apiClient.post('/api/competitors/update', {
+        id,
+        field,
+        value
+      });
       
-      if (response.success) {
+      if (response.data.success) {
         toast.success('Данные обновлены');
         loadCompetitors();
       } else {
-        toast.error(response.error || 'Ошибка обновления');
+        toast.error(response.data.error || 'Ошибка обновления');
       }
     } catch (error) {
       console.error('Error updating competitor:', error);
@@ -105,15 +106,17 @@ const CompetitorsView = ({ onClose }) => {
     }
 
     try {
-      const response = await api.deleteCompetitors(selectedIds);
+      const response = await apiClient.post('/api/competitors/delete', {
+        ids: selectedIds
+      });
 
-      if (response.success) {
-        toast.success(response.message);
+      if (response.data.success) {
+        toast.success(response.data.message);
         setSelectedIds([]);
         loadCompetitors();
         loadStats();
       } else {
-        toast.error(response.error || 'Ошибка удаления');
+        toast.error(response.data.error || 'Ошибка удаления');
       }
     } catch (error) {
       console.error('Error deleting competitors:', error);
@@ -129,7 +132,7 @@ const CompetitorsView = ({ onClose }) => {
 
     // Находим выбранных конкурентов и копируем их домены
     const selectedCompetitors = competitors.filter(c => selectedIds.includes(c.id));
-    const domains = selectedCompetitors.map(c => c.domain).join('\\n');
+    const domains = selectedCompetitors.map(c => c.domain).join('\n');
     
     navigator.clipboard.writeText(domains).then(() => {
       toast.success(`Скопировано доменов: ${selectedIds.length}`);
@@ -148,7 +151,7 @@ const CompetitorsView = ({ onClose }) => {
     try {
       // Обновляем каждую выбранную запись
       const promises = selectedIds.map(id => 
-        api.updateCompetitor(id, field, value)
+        apiClient.post('/api/competitors/update', { id, field, value })
       );
 
       await Promise.all(promises);
@@ -278,63 +281,3 @@ const CompetitorsView = ({ onClose }) => {
 };
 
 export default CompetitorsView;
-"""
-
-
-def main():
-    """Основная функция исправления"""
-    
-    print("=" * 60)
-    print("🔧 Исправление дублирования /api/ в CompetitorsView")
-    print("=" * 60)
-    
-    # Определяем путь к файлу
-    script_dir = Path(__file__).parent.absolute()
-    
-    # Проверяем структуру проекта
-    if not (script_dir / 'frontend').exists():
-        print("❌ ОШИБКА: Скрипт должен запускаться из корневой директории проекта!")
-        print(f"   Текущая директория: {script_dir}")
-        return False
-    
-    competitors_view_path = script_dir / 'frontend' / 'src' / 'components' / 'CompetitorsView.jsx'
-    
-    # Создаем бэкап
-    print("\\n📦 Создание резервной копии...")
-    if competitors_view_path.exists():
-        backup_path = competitors_view_path.with_suffix('.jsx.backup2')
-        with open(competitors_view_path, 'r', encoding='utf-8') as f:
-            with open(backup_path, 'w', encoding='utf-8') as bf:
-                bf.write(f.read())
-        print(f"   ✅ Бэкап создан: {backup_path}")
-    
-    # Заменяем файл
-    print("\\n🔄 Замена файла...")
-    with open(competitors_view_path, 'w', encoding='utf-8') as f:
-        f.write(COMPETITORS_VIEW_FIXED)
-    print(f"   ✅ Заменен: {competitors_view_path}")
-    
-    print("\\n" + "=" * 60)
-    print("✅ ИСПРАВЛЕНИЕ ЗАВЕРШЕНО!")
-    print("=" * 60)
-    print("\\n📋 Что было исправлено:")
-    print("   ❌ БЫЛО: apiClient.get('/api/competitors/list')")
-    print("   ✅ СТАЛО: api.getCompetitors()")
-    print("\\n   Теперь используется единый api-сервис без дублирования /api/")
-    print("\\n🚀 Следующие шаги:")
-    print("   1. Перезапустите React dev server")
-    print("   2. Проверьте консоль браузера - ошибок 404 быть не должно")
-    print("   3. Проверьте логи Flask - запросы должны быть '/api/competitors/...'")
-    
-    return True
-
-
-if __name__ == '__main__':
-    try:
-        success = main()
-        exit(0 if success else 1)
-    except Exception as e:
-        print(f"\\n❌ КРИТИЧЕСКАЯ ОШИБКА: {e}")
-        import traceback
-        traceback.print_exc()
-        exit(1)

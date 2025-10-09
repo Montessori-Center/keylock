@@ -4,16 +4,8 @@ import CompetitorsTable from './CompetitorsTable';
 import AddCompetitorModal from './Modals/AddCompetitorModal';
 import ChangeFieldCompetitorModal from './Modals/ChangeFieldCompetitorModal';
 import ApplyFiltersModal from './Modals/ApplyFiltersModal';
-import axios from 'axios';
+import api from '../services/api';
 import { toast } from 'react-toastify';
-
-// Создаём axios instance для API запросов
-const apiClient = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000',
-  headers: {
-    'Content-Type': 'application/json'
-  }
-});
 
 const CompetitorsView = ({ onClose }) => {
   const [competitors, setCompetitors] = useState([]);
@@ -35,9 +27,9 @@ const CompetitorsView = ({ onClose }) => {
   const loadCompetitors = async () => {
     setLoading(true);
     try {
-      const response = await apiClient.get('/api/competitors/list');
-      if (response.data.success) {
-        setCompetitors(response.data.competitors || []);
+      const response = await api.getCompetitors();
+      if (response.success) {
+        setCompetitors(response.competitors || []);
       } else {
         toast.error('Ошибка загрузки конкурентов');
       }
@@ -51,9 +43,9 @@ const CompetitorsView = ({ onClose }) => {
 
   const loadStats = async () => {
     try {
-      const response = await apiClient.get('/api/competitors/stats');
-      if (response.data.success) {
-        setStats(response.data.stats);
+      const response = await api.getCompetitorsStats();
+      if (response.success) {
+        setStats(response.stats);
       }
     } catch (error) {
       console.error('Error loading stats:', error);
@@ -62,13 +54,13 @@ const CompetitorsView = ({ onClose }) => {
 
   const handleAdd = async (competitorData) => {
     try {
-      const response = await apiClient.post('/api/competitors/add', competitorData);
-      if (response.data.success) {
+      const response = await api.addCompetitor(competitorData);
+      if (response.success) {
         toast.success('Конкурент добавлен');
         loadCompetitors();
         loadStats();
       } else {
-        throw new Error(response.data.error || 'Ошибка добавления');
+        throw new Error(response.error || 'Ошибка добавления');
       }
     } catch (error) {
       throw error;
@@ -77,17 +69,13 @@ const CompetitorsView = ({ onClose }) => {
 
   const handleDataChange = async (id, field, value) => {
     try {
-      const response = await apiClient.post('/api/competitors/update', {
-        id,
-        field,
-        value
-      });
+      const response = await api.updateCompetitor(id, field, value);
       
-      if (response.data.success) {
+      if (response.success) {
         toast.success('Данные обновлены');
         loadCompetitors();
       } else {
-        toast.error(response.data.error || 'Ошибка обновления');
+        toast.error(response.error || 'Ошибка обновления');
       }
     } catch (error) {
       console.error('Error updating competitor:', error);
@@ -106,17 +94,15 @@ const CompetitorsView = ({ onClose }) => {
     }
 
     try {
-      const response = await apiClient.post('/api/competitors/delete', {
-        ids: selectedIds
-      });
+      const response = await api.deleteCompetitors(selectedIds);
 
-      if (response.data.success) {
-        toast.success(response.data.message);
+      if (response.success) {
+        toast.success(response.message);
         setSelectedIds([]);
         loadCompetitors();
         loadStats();
       } else {
-        toast.error(response.data.error || 'Ошибка удаления');
+        toast.error(response.error || 'Ошибка удаления');
       }
     } catch (error) {
       console.error('Error deleting competitors:', error);
@@ -151,7 +137,7 @@ const CompetitorsView = ({ onClose }) => {
     try {
       // Обновляем каждую выбранную запись
       const promises = selectedIds.map(id => 
-        apiClient.post('/api/competitors/update', { id, field, value })
+        api.updateCompetitor(id, field, value)
       );
 
       await Promise.all(promises);
