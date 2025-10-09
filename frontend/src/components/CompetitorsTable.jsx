@@ -1,4 +1,4 @@
-// frontend/src/components/CompetitorsTable.jsx
+// frontend/src/components/CompetitorsTable.jsx - ПОЛНАЯ ВЕРСИЯ
 import React, { useRef, useEffect, useState } from 'react';
 import { HotTable } from '@handsontable/react';
 import Handsontable from 'handsontable';
@@ -145,60 +145,74 @@ const CompetitorsTable = ({
     }
   };
 
-  // ✅ SHIFT-выделение
+  // ✅ ИСПРАВЛЕНО: SHIFT-выделение (скопировано из KeywordsTable)
   useEffect(() => {
     const instance = hotTableRef.current?.hotInstance;
     if (!instance) return;
 
-    const handleMouseDown = (event) => {
-      if (event.shiftKey && event.target.type === 'checkbox') {
-        event.preventDefault();
-        
-        const td = event.target.closest('td');
-        if (!td) return;
+    const handleMouseDown = (e) => {
+      // Проверяем, что клик по чекбоксу
+      const checkbox = e.target.closest('input[type="checkbox"]');
+      if (!checkbox) return;
 
-        const coords = instance.getCoords(td);
-        if (!coords || coords.col !== 0) return;
+      // Проверяем, что это чекбокс из нашей таблицы
+      const td = checkbox.closest('td');
+      if (!td) return;
 
-        const currentRow = coords.row;
-        
-        if (lastClickedRowRef.current !== null && lastClickedRowRef.current !== currentRow) {
-          const startRow = Math.min(lastClickedRowRef.current, currentRow);
-          const endRow = Math.max(lastClickedRowRef.current, currentRow);
-          
-          const rangeIds = [];
-          for (let i = startRow; i <= endRow; i++) {
-            const rowData = instance.getDataAtRow(i);
-            if (rowData && rowData[1]) {
-              rangeIds.push(rowData[1]);
-            }
+      const coords = instance.getCoords(td);
+      
+      if (!coords || coords.col !== 0) return; // Только первая колонка (чекбоксы)
+
+      const currentRow = coords.row;
+
+      // ✅ SHIFT-ВЫДЕЛЕНИЕ
+      if (e.shiftKey && lastClickedRowRef.current !== null) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const startRow = Math.min(lastClickedRowRef.current, currentRow);
+        const endRow = Math.max(lastClickedRowRef.current, currentRow);
+
+        console.log(`✅ Shift-click: selecting rows ${startRow} to ${endRow}`);
+
+        // Определяем, выделяем или снимаем выделение
+        const shouldSelect = !checkbox.checked;
+
+        // Собираем ID для выделения
+        const rangeIds = [];
+        for (let i = startRow; i <= endRow; i++) {
+          if (tableData[i]) {
+            rangeIds.push(tableData[i].id);
           }
-
-          const shouldSelect = !selectedIds.includes(tableData[currentRow].id);
-          let newSelectedIds;
-
-          if (shouldSelect) {
-            newSelectedIds = [...new Set([...selectedIds, ...rangeIds])];
-          } else {
-            newSelectedIds = selectedIds.filter(id => !rangeIds.includes(id));
-          }
-
-          onSelectionChange(newSelectedIds);
-
-          const newData = tableData.map((row, idx) => {
-            if (idx >= startRow && idx <= endRow) {
-              return { ...row, selected: shouldSelect };
-            }
-            return row;
-          });
-          
-          instance.loadData(newData);
-          
-          return;
         }
 
-        lastClickedRowRef.current = currentRow;
+        let newSelectedIds;
+        if (shouldSelect) {
+          // Добавляем все ID из диапазона
+          newSelectedIds = [...new Set([...selectedIds, ...rangeIds])];
+        } else {
+          // Убираем все ID из диапазона
+          newSelectedIds = selectedIds.filter(id => !rangeIds.includes(id));
+        }
+
+        // Обновляем состояние
+        onSelectionChange(newSelectedIds);
+
+        // Обновляем чекбоксы в таблице
+        const newData = tableData.map((row, idx) => {
+          if (idx >= startRow && idx <= endRow) {
+            return { ...row, selected: shouldSelect };
+          }
+          return row;
+        });
+        
+        instance.loadData(newData);
+        
+        return;
       }
+
+      // Сохраняем последний кликнутый ряд
+      lastClickedRowRef.current = currentRow;
     };
 
     const tableElement = instance.rootElement;
@@ -209,13 +223,12 @@ const CompetitorsTable = ({
     };
   }, [tableData, selectedIds, onSelectionChange]);
 
-  // ✅ ИСПРАВЛЕНО: Рендерер для ссылки "Открыть сайт" - обычная функция вместо стрелочной
+  // ✅ Рендерер для ссылки "Открыть сайт"
   function openSiteRenderer(instance, td, row, col, prop, value, cellProperties) {
-    // Вызываем базовый рендерер
     Handsontable.renderers.TextRenderer(instance, td, row, col, prop, value, cellProperties);
     
     const rowData = instance.getDataAtRow(row);
-    const domain = rowData[2]; // domain находится в колонке с индексом 2
+    const domain = rowData[2];
     
     if (domain) {
       td.innerHTML = '';
@@ -228,7 +241,6 @@ const CompetitorsTable = ({
       link.style.textDecoration = 'none';
       link.style.cursor = 'pointer';
       
-      // Предотвращаем всплытие событий
       link.addEventListener('mousedown', (e) => {
         e.stopPropagation();
       });

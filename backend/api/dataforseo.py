@@ -2206,17 +2206,17 @@ def get_campaign_domain(campaign_id: int, connection) -> str:
         log_print(f"❌ Error getting campaign domain: {e}")
         return None
 
-
 def get_school_domains(connection) -> set:
     """
-    Получает список доменов школ-конкурентов из БД
+    Получает список доменов школ-конкурентов из БД (только обработанные, is_new=FALSE)
     """
     try:
         cursor = connection.cursor()
+        # ✅ ИСПРАВЛЕНО: читаем из competitor_schools, только обработанные (is_new=FALSE)
         cursor.execute("""
             SELECT domain 
-            FROM school_sites 
-            WHERE is_active = TRUE
+            FROM competitor_schools 
+            WHERE is_new = FALSE
         """)
         
         results = cursor.fetchall()
@@ -2232,9 +2232,14 @@ def get_school_domains(connection) -> set:
                     domain = domain[4:]
                 domains.add(domain)
         
+        log_print(f"📋 Загружено школ-конкурентов (обработанных): {len(domains)}")
+        if domains:
+            log_print(f"   Примеры: {list(domains)[:5]}")
+        
         return domains
         
     except Exception as e:
         log_print(f"⚠️ Error getting school domains: {e}")
-        # Если таблицы нет, возвращаем пустой set
+        import traceback
+        traceback.print_exc()
         return set()
