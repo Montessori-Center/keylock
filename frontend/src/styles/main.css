@@ -702,6 +702,120 @@ body {
   font-weight: 500;
 }
 
+/* Обновленные стили для CompetitorsView */
+.competitors-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden; /* ✅ Предотвращаем переполнение */
+}
+
+.competitors-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  border-bottom: 1px solid var(--border-color);
+  background-color: #f8f9fa;
+  flex-shrink: 0; /* ✅ Не сжимается */
+}
+
+.competitors-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.competitors-stats {
+  display: flex;
+  gap: 20px;
+  font-size: 13px;
+  color: #5f6368;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #80868b;
+}
+
+.stat-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: #202124;
+}
+
+/* ✅ НОВЫЙ: Контейнер для контента с правильным распределением высоты */
+.competitors-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  overflow: hidden; /* ✅ Предотвращаем переполнение */
+  gap: 15px;
+}
+
+/* ✅ НОВЫЙ: Обертка для таблицы с ограниченной высотой */
+.competitors-table-wrapper {
+  flex: 1; /* ✅ Занимает всё доступное пространство между кнопками */
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background-color: #fff;
+  min-height: 300px; /* ✅ Минимальная высота для видимости */
+}
+
+/* Кнопки действий для конкурентов */
+.competitors-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  flex-shrink: 0; /* ✅ Не сжимается */
+}
+
+/* ✅ ОБНОВЛЕНО: Массовые действия внизу - теперь всегда видны */
+.competitors-bulk-actions {
+  display: flex;
+  gap: 10px;
+  padding: 15px 20px;
+  border-top: 1px solid var(--border-color);
+  background-color: #f8f9fa;
+  flex-wrap: wrap;
+  flex-shrink: 0; /* ✅ Не сжимается */
+  border-radius: 0 0 4px 4px;
+}
+
+/* Специальные стили для колонки "Конкурентность" */
+.competitiveness-high {
+  background-color: #fef7e0 !important;
+  font-weight: 600;
+}
+
+.competitiveness-medium {
+  background-color: #e8f5e9 !important;
+}
+
+.competitiveness-low {
+  background-color: #f1f3f4 !important;
+}
+
+/* Подсветка типа организации */
+.org-type-school {
+  color: #1976d2;
+  font-weight: 500;
+}
+
+.org-type-tutor-base {
+  color: #7b1fa2;
+  font-weight: 500;
+}
+
 /* ДОБАВЛЕНО: анимации для новых записей */
 @keyframes newRecordPulse {
   0% {

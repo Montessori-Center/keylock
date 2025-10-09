@@ -52,7 +52,7 @@ const CompetitorsTable = ({
     }
   };
 
-  // ✅ ИСПРАВЛЕНО: Обработка клика по чекбоксу
+  // Обработка клика по чекбоксу
   const handleAfterChange = (changes, source) => {
     if (!changes || source === 'loadData') return;
     
@@ -60,13 +60,10 @@ const CompetitorsTable = ({
     if (!hot) return;
 
     changes.forEach(([row, prop, oldValue, newValue]) => {
-      // ✅ Получаем rowData в начале forEach для всех случаев
-      const rowData = hot.getDataAtRow(row);
-      if (!rowData) return;
-      
-      const id = rowData[1];
-      
       if (prop === 'selected') {
+        const rowData = hot.getDataAtRow(row);
+        const id = rowData[1];
+        
         if (newValue && !selectedIds.includes(id)) {
           onSelectionChange([...selectedIds, id]);
         } else if (!newValue && selectedIds.includes(id)) {
@@ -74,6 +71,7 @@ const CompetitorsTable = ({
         }
       } else if (prop === 'org_type' || prop === 'notes') {
         // Отправляем изменение на сервер
+        const id = rowData[1];
         onDataChange(id, prop, newValue);
       }
     });
@@ -104,8 +102,8 @@ const CompetitorsTable = ({
     lastClickedRowRef.current = coords.row;
   };
 
-  // ✅ ИСПРАВЛЕНО: Рендер кнопки "Открыть сайт" - используем обычную функцию
-  function openSiteRenderer(instance, td, row, col, prop, value, cellProperties) {
+  // Рендер кнопки "Открыть сайт"
+  const openSiteRenderer = (instance, td, row, col, prop, value, cellProperties) => {
     Handsontable.renderers.TextRenderer.apply(this, arguments);
     
     const rowData = instance.getDataAtRow(row);
@@ -118,7 +116,7 @@ const CompetitorsTable = ({
     }
     
     return td;
-  }
+  };
 
   // Конфигурация колонок
   const columns = [
@@ -177,7 +175,7 @@ const CompetitorsTable = ({
   ];
 
   return (
-    <div style={{ width: '100%', height: '100%', overflow: 'hidden' }}>
+    <div className="keywords-table-container">
       {loading ? (
         <div style={{ padding: '20px', textAlign: 'center' }}>
           Загрузка данных...

@@ -196,9 +196,8 @@ const CompetitorsView = ({ onClose }) => {
         </button>
       </div>
 
-      {/* Контент с правильной структурой */}
-      <div className="competitors-content">
-        {/* Кнопки действий */}
+      {/* Кнопки действий */}
+      <div style={{ padding: '20px' }}>
         <div className="competitors-actions action-buttons">
           <button 
             className="btn btn-purple" 
@@ -214,16 +213,14 @@ const CompetitorsView = ({ onClose }) => {
           </button>
         </div>
 
-        {/* Обертка для таблицы */}
-        <div className="competitors-table-wrapper">
-          <CompetitorsTable
-            competitors={competitors}
-            loading={loading}
-            selectedIds={selectedIds}
-            onSelectionChange={setSelectedIds}
-            onDataChange={handleDataChange}
-          />
-        </div>
+        {/* Таблица */}
+        <CompetitorsTable
+          competitors={competitors}
+          loading={loading}
+          selectedIds={selectedIds}
+          onSelectionChange={setSelectedIds}
+          onDataChange={handleDataChange}
+        />
 
         {/* Массовые действия */}
         <div className="competitors-bulk-actions">
@@ -239,7 +236,7 @@ const CompetitorsView = ({ onClose }) => {
             onClick={handleCopyDomain}
             disabled={selectedIds.length === 0}
           >
-            Копировать домены
+            Копировать домен
           </button>
           <button 
             className="btn btn-green" 
