@@ -209,12 +209,13 @@ const CompetitorsTable = ({
     };
   }, [tableData, selectedIds, onSelectionChange]);
 
-  // ✅ Рендерер для ссылки "Открыть сайт"
-  const openSiteRenderer = (instance, td, row, col, prop, value, cellProperties) => {
-    Handsontable.renderers.TextRenderer.apply(this, arguments);
+  // ✅ ИСПРАВЛЕНО: Рендерер для ссылки "Открыть сайт" - обычная функция вместо стрелочной
+  function openSiteRenderer(instance, td, row, col, prop, value, cellProperties) {
+    // Вызываем базовый рендерер
+    Handsontable.renderers.TextRenderer(instance, td, row, col, prop, value, cellProperties);
     
     const rowData = instance.getDataAtRow(row);
-    const domain = rowData[2];
+    const domain = rowData[2]; // domain находится в колонке с индексом 2
     
     if (domain) {
       td.innerHTML = '';
@@ -227,6 +228,7 @@ const CompetitorsTable = ({
       link.style.textDecoration = 'none';
       link.style.cursor = 'pointer';
       
+      // Предотвращаем всплытие событий
       link.addEventListener('mousedown', (e) => {
         e.stopPropagation();
       });
@@ -240,7 +242,7 @@ const CompetitorsTable = ({
     }
     
     return td;
-  };
+  }
 
   const columns = [
     { 
