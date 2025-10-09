@@ -4,16 +4,8 @@ import CompetitorsTable from './CompetitorsTable';
 import AddCompetitorModal from './Modals/AddCompetitorModal';
 import ChangeFieldCompetitorModal from './Modals/ChangeFieldCompetitorModal';
 import ApplyFiltersModal from './Modals/ApplyFiltersModal';
-import axios from 'axios';
+import api from '../services/api';
 import { toast } from 'react-toastify';
-
-// Создаём axios instance для API запросов
-const apiClient = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000',
-  headers: {
-    'Content-Type': 'application/json'
-  }
-});
 
 const CompetitorsView = ({ onClose }) => {
   const [competitors, setCompetitors] = useState([]);
@@ -21,13 +13,12 @@ const CompetitorsView = ({ onClose }) => {
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState(null);
   
-  // Модальные окна
   const [showAddModal, setShowAddModal] = useState(false);
   const [showChangeFieldModal, setShowChangeFieldModal] = useState(false);
   const [showFiltersModal, setShowFiltersModal] = useState(false);
 
-  // Загрузка данных при монтировании
   useEffect(() => {
+    console.log('🚀 CompetitorsView mounted');
     loadCompetitors();
     loadStats();
   }, []);
@@ -35,15 +26,20 @@ const CompetitorsView = ({ onClose }) => {
   const loadCompetitors = async () => {
     setLoading(true);
     try {
-      const response = await apiClient.get('/api/competitors/list');
-      if (response.data.success) {
-        setCompetitors(response.data.competitors || []);
+      console.log('📞 Calling api.getCompetitors()...');
+      const response = await api.getCompetitors();
+      console.log('✅ Response:', response);
+      
+      if (response.success) {
+        setCompetitors(response.competitors || []);
+        toast.success(`Загружено: ${response.competitors?.length || 0}`);
       } else {
-        toast.error('Ошибка загрузки конкурентов');
+        toast.error('Ошибка загрузки');
       }
     } catch (error) {
-      console.error('Error loading competitors:', error);
-      toast.error('Ошибка загрузки данных');
+      console.error('❌ Error:', error);
+      console.error('❌ URL:', error.config?.url);
+      toast.error(`Ошибка: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -51,126 +47,64 @@ const CompetitorsView = ({ onClose }) => {
 
   const loadStats = async () => {
     try {
-      const response = await apiClient.get('/api/competitors/stats');
-      if (response.data.success) {
-        setStats(response.data.stats);
+      const response = await api.getCompetitorsStats();
+      if (response.success) {
+        setStats(response.stats);
       }
     } catch (error) {
-      console.error('Error loading stats:', error);
+      console.error('❌ Stats error:', error);
     }
   };
 
   const handleAdd = async (competitorData) => {
-    try {
-      const response = await apiClient.post('/api/competitors/add', competitorData);
-      if (response.data.success) {
-        toast.success('Конкурент добавлен');
-        loadCompetitors();
-        loadStats();
-      } else {
-        throw new Error(response.data.error || 'Ошибка добавления');
-      }
-    } catch (error) {
-      throw error;
+    const response = await api.addCompetitor(competitorData);
+    if (response.success) {
+      toast.success('Добавлено');
+      loadCompetitors();
+      loadStats();
+    } else {
+      throw new Error(response.error || 'Ошибка');
     }
   };
 
   const handleDataChange = async (id, field, value) => {
-    try {
-      const response = await apiClient.post('/api/competitors/update', {
-        id,
-        field,
-        value
-      });
-      
-      if (response.data.success) {
-        toast.success('Данные обновлены');
-        loadCompetitors();
-      } else {
-        toast.error(response.data.error || 'Ошибка обновления');
-      }
-    } catch (error) {
-      console.error('Error updating competitor:', error);
-      toast.error('Ошибка при сохранении');
+    const response = await api.updateCompetitor(id, field, value);
+    if (response.success) {
+      toast.success('Обновлено');
+      loadCompetitors();
     }
   };
 
   const handleDelete = async () => {
-    if (selectedIds.length === 0) {
-      toast.warning('Выберите записи для удаления');
-      return;
-    }
-
-    if (!window.confirm(`Удалить выбранные записи (${selectedIds.length})?`)) {
-      return;
-    }
-
-    try {
-      const response = await apiClient.post('/api/competitors/delete', {
-        ids: selectedIds
-      });
-
-      if (response.data.success) {
-        toast.success(response.data.message);
-        setSelectedIds([]);
-        loadCompetitors();
-        loadStats();
-      } else {
-        toast.error(response.data.error || 'Ошибка удаления');
-      }
-    } catch (error) {
-      console.error('Error deleting competitors:', error);
-      toast.error('Ошибка при удалении');
+    if (!selectedIds.length) return;
+    if (!window.confirm(`Удалить ${selectedIds.length}?`)) return;
+    
+    const response = await api.deleteCompetitors(selectedIds);
+    if (response.success) {
+      toast.success(response.message);
+      setSelectedIds([]);
+      loadCompetitors();
+      loadStats();
     }
   };
 
   const handleCopyDomain = () => {
-    if (selectedIds.length === 0) {
-      toast.warning('Выберите записи');
-      return;
-    }
-
-    // Находим выбранных конкурентов и копируем их домены
-    const selectedCompetitors = competitors.filter(c => selectedIds.includes(c.id));
-    const domains = selectedCompetitors.map(c => c.domain).join('\n');
-    
-    navigator.clipboard.writeText(domains).then(() => {
-      toast.success(`Скопировано доменов: ${selectedIds.length}`);
-    }).catch(err => {
-      console.error('Error copying:', err);
-      toast.error('Ошибка копирования');
-    });
+    if (!selectedIds.length) return;
+    const selected = competitors.filter(c => selectedIds.includes(c.id));
+    const domains = selected.map(c => c.domain).join('\n');
+    navigator.clipboard.writeText(domains);
+    toast.success(`Скопировано: ${selectedIds.length}`);
   };
 
   const handleChangeField = async (field, value) => {
-    if (selectedIds.length === 0) {
-      toast.warning('Выберите записи');
-      return;
-    }
-
-    try {
-      // Обновляем каждую выбранную запись
-      const promises = selectedIds.map(id => 
-        apiClient.post('/api/competitors/update', { id, field, value })
-      );
-
-      await Promise.all(promises);
-      
-      toast.success(`Обновлено записей: ${selectedIds.length}`);
-      loadCompetitors();
-    } catch (error) {
-      console.error('Error updating field:', error);
-      toast.error('Ошибка при обновлении');
-    }
-  };
-
-  const handleUnselectAll = () => {
-    setSelectedIds([]);
+    if (!selectedIds.length) return;
+    await Promise.all(selectedIds.map(id => api.updateCompetitor(id, field, value)));
+    toast.success(`Обновлено: ${selectedIds.length}`);
+    loadCompetitors();
   };
 
   return (
     <div className="competitors-view">
-      {/* Заголовок со статистикой */}
       <div className="competitors-header">
         <div>
           <h2>Школы-конкуренты</h2>
@@ -180,40 +114,19 @@ const CompetitorsView = ({ onClose }) => {
                 <span className="stat-label">Всего</span>
                 <span className="stat-value">{stats.total || 0}</span>
               </div>
-              <div className="stat-item">
-                <span className="stat-label">Школы</span>
-                <span className="stat-value">{stats.schools || 0}</span>
-              </div>
-              <div className="stat-item">
-                <span className="stat-label">Базы репетиторов</span>
-                <span className="stat-value">{stats.tutor_bases || 0}</span>
-              </div>
             </div>
           )}
         </div>
-        <button className="btn btn-secondary" onClick={onClose}>
-          Закрыть
-        </button>
+        <button className="btn btn-secondary" onClick={onClose}>Закрыть</button>
       </div>
 
-      {/* Кнопки действий */}
       <div style={{ padding: '20px' }}>
-        <div className="competitors-actions action-buttons">
-          <button 
-            className="btn btn-purple" 
-            onClick={() => setShowAddModal(true)}
-          >
+        <div className="action-buttons">
+          <button className="btn btn-purple" onClick={() => setShowAddModal(true)}>
             Добавить новый сайт
-          </button>
-          <button 
-            className="btn btn-blue" 
-            onClick={() => setShowFiltersModal(true)}
-          >
-            Применить фильтры
           </button>
         </div>
 
-        {/* Таблица */}
         <CompetitorsTable
           competitors={competitors}
           loading={loading}
@@ -222,57 +135,25 @@ const CompetitorsView = ({ onClose }) => {
           onDataChange={handleDataChange}
         />
 
-        {/* Массовые действия */}
         <div className="competitors-bulk-actions">
-          <button 
-            className="btn btn-red" 
-            onClick={handleDelete}
-            disabled={selectedIds.length === 0}
-          >
+          <button className="btn btn-red" onClick={handleDelete} disabled={!selectedIds.length}>
             Удалить ({selectedIds.length})
           </button>
-          <button 
-            className="btn btn-blue" 
-            onClick={handleCopyDomain}
-            disabled={selectedIds.length === 0}
-          >
-            Копировать домен
+          <button className="btn btn-blue" onClick={handleCopyDomain} disabled={!selectedIds.length}>
+            Копировать
           </button>
-          <button 
-            className="btn btn-green" 
-            onClick={() => setShowChangeFieldModal(true)}
-            disabled={selectedIds.length === 0}
-          >
-            Изм. польз. значение
+          <button className="btn btn-green" onClick={() => setShowChangeFieldModal(true)} disabled={!selectedIds.length}>
+            Изменить
           </button>
-          <button 
-            className="btn btn-dark-blue" 
-            onClick={handleUnselectAll}
-            disabled={selectedIds.length === 0}
-          >
-            Снять выделение
+          <button className="btn btn-dark-blue" onClick={() => setSelectedIds([])} disabled={!selectedIds.length}>
+            Снять
           </button>
         </div>
       </div>
 
-      {/* Модальные окна */}
-      <AddCompetitorModal
-        show={showAddModal}
-        onHide={() => setShowAddModal(false)}
-        onAdd={handleAdd}
-      />
-
-      <ChangeFieldCompetitorModal
-        show={showChangeFieldModal}
-        onHide={() => setShowChangeFieldModal(false)}
-        onSave={handleChangeField}
-        selectedCount={selectedIds.length}
-      />
-
-      <ApplyFiltersModal
-        show={showFiltersModal}
-        onHide={() => setShowFiltersModal(false)}
-      />
+      <AddCompetitorModal show={showAddModal} onHide={() => setShowAddModal(false)} onAdd={handleAdd} />
+      <ChangeFieldCompetitorModal show={showChangeFieldModal} onHide={() => setShowChangeFieldModal(false)} onSave={handleChangeField} selectedCount={selectedIds.length} />
+      <ApplyFiltersModal show={showFiltersModal} onHide={() => setShowFiltersModal(false)} />
     </div>
   );
 };

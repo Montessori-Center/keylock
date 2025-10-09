@@ -22,6 +22,7 @@ def get_competitors():
     """Получение списка всех конкурентов с расчётом конкурентности"""
     connection = None
     try:
+        print("📋 GET /api/competitors/list called")
         connection = get_db_connection()
         cursor = connection.cursor()
         
