@@ -127,18 +127,33 @@ function App() {
   }, []);
   
   useEffect(() => {
-    const savedAdGroupId = localStorage.getItem('selectedAdGroupId');
-    if (savedAdGroupId && campaigns.length > 0) {
-      for (const campaign of campaigns) {
-        const adGroup = campaign.adGroups.find(ag => ag.id === parseInt(savedAdGroupId));
-        if (adGroup) {
-          console.log(`📌 Restoring selected ad group: ${adGroup.name}`);
-          setSelectedAdGroup(adGroup);
-          break;
+  // Восстанавливаем последнюю выбранную группу
+      if (campaigns.length > 0 && !selectedAdGroup) {
+        const savedAdGroupId = localStorage.getItem('selectedAdGroupId');
+        
+        if (savedAdGroupId) {
+          // Ищем сохранённую группу
+          for (const campaign of campaigns) {
+            const adGroup = campaign.adGroups?.find(ag => ag.id === parseInt(savedAdGroupId));
+            if (adGroup) {
+              console.log(`📌 Restoring selected ad group: ${adGroup.name}`);
+              setSelectedAdGroup(adGroup);
+              return;
+            }
+          }
+        }
+        
+        // Если не нашли сохранённую группу — открываем первую
+        const firstCampaign = campaigns[0];
+        const firstAdGroup = firstCampaign.adGroups?.[0];
+        
+        if (firstAdGroup) {
+          console.log(`📌 Opening first ad group: ${firstAdGroup.name}`);
+          setSelectedAdGroup(firstAdGroup);
+          localStorage.setItem('selectedAdGroupId', firstAdGroup.id.toString());
         }
       }
-    }
-  }, [campaigns]);
+    }, [campaigns, selectedAdGroup]);
   
   useEffect(() => {
     if (selectedAdGroup) {
@@ -177,6 +192,16 @@ function App() {
       toast.error('Ошибка принятия изменений');
     }
   };
+  
+  const handleAdGroupSelect = (adGroup) => {
+      setSelectedAdGroup(adGroup);
+      
+      // Сохраняем ID выбранной группы
+      if (adGroup && adGroup.id) {
+        localStorage.setItem('selectedAdGroupId', adGroup.id.toString());
+        console.log(`💾 Saved selected ad group ID: ${adGroup.id}`);
+      }
+    };
 
   const loadCampaigns = async () => {
     try {
@@ -672,7 +697,7 @@ function App() {
           campaigns={campaigns}
           selectedCampaign={selectedCampaign}
           selectedAdGroup={selectedAdGroup}
-          onSelectAdGroup={setSelectedAdGroup}
+          onSelectAdGroup={handleAdGroupSelect}
         />
         
         <div className={`content-area ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
@@ -777,6 +802,9 @@ function App() {
               </button>
               <button onClick={() => handleBulkAction('change_field')} disabled={selectedKeywordIds.length === 0}>
                 Изменить польз. значение
+              </button>
+              <button onClick={() => setSelectedKeywordIds([])} disabled={selectedKeywordIds.length === 0}>
+                Снять выделение
               </button>
             </div>
             
