@@ -15,6 +15,7 @@ import ChangeFieldModal from './components/Modals/ChangeFieldModal';
 import TrashModal from './components/Modals/TrashModal';
 import SerpProgressModal from './components/Modals/SerpProgressModal';
 import LiveProgressModal from './components/Modals/LiveProgressModal';
+import CompetitorsView from './components/CompetitorsView';
 import api from './services/api';
 import { toast } from 'react-toastify';
 
@@ -55,6 +56,7 @@ function App() {
       show: false,
       keyword: ''
     });
+  const [showCompetitors, setShowCompetitors] = useState(false);
 
   // Копирование в буфер обмена
   const copyToClipboard = (text) => {
@@ -681,7 +683,7 @@ function App() {
   const handleSaveToDB = async () => {
     toast.success('Данные сохранены в БД');
   };
-
+  
   return (
     <div className="app">
       <Header 
@@ -698,123 +700,133 @@ function App() {
           selectedCampaign={selectedCampaign}
           selectedAdGroup={selectedAdGroup}
           onSelectAdGroup={handleAdGroupSelect}
+          onOpenCompetitors={() => setShowCompetitors(true)}
         />
         
         <div className={`content-area ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
-          <div className="action-buttons">
-            <button 
-              className="btn btn-purple" 
-              onClick={() => setShowAddKeywords(true)}
-              disabled={!selectedAdGroup}
-            >
-              Добавить новые слова
-            </button>
-            <button 
-              className="btn btn-pink" 
-              onClick={() => setShowAddNewOutput(true)}
-              disabled={!selectedAdGroup}
-            >
-              Добавить новую выдачу ($)
-            </button>
-            <button 
-              className="btn btn-blue" 
-              onClick={() => setShowApplySerp(true)}
-              disabled={!selectedAdGroup || selectedKeywordIds.length === 0}
-            >
-              Применить SERP ($)
-            </button>
-            <button 
-              className="btn btn-yellow" 
-              onClick={() => setShowSerpLogs(true)}
-            >
-              📊 SERP Логи
-            </button>
-            <button 
-              className="btn btn-dark-blue" 
-              onClick={() => setShowApplyFilters(true)}
-              disabled={!selectedAdGroup}
-            >
-              Применить фильтры
-            </button>
-            
-            <button 
-              className="btn btn-green" 
-              onClick={handleAcceptChanges}
-              disabled={!selectedAdGroup || keywordsStats.newChanges === 0}
-            >
-              Принять изменения {keywordsStats.newChanges > 0 && `(${keywordsStats.newChanges})`}
-            </button>
-            
-            <button 
-              className="btn btn-red" 
-              onClick={handleRejectChanges}
-              disabled={!selectedAdGroup || keywordsStats.newChanges === 0}
-            >
-              Отклонить изменения {keywordsStats.newChanges > 0 && `(${keywordsStats.newChanges})`}
-            </button>
-            
-            <button 
-              className="btn btn-yellow" 
-              onClick={() => setShowTrash(true)}
-              disabled={!selectedAdGroup}
-            >
-              Корзина
-            </button>
-          </div>
-          
-          {selectedAdGroup ? (
-            <KeywordsTable 
-              keywords={keywords}
-              loading={loading}
-              selectedIds={selectedKeywordIds}
-              onSelectionChange={setSelectedKeywordIds}
-              onDataChange={(changes) => {
-                console.log('Data changes:', changes);
-              }}
-              visibleColumns={visibleColumns}
-            />
+          {/* ИЗМЕНЕНО: Условный рендеринг - показываем либо конкурентов, либо ключевые слова */}
+          {showCompetitors ? (
+            // Отображение таблицы конкурентов
+            <CompetitorsView onClose={() => setShowCompetitors(false)} />
           ) : (
-            <div className="no-selection">
-              <h3>Выберите группу объявлений</h3>
-            </div>
+            // Отображение ключевых слов (как раньше)
+            <>
+              <div className="action-buttons">
+                <button 
+                  className="btn btn-purple" 
+                  onClick={() => setShowAddKeywords(true)}
+                  disabled={!selectedAdGroup}
+                >
+                  Добавить новые слова
+                </button>
+                <button 
+                  className="btn btn-pink" 
+                  onClick={() => setShowAddNewOutput(true)}
+                  disabled={!selectedAdGroup}
+                >
+                  Добавить новую выдачу ($)
+                </button>
+                <button 
+                  className="btn btn-blue" 
+                  onClick={() => setShowApplySerp(true)}
+                  disabled={!selectedAdGroup || selectedKeywordIds.length === 0}
+                >
+                  Применить SERP ($)
+                </button>
+                <button 
+                  className="btn btn-yellow" 
+                  onClick={() => setShowSerpLogs(true)}
+                >
+                  📊 SERP Логи
+                </button>
+                <button 
+                  className="btn btn-dark-blue" 
+                  onClick={() => setShowApplyFilters(true)}
+                  disabled={!selectedAdGroup}
+                >
+                  Применить фильтры
+                </button>
+                
+                <button 
+                  className="btn btn-green" 
+                  onClick={handleAcceptChanges}
+                  disabled={!selectedAdGroup || keywordsStats.newChanges === 0}
+                >
+                  Принять изменения {keywordsStats.newChanges > 0 && `(${keywordsStats.newChanges})`}
+                </button>
+                
+                <button 
+                  className="btn btn-red" 
+                  onClick={handleRejectChanges}
+                  disabled={!selectedAdGroup || keywordsStats.newChanges === 0}
+                >
+                  Отклонить изменения {keywordsStats.newChanges > 0 && `(${keywordsStats.newChanges})`}
+                </button>
+                
+                <button 
+                  className="btn btn-yellow" 
+                  onClick={() => setShowTrash(true)}
+                  disabled={!selectedAdGroup}
+                >
+                  Корзина
+                </button>
+              </div>
+              
+              {selectedAdGroup ? (
+                <KeywordsTable 
+                  keywords={keywords}
+                  loading={loading}
+                  selectedIds={selectedKeywordIds}
+                  onSelectionChange={setSelectedKeywordIds}
+                  onDataChange={(changes) => {
+                    console.log('Data changes:', changes);
+                  }}
+                  visibleColumns={visibleColumns}
+                />
+              ) : (
+                <div className="no-selection">
+                  <h3>Выберите группу объявлений или откройте таблицу конкурентов</h3>
+                </div>
+              )}
+              
+              <div className="bottom-actions">
+                <div className="bulk-actions">
+                  <span>Массовые действия (выбрано: {selectedKeywordIds.length}):</span>
+                  <button onClick={() => handleBulkAction('delete')} disabled={selectedKeywordIds.length === 0}>
+                    Удалить
+                  </button>
+                  <button onClick={() => handleBulkAction('copy')} disabled={selectedKeywordIds.length === 0}>
+                    Копир. слова
+                  </button>
+                  <button onClick={() => handleBulkAction('copy_data')} disabled={selectedKeywordIds.length === 0}>
+                    Копир. данные
+                  </button>
+                  <button onClick={() => handleBulkAction('paste')}>
+                    Вставить данные
+                  </button>
+                  <button onClick={() => handleBulkAction('pause')} disabled={selectedKeywordIds.length === 0}>
+                    Приостановить
+                  </button>
+                  <button onClick={() => handleBulkAction('activate')} disabled={selectedKeywordIds.length === 0}>
+                    Активировать
+                  </button>
+                  <button onClick={() => handleBulkAction('change_field')} disabled={selectedKeywordIds.length === 0}>
+                    Изменить польз. значение
+                  </button>
+                  <button onClick={() => setSelectedKeywordIds([])} disabled={selectedKeywordIds.length === 0}>
+                    Снять выделение
+                  </button>
+                </div>
+                
+                <div className="stats">
+                  Всего слов: {keywordsStats.total} | 
+                  Коммерч.: {keywordsStats.commercial} / {((keywordsStats.commercial / keywordsStats.total) * 100 || 0).toFixed(0)}% | 
+                  Дублей: {keywordsStats.duplicates}
+                  {keywordsStats.newChanges > 0 && ` | Новых: ${keywordsStats.newChanges}`}
+                </div>
+              </div>
+            </>
           )}
-          
-          <div className="bottom-actions">
-            <div className="bulk-actions">
-              <span>Массовые действия (выбрано: {selectedKeywordIds.length}):</span>
-              <button onClick={() => handleBulkAction('delete')} disabled={selectedKeywordIds.length === 0}>
-                Удалить
-              </button>
-              <button onClick={() => handleBulkAction('copy')} disabled={selectedKeywordIds.length === 0}>
-                Копир. слова
-              </button>
-              <button onClick={() => handleBulkAction('copy_data')} disabled={selectedKeywordIds.length === 0}>
-                Копир. данные
-              </button>
-              <button onClick={() => handleBulkAction('paste')}>
-                Вставить данные
-              </button>
-              <button onClick={() => handleBulkAction('pause')} disabled={selectedKeywordIds.length === 0}>
-                Приостановить
-              </button>
-              <button onClick={() => handleBulkAction('activate')} disabled={selectedKeywordIds.length === 0}>
-                Активировать
-              </button>
-              <button onClick={() => handleBulkAction('change_field')} disabled={selectedKeywordIds.length === 0}>
-                Изменить польз. значение
-              </button>
-              <button onClick={() => setSelectedKeywordIds([])} disabled={selectedKeywordIds.length === 0}>
-                Снять выделение
-              </button>
-            </div>
-            
-            <div className="stats">
-              Всего слов: {keywordsStats.total} | 
-              Коммерч.: {keywordsStats.commercial} / {((keywordsStats.commercial / keywordsStats.total) * 100 || 0).toFixed(0)}% | 
-              Дублей: {keywordsStats.duplicates}
-              {keywordsStats.newChanges > 0 && ` | Новых: ${keywordsStats.newChanges}`}
-            </div>
-          </div>
         </div>
       </div>
 

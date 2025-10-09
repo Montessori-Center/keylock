@@ -577,6 +577,131 @@ body {
   color: var(--primary-color);
 }
 
+/* Кнопка "Школы-конкуренты" в sidebar */
+.competitors-btn {
+  width: 100%;
+  padding: 10px 15px;
+  background-color: #4285f4;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+  margin-bottom: 10px;
+}
+
+.competitors-btn:hover {
+  background-color: #357ae8;
+}
+
+.competitors-btn:active {
+  background-color: #2a5db0;
+}
+
+/* Таблица конкурентов */
+.competitors-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.competitors-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  border-bottom: 1px solid var(--border-color);
+  background-color: #f8f9fa;
+}
+
+.competitors-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.competitors-stats {
+  display: flex;
+  gap: 20px;
+  font-size: 13px;
+  color: #5f6368;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #80868b;
+}
+
+.stat-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: #202124;
+}
+
+/* Кнопки действий для конкурентов */
+.competitors-actions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+  flex-wrap: wrap;
+}
+
+/* Массовые действия внизу */
+.competitors-bulk-actions {
+  display: flex;
+  gap: 10px;
+  padding: 15px 20px;
+  border-top: 1px solid var(--border-color);
+  background-color: #f8f9fa;
+  flex-wrap: wrap;
+}
+
+/* Специальные стили для колонки "Конкурентность" */
+.competitiveness-high {
+  background-color: #fef7e0 !important;
+  font-weight: 600;
+}
+
+.competitiveness-medium {
+  background-color: #e8f5e9 !important;
+}
+
+.competitiveness-low {
+  background-color: #f1f3f4 !important;
+}
+
+/* Подсветка типа организации */
+.org-type-school {
+  color: #1976d2;
+  font-weight: 500;
+}
+
+.org-type-tutor-base {
+  color: #7b1fa2;
+  font-weight: 500;
+}
+
+.org-type-not-school {
+  color: #616161;
+}
+
+.org-type-partner {
+  color: #388e3c;
+  font-weight: 500;
+}
+
 /* ДОБАВЛЕНО: анимации для новых записей */
 @keyframes newRecordPulse {
   0% {

@@ -1,7 +1,16 @@
+// frontend/src/components/Sidebar.jsx - ОБНОВЛЁННАЯ ВЕРСИЯ
 import React, { useState } from 'react';
-import { FaChevronRight, FaChevronDown, FaBars } from 'react-icons/fa';
+import { FaChevronRight, FaChevronDown, FaBars, FaUsers } from 'react-icons/fa';
 
-const Sidebar = ({ isOpen, onToggle, campaigns, selectedCampaign, selectedAdGroup, onSelectAdGroup }) => {
+const Sidebar = ({ 
+  isOpen, 
+  onToggle, 
+  campaigns, 
+  selectedCampaign, 
+  selectedAdGroup, 
+  onSelectAdGroup,
+  onOpenCompetitors 
+}) => {
   const [expandedCampaigns, setExpandedCampaigns] = useState([1]);
 
   const toggleCampaign = (campaignId) => {
@@ -20,6 +29,18 @@ const Sidebar = ({ isOpen, onToggle, campaigns, selectedCampaign, selectedAdGrou
       
       {isOpen && (
         <div className="sidebar-content">
+          {/* Кнопка "Школы-конкуренты" */}
+          <button 
+            className="competitors-btn"
+            onClick={onOpenCompetitors}
+            title="Школы-конкуренты"
+          >
+            <FaUsers style={{ marginRight: '8px' }} />
+            Школы-конкуренты
+          </button>
+
+          <div style={{ borderTop: '1px solid #dadce0', margin: '10px 0' }}></div>
+
           <h5>Кампании</h5>
           {campaigns && campaigns.length > 0 ? campaigns.map(campaign => (
             <div key={campaign.id} className="campaign-item">
@@ -34,7 +55,6 @@ const Sidebar = ({ isOpen, onToggle, campaigns, selectedCampaign, selectedAdGrou
               {expandedCampaigns.includes(campaign.id) && campaign.adGroups && (
                 <div className="ad-groups">
                   {campaign.adGroups.map(adGroup => {
-                    // Определяем классы для группы
                     const isActive = selectedAdGroup?.id === adGroup.id;
                     const hasChanges = adGroup.hasChanges || adGroup.newChanges > 0;
                     

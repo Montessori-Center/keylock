@@ -9,6 +9,7 @@ from config import Config
 import pymysql
 from datetime import datetime
 from services.dataforseo_client import get_dataforseo_client, DataForSeoClient
+from utils.serp_competitors_helper import save_serp_competitors
 from api.keywords import get_random_batch_color
 
 dataforseo_bp = Blueprint('dataforseo', __name__)
@@ -1713,7 +1714,7 @@ def parse_serp_response(
     serp_params: Dict = None
 ) -> Dict:
     """
-    Парсинг SERP ответа с детальным логированием
+    Парсинг SERP ответа с детальным логированием и автоматическим добавлением конкурентов
     """
     try:
         if not serp_response.get('tasks'):
@@ -1794,7 +1795,7 @@ def parse_serp_response(
                 clean_domain = domain.replace('www.', '').strip()
                 
                 paid_results.append({
-                    'actual_position': rank_absolute,
+                    'position': rank_absolute,
                     'domain': clean_domain,
                     'title': title[:100] if title else '',
                     'url': url,
@@ -1806,15 +1807,25 @@ def parse_serp_response(
             # GOOGLE MAPS / LOCAL PACK
             elif item_type in ['local_pack', 'map', 'maps', 'google_maps']:
                 has_google_maps = True
-                maps_results.append({
-                    'rank_absolute': rank_absolute,
-                    'type': item_type,
-                    'title': title[:100] if title else ''
-                })
-                log_print(f"     🗺️ [КАРТЫ] Type: {item_type}")
                 
+                # Извлекаем домены из местных результатов
                 if item.get('items'):
-                    log_print(f"     📍 Мест в блоке: {len(item.get('items', []))}")
+                    for local_item in item.get('items', []):
+                        local_domain = (local_item.get('domain', '') or '').lower().replace('www.', '').strip()
+                        local_url = (local_item.get('url', '') or '').lower()
+                        local_title = local_item.get('title') or ''
+                        
+                        if local_domain:
+                            maps_results.append({
+                                'position': rank_absolute,
+                                'domain': local_domain,
+                                'title': local_title[:100] if local_title else '',
+                                'url': local_url,
+                                'type': 'maps'
+                            })
+                
+                log_print(f"     🗺️ [КАРТЫ] Type: {item_type}")
+                log_print(f"     📍 Мест в блоке: {len(item.get('items', []))}")
             
             # ОРГАНИЧЕСКИЕ РЕЗУЛЬТАТЫ
             elif item_type == 'organic':
@@ -1825,7 +1836,7 @@ def parse_serp_response(
                 description = item.get('description') or ''
                 
                 organic_item = {
-                    'organic_position': organic_position_counter,
+                    'position': organic_position_counter,
                     'actual_position': rank_absolute,
                     'domain': clean_domain,
                     'title': title[:100] if title else '',
@@ -1899,7 +1910,7 @@ def parse_serp_response(
         log_print(f"   Интент: {intent_type}")
         log_print(f"{'=' * 70}\n")
         
-        # Формируем JSON
+        # Формируем JSON для сохранения
         parsed_items_json = json.dumps({
             'organic': organic_results,
             'paid': paid_results,
@@ -1920,7 +1931,7 @@ def parse_serp_response(
             'maps_count': len(maps_results)
         }, ensure_ascii=False)
         
-        # Сохраняем в БД
+        # Сохраняем в БД (serp_logs - старая таблица для совместимости)
         if connection and keyword_id:
             try:
                 cursor = connection.cursor()
@@ -1935,7 +1946,7 @@ def parse_serp_response(
                 else:
                     request_params = serp_params
                 
-                # 🔍 DEBUG
+                # DEBUG
                 log_print(f"\n🔍 DEBUG request_params:")
                 log_print(f"   location_code: {request_params.get('location_code')}")
                 log_print(f"   language_code: {request_params.get('language_code')}")
@@ -1944,6 +1955,7 @@ def parse_serp_response(
                 log_print(f"   depth: {request_params.get('depth')}")
                 log_print()
                 
+                # 1. Сохраняем в старую таблицу serp_logs (для совместимости)
                 insert_query = """
                     INSERT INTO serp_logs (
                         keyword_id, keyword_text, location_code, language_code,
@@ -1986,11 +1998,66 @@ def parse_serp_response(
                 )
                 
                 cursor.execute(insert_query, insert_values)
-                inserted_id = cursor.lastrowid
+                serp_log_id = cursor.lastrowid
+                log_print(f"💾 Сохранено в serp_logs, ID: {serp_log_id}")
+                
+                # 2. Сохраняем в новую таблицу serp_analysis_history
+                cursor.execute("""
+                    INSERT INTO serp_analysis_history (
+                        keyword_id, keyword_text, campaign_id,
+                        analysis_date, has_ads, has_maps, has_our_site, has_school_sites,
+                        intent_type, organic_count, paid_count, maps_count, 
+                        school_percentage, cost, parsed_items, analysis_result
+                    ) VALUES (
+                        %s, %s, %s, NOW(), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                    )
+                """, (
+                    keyword_id,
+                    keyword_text or '',
+                    campaign_id,
+                    has_ads,
+                    has_google_maps,
+                    has_our_site,
+                    has_school_sites,
+                    intent_type,
+                    total_organic_sites,
+                    len(paid_results),
+                    len(maps_results),
+                    school_percentage,
+                    task.get('cost', 0),
+                    parsed_items_json,
+                    analysis_result_json
+                ))
+                
+                serp_analysis_id = cursor.lastrowid
+                log_print(f"💾 Сохранено в serp_analysis_history, ID: {serp_analysis_id}")
+                
+                # 3. АВТОМАТИЧЕСКИ ДОБАВЛЯЕМ КОНКУРЕНТОВ
+                log_print(f"\n🔄 Добавление конкурентов в БД...")
+                
+                # Импортируем helper (если ещё не импортирован)
+                try:
+                    from utils.serp_competitors_helper import save_serp_competitors
+                    
+                    # Сохраняем конкурентов
+                    save_serp_competitors(
+                        connection=connection,
+                        serp_analysis_id=serp_analysis_id,
+                        organic_results=organic_results,
+                        paid_results=paid_results,
+                        maps_results=maps_results,
+                        campaign_id=campaign_id
+                    )
+                    
+                except ImportError:
+                    log_print("⚠️ Модуль serp_competitors_helper не найден. Конкуренты не будут добавлены автоматически.")
+                except Exception as e:
+                    log_print(f"⚠️ Ошибка при добавлении конкурентов: {e}")
+                
                 connection.commit()
                 cursor.close()
                 
-                log_print(f"💾 Сохранено в БД (serp_logs), ID: {inserted_id}\n")
+                log_print(f"✅ Все данные SERP-анализа сохранены\n")
                 
             except Exception as e:
                 log_print(f"❌ Ошибка сохранения в БД: {str(e)}")
@@ -2019,6 +2086,97 @@ def parse_serp_response(
         import traceback
         traceback.print_exc()
         return None
+        
+def save_serp_analysis_to_db(connection, keyword_id, keyword_text, campaign_id, serp_data, 
+                              organic_results, paid_results, maps_results, cost):
+    """
+    Сохранение результатов SERP-анализа в БД с автоматическим добавлением конкурентов
+    
+    Args:
+        connection: подключение к БД
+        keyword_id: ID ключевого слова
+        keyword_text: текст ключевого слова
+        campaign_id: ID кампании
+        serp_data: результаты парсинга SERP
+        organic_results: список органических результатов
+        paid_results: список платных результатов
+        maps_results: список результатов с карт
+        cost: стоимость запроса
+    """
+    cursor = connection.cursor()
+    
+    try:
+        # Подготовка JSON данных
+        import json
+        
+        parsed_items_json = json.dumps({
+            'organic': organic_results,
+            'paid': paid_results,
+            'maps': maps_results
+        }, ensure_ascii=False)
+        
+        analysis_result_json = json.dumps({
+            'has_ads': serp_data.get('has_ads', False),
+            'has_google_maps': serp_data.get('has_google_maps', False),
+            'has_our_site': serp_data.get('has_our_site', False),
+            'has_school_sites': serp_data.get('has_school_sites', False),
+            'our_organic_position': serp_data.get('our_organic_position'),
+            'our_actual_position': serp_data.get('our_actual_position'),
+            'intent_type': serp_data.get('intent_type', 'Информационный'),
+            'stats': serp_data.get('stats', {})
+        }, ensure_ascii=False)
+        
+        # Сохраняем запись о SERP-анализе
+        cursor.execute("""
+            INSERT INTO serp_analysis_history (
+                keyword_id, keyword_text, campaign_id,
+                analysis_date, has_ads, has_maps, has_our_site, has_school_sites,
+                intent_type, organic_count, paid_count, maps_count, 
+                school_percentage, cost, parsed_items, analysis_result
+            ) VALUES (
+                %s, %s, %s, NOW(), %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            )
+        """, (
+            keyword_id,
+            keyword_text,
+            campaign_id,
+            serp_data.get('has_ads', False),
+            serp_data.get('has_google_maps', False),
+            serp_data.get('has_our_site', False),
+            serp_data.get('has_school_sites', False),
+            serp_data.get('intent_type', 'Информационный'),
+            len(organic_results),
+            len(paid_results),
+            len(maps_results),
+            serp_data.get('stats', {}).get('school_percentage', 0),
+            cost,
+            parsed_items_json,
+            analysis_result_json
+        ))
+        
+        serp_analysis_id = cursor.lastrowid
+        
+        log_print(f"   ✅ SERP-анализ сохранён с ID: {serp_analysis_id}")
+        
+        # Автоматически добавляем конкурентов
+        save_serp_competitors(
+            connection=connection,
+            serp_analysis_id=serp_analysis_id,
+            organic_results=organic_results,
+            paid_results=paid_results,
+            maps_results=maps_results,
+            campaign_id=campaign_id
+        )
+        
+        connection.commit()
+        
+    except Exception as e:
+        log_print(f"   ❌ Ошибка сохранения SERP-анализа: {e}")
+        connection.rollback()
+        import traceback
+        traceback.print_exc()
+    finally:
+        cursor.close()
         
 def get_campaign_domain(campaign_id: int, connection) -> str:
     """

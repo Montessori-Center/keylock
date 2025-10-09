@@ -67,15 +67,18 @@ def create_app():
     with app.app_context():
         # Импортируем модели
         from models.keyword import Campaign, AdGroup, Keyword, AppSetting
+        from models.competitor import CompetitorSchool, SerpAnalysisHistory, SerpCompetitorAppearance, CampaignSite
     
     # Register blueprints
     from api.keywords import keywords_bp
     from api.dataforseo import dataforseo_bp
     from api.settings import settings_bp
+    from api.competitors import competitors_bp
     
     app.register_blueprint(keywords_bp, url_prefix='/api/keywords')
     app.register_blueprint(dataforseo_bp, url_prefix='/api/dataforseo')
     app.register_blueprint(settings_bp, url_prefix='/api/settings')
+    app.register_blueprint(competitors_bp, url_prefix='/api/competitors')
     
     # Create tables within app context
     with app.app_context():
