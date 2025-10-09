@@ -1,8 +1,12 @@
 // frontend/src/components/CompetitorsTable.jsx - ИСПРАВЛЕННАЯ ВЕРСИЯ
 import React, { useRef, useEffect, useState } from 'react';
 import { HotTable } from '@handsontable/react';
+import { registerAllModules } from 'handsontable/registry';
 import Handsontable from 'handsontable';
 import 'handsontable/dist/handsontable.full.css';
+
+// ✅ КРИТИЧНО: Регистрируем все модули для сортировки и фильтров
+registerAllModules();
 
 const CompetitorsTable = ({ 
   competitors, 
@@ -30,10 +34,11 @@ const CompetitorsTable = ({
     }
   }, []);
 
-  // ✅ ИСПРАВЛЕНО: Обработчик изменения ширины столбца с правильной последовательностью обновления
+  // ✅ Обработчик изменения ширины столбца (как в KeywordsTable)
   const handleAfterColumnResize = (newSize, column) => {
-    console.log(`📏 Column ${column} resized to ${newSize}px`);
-    
+    const instance = hotTableRef.current?.hotInstance;
+    if (!instance) return;
+
     const columns = ['selected', 'id', 'domain', 'org_type', 'competitiveness', 'notes', 'action'];
     const columnKey = columns[column];
     
@@ -43,12 +48,9 @@ const CompetitorsTable = ({
         [columnKey]: newSize
       };
       
-      // ✅ КРИТИЧНО: Сначала сохраняем, потом обновляем state
-      localStorage.setItem('competitorsTableColumnWidths', JSON.stringify(newWidths));
       setColumnWidths(newWidths);
-      
+      localStorage.setItem('competitorsTableColumnWidths', JSON.stringify(newWidths));
       console.log(`📏 Saved competitors column width: ${columnKey} = ${newSize}px`);
-      console.log('📏 Current widths:', newWidths);
     }
   };
 
@@ -92,26 +94,25 @@ const CompetitorsTable = ({
     instance.render();
   }, [tableData]);
 
-  // ✅ ДОБАВЛЕНО: Обновление ширин колонок при изменении columnWidths
+  // ✅ ДОБАВЛЕНО: Применение сохранённых ширин при изменении columnWidths
   useEffect(() => {
     if (!hotTableRef.current?.hotInstance || Object.keys(columnWidths).length === 0) return;
     
     const instance = hotTableRef.current.hotInstance;
-    const currentColumns = instance.getSettings().columns;
     
-    // Обновляем ширины колонок
+    // Обновляем настройки таблицы с новыми ширинами
+    const currentColumns = instance.getSettings().columns;
+    const columns = ['selected', 'id', 'domain', 'org_type', 'competitiveness', 'notes', 'action'];
+    
     const updatedColumns = currentColumns.map((col, index) => {
-      const columns = ['selected', 'id', 'domain', 'org_type', 'competitiveness', 'notes', 'action'];
       const columnKey = columns[index];
-      
       if (columnKey && columnWidths[columnKey]) {
         return { ...col, width: columnWidths[columnKey] };
       }
       return col;
     });
     
-    instance.updateSettings({ columns: updatedColumns });
-    console.log('📏 Applied column widths to table');
+    instance.updateSettings({ columns: updatedColumns }, false);
   }, [columnWidths]);
 
   const handleAfterChange = (changes, source) => {
@@ -346,10 +347,12 @@ const CompetitorsTable = ({
           afterChange={handleAfterChange}
           afterSelectionEnd={handleAfterSelectionEnd}
           afterColumnResize={handleAfterColumnResize}
-          contextMenu={false}
+          contextMenu={true}
           selectionMode="range"
           outsideClickDeselects={false}
           fillHandle={false}
+          filters={true}
+          dropdownMenu={true}
           columnSorting={true}
           className="keywords-handsontable"
         />
