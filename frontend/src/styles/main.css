@@ -843,4 +843,93 @@ body {
     z-index: 999;
     height: 100%;
   }
+}\n
+/* ===== ДОБАВИТЬ/ЗАМЕНИТЬ В frontend/src/styles/main.css ===== */
+
+/* ✅ ОБНОВЛЕННЫЕ стили для массовых действий конкурентов - повторяют основную страницу */
+.competitors-bulk-actions {
+  margin-top: 15px;
+  padding: 15px;
+  background-color: var(--light-gray);
+  border-radius: 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+  border-top: 1px solid var(--border-color);
+}
+
+.competitors-bulk-actions .bulk-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.competitors-bulk-actions .bulk-actions span {
+  font-weight: 500;
+  margin-right: 10px;
+}
+
+.competitors-bulk-actions .bulk-actions button {
+  padding: 5px 12px;
+  border: 1px solid var(--border-color);
+  background-color: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background-color 0.2s;
+}
+
+.competitors-bulk-actions .bulk-actions button:hover:not(:disabled) {
+  background-color: var(--light-gray);
+}
+
+.competitors-bulk-actions .bulk-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.competitors-bulk-actions .stats {
+  font-size: 13px;
+  color: #5f6368;
+}
+
+.competitors-bulk-actions .stats .new-changes {
+  color: var(--new-record-highlight);
+  font-weight: bold;
+}
+
+/* ✅ НОВОЕ: Стили для новых школ-конкурентов */
+.new-competitor-row {
+  background-color: #e8f5e9 !important;
+  font-weight: 600;
+}
+
+.new-competitor-row td {
+  background-color: #e8f5e9 !important;
+  border-left: 3px solid #4caf50 !important;
+}
+
+/* ✅ НОВОЕ: Badge для кнопки "Школы-конкуренты" */
+.competitors-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background-color: #f44336;
+  color: white;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: bold;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  animation: badge-pulse 2s ease-in-out infinite;
+}
+
+/* ✅ Убираем старые конфликтующие стили для конкурентов */
+.competitors-header .competitors-stats {
+  display: none; /* Статистика теперь внизу */
 }

@@ -1,6 +1,7 @@
 // frontend/src/components/Sidebar.jsx - ОБНОВЛЁННАЯ ВЕРСИЯ
-import React, { useState } from 'react';
+import React, { useState, useEffect} from 'react';
 import { FaChevronRight, FaChevronDown, FaBars, FaUsers } from 'react-icons/fa';
+import api from '../services/api';
 
 const Sidebar = ({ 
   isOpen, 
@@ -20,6 +21,28 @@ const Sidebar = ({
         : [...prev, campaignId]
     );
   };
+  
+  const [competitorsPending, setCompetitorsPending] = useState(0);
+
+  // Загрузка статистики конкурентов для badge
+  useEffect(() => {
+    const loadCompetitorsStats = async () => {
+      try {
+        const response = await api.getCompetitorsStats();
+        if (response.success && response.stats) {
+          setCompetitorsPending(response.stats.newPending || 0);
+        }
+      } catch (error) {
+        console.error('Error loading competitors stats:', error);
+      }
+    };
+
+    loadCompetitorsStats();
+    
+    // Обновление каждые 30 секунд
+    const interval = setInterval(loadCompetitorsStats, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className={`sidebar ${isOpen ? 'open' : 'closed'}`}>
@@ -31,12 +54,14 @@ const Sidebar = ({
         <div className="sidebar-content">
           {/* Кнопка "Школы-конкуренты" */}
           <button 
-            className="competitors-btn"
-            onClick={onOpenCompetitors}
-            title="Школы-конкуренты"
+            className="competitors-btn" 
+            onClick={onCompetitorsClick}
+            style={{ position: 'relative' }}
           >
-            <FaUsers style={{ marginRight: '8px' }} />
             Школы-конкуренты
+            {competitorsPending > 0 && (
+              <span className="competitors-badge">{competitorsPending}</span>
+            )}
           </button>
 
           <div style={{ borderTop: '1px solid #dadce0', margin: '10px 0' }}></div>

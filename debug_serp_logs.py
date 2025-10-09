@@ -1,340 +1,295 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Скрипт для исправления дублирования /api/ в CompetitorsView.jsx
-Запускать из корневой директории проекта: python fix_competitors_api.py
+Миграция БД: Добавление поля is_new в таблицу competitor_schools
+Запускать из корневой директории проекта: python migrate_competitors_is_new.py
 """
 
+import sys
 import os
 from pathlib import Path
 
-# Исправленный код CompetitorsView.jsx БЕЗ дублирования /api/
-COMPETITORS_VIEW_FIXED = """// frontend/src/components/CompetitorsView.jsx
-import React, { useState, useEffect } from 'react';
-import CompetitorsTable from './CompetitorsTable';
-import AddCompetitorModal from './Modals/AddCompetitorModal';
-import ChangeFieldCompetitorModal from './Modals/ChangeFieldCompetitorModal';
-import ApplyFiltersModal from './Modals/ApplyFiltersModal';
-import api from '../services/api';
-import { toast } from 'react-toastify';
+# Добавляем backend в путь для импорта
+sys.path.insert(0, str(Path(__file__).parent / 'backend'))
 
-const CompetitorsView = ({ onClose }) => {
-  const [competitors, setCompetitors] = useState([]);
-  const [selectedIds, setSelectedIds] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [stats, setStats] = useState(null);
-  
-  // Модальные окна
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showChangeFieldModal, setShowChangeFieldModal] = useState(false);
-  const [showFiltersModal, setShowFiltersModal] = useState(false);
+try:
+    from config import Config
+    import pymysql
+except ImportError as e:
+    print(f"❌ Ошибка импорта: {e}")
+    print("   Убедитесь, что файл backend/config.py существует")
+    sys.exit(1)
 
-  // Загрузка данных при монтировании
-  useEffect(() => {
-    loadCompetitors();
-    loadStats();
-  }, []);
 
-  const loadCompetitors = async () => {
-    setLoading(true);
-    try {
-      const response = await api.getCompetitors();
-      if (response.success) {
-        setCompetitors(response.competitors || []);
-      } else {
-        toast.error('Ошибка загрузки конкурентов');
-      }
-    } catch (error) {
-      console.error('Error loading competitors:', error);
-      toast.error('Ошибка загрузки данных');
-    } finally {
-      setLoading(false);
-    }
-  };
+def get_db_connection():
+    """Создаёт подключение к БД используя Config"""
+    return pymysql.connect(
+        host=Config.DB_HOST,
+        port=Config.DB_PORT,
+        user=Config.DB_USER,
+        password=Config.DB_PASSWORD,
+        database=Config.DB_NAME,
+        cursorclass=pymysql.cursors.DictCursor
+    )
 
-  const loadStats = async () => {
-    try {
-      const response = await api.getCompetitorsStats();
-      if (response.success) {
-        setStats(response.stats);
-      }
-    } catch (error) {
-      console.error('Error loading stats:', error);
-    }
-  };
 
-  const handleAdd = async (competitorData) => {
-    try {
-      const response = await api.addCompetitor(competitorData);
-      if (response.success) {
-        toast.success('Конкурент добавлен');
-        loadCompetitors();
-        loadStats();
-      } else {
-        throw new Error(response.error || 'Ошибка добавления');
-      }
-    } catch (error) {
-      throw error;
-    }
-  };
+def check_column_exists(cursor, table_name, column_name):
+    """Проверяет существование колонки в таблице"""
+    cursor.execute(f"""
+        SELECT COUNT(*) as count
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = '{table_name}'
+        AND COLUMN_NAME = '{column_name}'
+    """)
+    result = cursor.fetchone()
+    return result['count'] > 0
 
-  const handleDataChange = async (id, field, value) => {
-    try {
-      const response = await api.updateCompetitor(id, field, value);
-      
-      if (response.success) {
-        toast.success('Данные обновлены');
-        loadCompetitors();
-      } else {
-        toast.error(response.error || 'Ошибка обновления');
-      }
-    } catch (error) {
-      console.error('Error updating competitor:', error);
-      toast.error('Ошибка при сохранении');
-    }
-  };
 
-  const handleDelete = async () => {
-    if (selectedIds.length === 0) {
-      toast.warning('Выберите записи для удаления');
-      return;
-    }
-
-    if (!window.confirm(`Удалить выбранные записи (${selectedIds.length})?`)) {
-      return;
-    }
-
-    try {
-      const response = await api.deleteCompetitors(selectedIds);
-
-      if (response.success) {
-        toast.success(response.message);
-        setSelectedIds([]);
-        loadCompetitors();
-        loadStats();
-      } else {
-        toast.error(response.error || 'Ошибка удаления');
-      }
-    } catch (error) {
-      console.error('Error deleting competitors:', error);
-      toast.error('Ошибка при удалении');
-    }
-  };
-
-  const handleCopyDomain = () => {
-    if (selectedIds.length === 0) {
-      toast.warning('Выберите записи');
-      return;
-    }
-
-    // Находим выбранных конкурентов и копируем их домены
-    const selectedCompetitors = competitors.filter(c => selectedIds.includes(c.id));
-    const domains = selectedCompetitors.map(c => c.domain).join('\\n');
-    
-    navigator.clipboard.writeText(domains).then(() => {
-      toast.success(`Скопировано доменов: ${selectedIds.length}`);
-    }).catch(err => {
-      console.error('Error copying:', err);
-      toast.error('Ошибка копирования');
-    });
-  };
-
-  const handleChangeField = async (field, value) => {
-    if (selectedIds.length === 0) {
-      toast.warning('Выберите записи');
-      return;
-    }
-
-    try {
-      // Обновляем каждую выбранную запись
-      const promises = selectedIds.map(id => 
-        api.updateCompetitor(id, field, value)
-      );
-
-      await Promise.all(promises);
-      
-      toast.success(`Обновлено записей: ${selectedIds.length}`);
-      loadCompetitors();
-    } catch (error) {
-      console.error('Error updating field:', error);
-      toast.error('Ошибка при обновлении');
-    }
-  };
-
-  const handleUnselectAll = () => {
-    setSelectedIds([]);
-  };
-
-  return (
-    <div className="competitors-view">
-      {/* Заголовок со статистикой */}
-      <div className="competitors-header">
-        <div>
-          <h2>Школы-конкуренты</h2>
-          {stats && (
-            <div className="competitors-stats">
-              <div className="stat-item">
-                <span className="stat-label">Всего</span>
-                <span className="stat-value">{stats.total || 0}</span>
-              </div>
-              <div className="stat-item">
-                <span className="stat-label">Школы</span>
-                <span className="stat-value">{stats.schools || 0}</span>
-              </div>
-              <div className="stat-item">
-                <span className="stat-label">Базы репетиторов</span>
-                <span className="stat-value">{stats.tutor_bases || 0}</span>
-              </div>
-            </div>
-          )}
-        </div>
-        <button className="btn btn-secondary" onClick={onClose}>
-          Закрыть
-        </button>
-      </div>
-
-      {/* Контент с правильной структурой */}
-      <div className="competitors-content">
-        {/* Кнопки действий */}
-        <div className="competitors-actions action-buttons">
-          <button 
-            className="btn btn-purple" 
-            onClick={() => setShowAddModal(true)}
-          >
-            Добавить новый сайт
-          </button>
-          <button 
-            className="btn btn-blue" 
-            onClick={() => setShowFiltersModal(true)}
-          >
-            Применить фильтры
-          </button>
-        </div>
-
-        {/* Обертка для таблицы */}
-        <div className="competitors-table-wrapper">
-          <CompetitorsTable
-            competitors={competitors}
-            loading={loading}
-            selectedIds={selectedIds}
-            onSelectionChange={setSelectedIds}
-            onDataChange={handleDataChange}
-          />
-        </div>
-
-        {/* Массовые действия */}
-        <div className="competitors-bulk-actions">
-          <button 
-            className="btn btn-red" 
-            onClick={handleDelete}
-            disabled={selectedIds.length === 0}
-          >
-            Удалить ({selectedIds.length})
-          </button>
-          <button 
-            className="btn btn-blue" 
-            onClick={handleCopyDomain}
-            disabled={selectedIds.length === 0}
-          >
-            Копировать домены
-          </button>
-          <button 
-            className="btn btn-green" 
-            onClick={() => setShowChangeFieldModal(true)}
-            disabled={selectedIds.length === 0}
-          >
-            Изм. польз. значение
-          </button>
-          <button 
-            className="btn btn-dark-blue" 
-            onClick={handleUnselectAll}
-            disabled={selectedIds.length === 0}
-          >
-            Снять выделение
-          </button>
-        </div>
-      </div>
-
-      {/* Модальные окна */}
-      <AddCompetitorModal
-        show={showAddModal}
-        onHide={() => setShowAddModal(false)}
-        onAdd={handleAdd}
-      />
-
-      <ChangeFieldCompetitorModal
-        show={showChangeFieldModal}
-        onHide={() => setShowChangeFieldModal(false)}
-        onSave={handleChangeField}
-        selectedCount={selectedIds.length}
-      />
-
-      <ApplyFiltersModal
-        show={showFiltersModal}
-        onHide={() => setShowFiltersModal(false)}
-      />
-    </div>
-  );
-};
-
-export default CompetitorsView;
-"""
+def check_index_exists(cursor, table_name, index_name):
+    """Проверяет существование индекса"""
+    cursor.execute(f"""
+        SELECT COUNT(*) as count
+        FROM information_schema.STATISTICS
+        WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = '{table_name}'
+        AND INDEX_NAME = '{index_name}'
+    """)
+    result = cursor.fetchone()
+    return result['count'] > 0
 
 
 def main():
-    """Основная функция исправления"""
+    """Основная функция миграции"""
     
-    print("=" * 60)
-    print("🔧 Исправление дублирования /api/ в CompetitorsView")
-    print("=" * 60)
+    print("=" * 70)
+    print("🔧 МИГРАЦИЯ БД: Добавление поля is_new в таблицу competitor_schools")
+    print("=" * 70)
     
-    # Определяем путь к файлу
-    script_dir = Path(__file__).parent.absolute()
+    connection = None
     
-    # Проверяем структуру проекта
-    if not (script_dir / 'frontend').exists():
-        print("❌ ОШИБКА: Скрипт должен запускаться из корневой директории проекта!")
-        print(f"   Текущая директория: {script_dir}")
+    try:
+        # Выводим информацию о подключении
+        print(f"\n📋 Параметры подключения:")
+        print(f"   Host: {Config.DB_HOST}")
+        print(f"   Port: {Config.DB_PORT}")
+        print(f"   Database: {Config.DB_NAME}")
+        print(f"   User: {Config.DB_USER}")
+        
+        # Подключение к БД
+        print("\n📡 Подключение к базе данных...")
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # Получаем имя текущей БД
+        cursor.execute("SELECT DATABASE() as db_name")
+        db_info = cursor.fetchone()
+        print(f"   ✅ Подключено к БД: {db_info['db_name']}")
+        
+        # Проверяем версию MySQL
+        cursor.execute("SELECT VERSION() as version")
+        version_info = cursor.fetchone()
+        print(f"   ✅ MySQL версия: {version_info['version']}")
+        
+        # Проверяем существование таблицы competitor_schools
+        print("\n🔍 Проверка таблицы competitor_schools...")
+        cursor.execute("""
+            SELECT COUNT(*) as count
+            FROM information_schema.TABLES
+            WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME = 'competitor_schools'
+        """)
+        table_exists = cursor.fetchone()['count'] > 0
+        
+        if not table_exists:
+            print("   ❌ ОШИБКА: Таблица competitor_schools не существует!")
+            print("   Создайте таблицу сначала через create_new_tables.py")
+            return False
+        
+        print("   ✅ Таблица competitor_schools найдена")
+        
+        # Проверяем текущие колонки
+        cursor.execute("""
+            SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT, COLUMN_COMMENT
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME = 'competitor_schools'
+            ORDER BY ORDINAL_POSITION
+        """)
+        current_columns = cursor.fetchall()
+        
+        print(f"\n📋 Текущие колонки в таблице competitor_schools ({len(current_columns)}):")
+        for col in current_columns:
+            print(f"   - {col['COLUMN_NAME']} ({col['COLUMN_TYPE']})")
+        
+        # Проверяем существование поля is_new
+        print("\n🔍 Проверка поля is_new...")
+        is_new_exists = check_column_exists(cursor, 'competitor_schools', 'is_new')
+        
+        if is_new_exists:
+            print("   ⚠️  Поле is_new уже существует!")
+            print("   Миграция уже была выполнена ранее")
+            
+            # Показываем статистику
+            cursor.execute("SELECT COUNT(*) as count FROM competitor_schools WHERE is_new = 1")
+            pending_count = cursor.fetchone()['count']
+            print(f"\n📊 Статистика:")
+            print(f"   Необработанных школ (is_new = 1): {pending_count}")
+            
+            return True
+        
+        print("   ✅ Поле is_new отсутствует, начинаем миграцию...")
+        
+        # ===== МИГРАЦИЯ 1: Добавление поля is_new =====
+        print("\n🔨 Шаг 1/4: Добавление поля is_new...")
+        cursor.execute("""
+            ALTER TABLE competitor_schools 
+            ADD COLUMN is_new TINYINT(1) NOT NULL DEFAULT 0 
+            COMMENT 'Флаг новой необработанной школы (1 = новая, 0 = обработана)'
+            AFTER notes
+        """)
+        print("   ✅ Поле is_new успешно добавлено")
+        
+        # ===== МИГРАЦИЯ 2: Установка значений по умолчанию =====
+        print("\n🔨 Шаг 2/4: Установка значений по умолчанию...")
+        cursor.execute("UPDATE competitor_schools SET is_new = 0 WHERE is_new IS NULL")
+        affected = cursor.rowcount
+        print(f"   ✅ Обновлено записей: {affected}")
+        
+        # ===== МИГРАЦИЯ 3: Добавление индекса =====
+        print("\n🔨 Шаг 3/4: Добавление индекса для быстрого поиска...")
+        
+        index_exists = check_index_exists(cursor, 'competitor_schools', 'idx_is_new')
+        
+        if not index_exists:
+            cursor.execute("CREATE INDEX idx_is_new ON competitor_schools(is_new)")
+            print("   ✅ Индекс idx_is_new создан")
+        else:
+            print("   ℹ️  Индекс idx_is_new уже существует")
+        
+        # ===== МИГРАЦИЯ 4: Добавление составного индекса =====
+        print("\n🔨 Шаг 4/4: Добавление составного индекса для фильтрации...")
+        
+        composite_index_exists = check_index_exists(cursor, 'competitor_schools', 'idx_is_new_org_type')
+        
+        if not composite_index_exists:
+            cursor.execute("CREATE INDEX idx_is_new_org_type ON competitor_schools(is_new, org_type)")
+            print("   ✅ Индекс idx_is_new_org_type создан")
+        else:
+            print("   ℹ️  Индекс idx_is_new_org_type уже существует")
+        
+        # Коммитим изменения
+        connection.commit()
+        print("\n💾 Изменения успешно сохранены в БД")
+        
+        # Проверка результата
+        print("\n🔍 Проверка результата миграции...")
+        cursor.execute("""
+            SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT, COLUMN_COMMENT
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME = 'competitor_schools'
+            AND COLUMN_NAME = 'is_new'
+        """)
+        new_column = cursor.fetchone()
+        
+        if new_column:
+            print("   ✅ Поле is_new успешно создано:")
+            print(f"      Тип: {new_column['COLUMN_TYPE']}")
+            print(f"      NULL: {new_column['IS_NULLABLE']}")
+            print(f"      По умолчанию: {new_column['COLUMN_DEFAULT']}")
+            print(f"      Комментарий: {new_column['COLUMN_COMMENT']}")
+        
+        # Показываем индексы
+        print("\n📑 Индексы таблицы competitor_schools:")
+        cursor.execute("""
+            SELECT DISTINCT INDEX_NAME, NON_UNIQUE, GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) as COLUMNS
+            FROM information_schema.STATISTICS
+            WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME = 'competitor_schools'
+            GROUP BY INDEX_NAME, NON_UNIQUE
+            ORDER BY INDEX_NAME
+        """)
+        indexes = cursor.fetchall()
+        for idx in indexes:
+            index_type = "UNIQUE" if idx['NON_UNIQUE'] == 0 else "INDEX"
+            print(f"   - {idx['INDEX_NAME']} ({index_type}): {idx['COLUMNS']}")
+        
+        # Финальная статистика
+        cursor.execute("SELECT COUNT(*) as count FROM competitor_schools")
+        total = cursor.fetchone()['count']
+        
+        cursor.execute("SELECT COUNT(*) as count FROM competitor_schools WHERE is_new = 1")
+        pending = cursor.fetchone()['count']
+        
+        cursor.execute("SELECT COUNT(*) as count FROM competitor_schools WHERE is_new = 0")
+        processed = cursor.fetchone()['count']
+        
+        print("\n📊 Статистика после миграции:")
+        print(f"   Всего записей: {total}")
+        print(f"   Обработанных (is_new = 0): {processed}")
+        print(f"   Необработанных (is_new = 1): {pending}")
+        
+        print("\n" + "=" * 70)
+        print("✅ МИГРАЦИЯ УСПЕШНО ЗАВЕРШЕНА!")
+        print("=" * 70)
+        
+        print("\n📝 Следующие шаги:")
+        print("   1. Обновите backend API для работы с новым полем")
+        print("   2. Обновите frontend компоненты")
+        print("   3. При создании школ из SERP устанавливайте is_new = 1")
+        print("   4. Перезапустите Flask сервер")
+        
+        return True
+        
+    except pymysql.err.OperationalError as e:
+        print(f"\n❌ ОШИБКА подключения к БД:")
+        print(f"   {e}")
+        print("\n💡 Проверьте:")
+        print("   1. MySQL сервер запущен")
+        print("   2. Параметры подключения в backend/config.py или .env")
+        print("   3. База данных существует")
+        print("   4. Пользователь имеет права доступа")
         return False
-    
-    competitors_view_path = script_dir / 'frontend' / 'src' / 'components' / 'CompetitorsView.jsx'
-    
-    # Создаем бэкап
-    print("\\n📦 Создание резервной копии...")
-    if competitors_view_path.exists():
-        backup_path = competitors_view_path.with_suffix('.jsx.backup2')
-        with open(competitors_view_path, 'r', encoding='utf-8') as f:
-            with open(backup_path, 'w', encoding='utf-8') as bf:
-                bf.write(f.read())
-        print(f"   ✅ Бэкап создан: {backup_path}")
-    
-    # Заменяем файл
-    print("\\n🔄 Замена файла...")
-    with open(competitors_view_path, 'w', encoding='utf-8') as f:
-        f.write(COMPETITORS_VIEW_FIXED)
-    print(f"   ✅ Заменен: {competitors_view_path}")
-    
-    print("\\n" + "=" * 60)
-    print("✅ ИСПРАВЛЕНИЕ ЗАВЕРШЕНО!")
-    print("=" * 60)
-    print("\\n📋 Что было исправлено:")
-    print("   ❌ БЫЛО: apiClient.get('/api/competitors/list')")
-    print("   ✅ СТАЛО: api.getCompetitors()")
-    print("\\n   Теперь используется единый api-сервис без дублирования /api/")
-    print("\\n🚀 Следующие шаги:")
-    print("   1. Перезапустите React dev server")
-    print("   2. Проверьте консоль браузера - ошибок 404 быть не должно")
-    print("   3. Проверьте логи Flask - запросы должны быть '/api/competitors/...'")
-    
-    return True
+        
+    except Exception as e:
+        print(f"\n❌ ОШИБКА при выполнении миграции:")
+        print(f"   {type(e).__name__}: {e}")
+        
+        if connection:
+            print("\n🔄 Откат изменений...")
+            connection.rollback()
+            print("   ✅ Откат выполнен")
+        
+        import traceback
+        print("\n📋 Детали ошибки:")
+        traceback.print_exc()
+        
+        return False
+        
+    finally:
+        if connection:
+            cursor.close()
+            connection.close()
+            print("\n🔌 Соединение с БД закрыто")
 
 
 if __name__ == '__main__':
     try:
         success = main()
-        exit(0 if success else 1)
+        
+        if success:
+            print("\n🎉 Миграция завершена успешно!")
+            sys.exit(0)
+        else:
+            print("\n⚠️  Миграция завершена с ошибками")
+            sys.exit(1)
+            
+    except KeyboardInterrupt:
+        print("\n\n⚠️  Миграция прервана пользователем")
+        sys.exit(1)
     except Exception as e:
-        print(f"\\n❌ КРИТИЧЕСКАЯ ОШИБКА: {e}")
+        print(f"\n❌ КРИТИЧЕСКАЯ ОШИБКА: {e}")
         import traceback
         traceback.print_exc()
-        exit(1)
+        sys.exit(1)

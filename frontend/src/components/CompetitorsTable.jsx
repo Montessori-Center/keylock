@@ -24,7 +24,8 @@ const CompetitorsTable = ({
         domain: comp.domain,
         org_type: comp.org_type || 'Школа',
         competitiveness: comp.competitiveness || 0,
-        notes: comp.notes || ''
+        notes: comp.notes || '',
+        is_new: comp.is_new || false  // ✅ НОВОЕ: флаг новой школы
       }));
       setTableData(data);
     } else {
@@ -32,9 +33,31 @@ const CompetitorsTable = ({
     }
   }, [competitors, selectedIds]);
 
-  // Обработка изменения выделения
+  // ✅ НОВОЕ: Применение стилей для новых записей
+  useEffect(() => {
+    if (!hotTableRef.current?.hotInstance || tableData.length === 0) return;
+    
+    const instance = hotTableRef.current.hotInstance;
+    
+    instance.updateSettings({
+      cells: function(row) {
+        const cellProperties = {};
+        const rowData = this.instance.getSourceDataAtRow(row);
+        
+        // ✅ Подсветка новых школ
+        if (rowData && rowData.is_new) {
+          cellProperties.className = 'new-competitor-row';
+        }
+        
+        return cellProperties;
+      }
+    });
+    
+    instance.render();
+  }, [tableData]);
+
   const handleAfterSelectionEnd = (row, column, row2, column2) => {
-    if (column === 0) return; // Игнорируем клики по чекбоксу
+    if (column === 0) return;
     
     const hot = hotTableRef.current?.hotInstance;
     if (!hot) return;
@@ -42,7 +65,7 @@ const CompetitorsTable = ({
     const newSelectedIds = [];
     for (let i = Math.min(row, row2); i <= Math.max(row, row2); i++) {
       const rowData = hot.getDataAtRow(i);
-      if (rowData && rowData[1]) { // rowData[1] - это ID
+      if (rowData && rowData[1]) {
         newSelectedIds.push(rowData[1]);
       }
     }
@@ -52,7 +75,6 @@ const CompetitorsTable = ({
     }
   };
 
-  // ✅ ИСПРАВЛЕНО: Обработка клика по чекбоксу
   const handleAfterChange = (changes, source) => {
     if (!changes || source === 'loadData') return;
     
@@ -60,7 +82,6 @@ const CompetitorsTable = ({
     if (!hot) return;
 
     changes.forEach(([row, prop, oldValue, newValue]) => {
-      // ✅ Получаем rowData в начале forEach для всех случаев
       const rowData = hot.getDataAtRow(row);
       if (!rowData) return;
       
@@ -73,13 +94,11 @@ const CompetitorsTable = ({
           onSelectionChange(selectedIds.filter(selectedId => selectedId !== id));
         }
       } else if (prop === 'org_type' || prop === 'notes') {
-        // Отправляем изменение на сервер
         onDataChange(id, prop, newValue);
       }
     });
   };
 
-  // Обработка Shift+Click
   const handleAfterOnCellMouseDown = (event, coords, td) => {
     if (coords.row < 0) return;
     
@@ -104,15 +123,33 @@ const CompetitorsTable = ({
     lastClickedRowRef.current = coords.row;
   };
 
-  // ✅ ИСПРАВЛЕНО: Рендер кнопки "Открыть сайт" - используем обычную функцию
+  // ✅ ИСПРАВЛЕНО: Рендер кнопки "Открыть сайт"
   function openSiteRenderer(instance, td, row, col, prop, value, cellProperties) {
     Handsontable.renderers.TextRenderer.apply(this, arguments);
     
     const rowData = instance.getDataAtRow(row);
-    const domain = rowData[2]; // domain находится в 3-й колонке (индекс 2)
+    const domain = rowData[2];
     
     if (domain) {
-      td.innerHTML = `<a href="https://${domain}" target="_blank" rel="noopener noreferrer" style="color: #4285f4; text-decoration: none;">Открыть сайт</a>`;
+      td.innerHTML = '';
+      const link = document.createElement('a');
+      link.href = `https://${domain}`;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = 'Открыть сайт';
+      link.style.color = '#4285f4';
+      link.style.textDecoration = 'none';
+      link.style.cursor = 'pointer';
+      
+      // ✅ КРИТИЧНО: Останавливаем всплытие события
+      link.addEventListener('mousedown', (e) => {
+        e.stopPropagation();
+      });
+      link.addEventListener('click', (e) => {
+        e.stopPropagation();
+      });
+      
+      td.appendChild(link);
     } else {
       td.innerHTML = '';
     }
@@ -120,7 +157,6 @@ const CompetitorsTable = ({
     return td;
   }
 
-  // Конфигурация колонок
   const columns = [
     { 
       data: 'selected', 
@@ -201,6 +237,7 @@ const CompetitorsTable = ({
           selectionMode="range"
           outsideClickDeselects={false}
           fillHandle={false}
+          columnSorting={true}
           className="keywords-handsontable"
         />
       )}
