@@ -226,7 +226,7 @@ const CompetitorsView = ({ onClose }) => {
         </div>
 
         {/* ✅ ОБНОВЛЕНО: Массовые действия со статистикой справа (как на основной странице) */}
-        <div className="competitors-bulk-actions">
+        <div className="bottom-actions">
           <div className="bulk-actions">
             <span>Массовые действия (выбрано: {selectedIds.length}):</span>
             <button 

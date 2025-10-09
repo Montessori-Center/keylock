@@ -1,6 +1,6 @@
-// frontend/src/components/Sidebar.jsx - ОБНОВЛЁННАЯ ВЕРСИЯ
-import React, { useState, useEffect} from 'react';
-import { FaChevronRight, FaChevronDown, FaBars, FaUsers } from 'react-icons/fa';
+// frontend/src/components/Sidebar.jsx - ВОССТАНОВЛЕННАЯ ВЕРСИЯ
+import React, { useState, useEffect } from 'react';
+import { FaChevronRight, FaChevronDown, FaBars } from 'react-icons/fa';
 import api from '../services/api';
 
 const Sidebar = ({ 
@@ -10,9 +10,10 @@ const Sidebar = ({
   selectedCampaign, 
   selectedAdGroup, 
   onSelectAdGroup,
-  onOpenCompetitors 
+  onOpenCompetitors
 }) => {
   const [expandedCampaigns, setExpandedCampaigns] = useState([1]);
+  const [competitorsPending, setCompetitorsPending] = useState(0);
 
   const toggleCampaign = (campaignId) => {
     setExpandedCampaigns(prev => 
@@ -21,8 +22,6 @@ const Sidebar = ({
         : [...prev, campaignId]
     );
   };
-  
-  const [competitorsPending, setCompetitorsPending] = useState(0);
 
   // Загрузка статистики конкурентов для badge
   useEffect(() => {
@@ -52,10 +51,10 @@ const Sidebar = ({
       
       {isOpen && (
         <div className="sidebar-content">
-          {/* Кнопка "Школы-конкуренты" */}
+          {/* Кнопка "Школы-конкуренты" с badge */}
           <button 
             className="competitors-btn" 
-            onClick={onCompetitorsClick}
+            onClick={onOpenCompetitors}
             style={{ position: 'relative' }}
           >
             Школы-конкуренты
@@ -73,13 +72,18 @@ const Sidebar = ({
                 className="campaign-header"
                 onClick={() => toggleCampaign(campaign.id)}
               >
-                {expandedCampaigns.includes(campaign.id) ? <FaChevronDown /> : <FaChevronRight />}
+                {expandedCampaigns.includes(campaign.id) ? 
+                  <FaChevronDown /> : 
+                  <FaChevronRight />
+                }
                 <span className="campaign-name">{campaign.name}</span>
               </div>
               
-              {expandedCampaigns.includes(campaign.id) && campaign.adGroups && (
+              {/* ✅ ВОССТАНОВЛЕНО: проверка adGroups (как snake_case, так и camelCase) */}
+              {expandedCampaigns.includes(campaign.id) && (campaign.adGroups || campaign.ad_groups) && (
                 <div className="ad-groups">
-                  {campaign.adGroups.map(adGroup => {
+                  {(campaign.adGroups || campaign.ad_groups).map(adGroup => {
+                    // ✅ ВОССТАНОВЛЕНО: логика определения изменений
                     const isActive = selectedAdGroup?.id === adGroup.id;
                     const hasChanges = adGroup.hasChanges || adGroup.newChanges > 0;
                     
@@ -96,6 +100,7 @@ const Sidebar = ({
                           {adGroup.name}
                         </span>
                         
+                        {/* ✅ ВОССТАНОВЛЕНО: индикаторы изменений и цветные метки партий */}
                         {hasChanges && (
                           <div className="changes-indicator">
                             <span className="changes-badge">{adGroup.newChanges}</span>
@@ -124,7 +129,9 @@ const Sidebar = ({
               )}
             </div>
           )) : (
-            <div className="no-campaigns">Нет кампаний</div>
+            <div style={{ padding: '10px', color: '#5f6368', fontSize: '13px' }}>
+              Кампании не найдены
+            </div>
           )}
         </div>
       )}
