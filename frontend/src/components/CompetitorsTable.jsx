@@ -1,4 +1,4 @@
-// frontend/src/components/CompetitorsTable.jsx - ПОЛНАЯ ВЕРСИЯ
+// frontend/src/components/CompetitorsTable.jsx - ИСПРАВЛЕННАЯ ВЕРСИЯ
 import React, { useRef, useEffect, useState } from 'react';
 import { HotTable } from '@handsontable/react';
 import Handsontable from 'handsontable';
@@ -30,11 +30,10 @@ const CompetitorsTable = ({
     }
   }, []);
 
-  // ✅ Обработчик изменения ширины столбца
+  // ✅ ИСПРАВЛЕНО: Обработчик изменения ширины столбца с правильной последовательностью обновления
   const handleAfterColumnResize = (newSize, column) => {
-    const instance = hotTableRef.current?.hotInstance;
-    if (!instance) return;
-
+    console.log(`📏 Column ${column} resized to ${newSize}px`);
+    
     const columns = ['selected', 'id', 'domain', 'org_type', 'competitiveness', 'notes', 'action'];
     const columnKey = columns[column];
     
@@ -44,9 +43,12 @@ const CompetitorsTable = ({
         [columnKey]: newSize
       };
       
-      setColumnWidths(newWidths);
+      // ✅ КРИТИЧНО: Сначала сохраняем, потом обновляем state
       localStorage.setItem('competitorsTableColumnWidths', JSON.stringify(newWidths));
+      setColumnWidths(newWidths);
+      
       console.log(`📏 Saved competitors column width: ${columnKey} = ${newSize}px`);
+      console.log('📏 Current widths:', newWidths);
     }
   };
 
@@ -89,6 +91,28 @@ const CompetitorsTable = ({
     
     instance.render();
   }, [tableData]);
+
+  // ✅ ДОБАВЛЕНО: Обновление ширин колонок при изменении columnWidths
+  useEffect(() => {
+    if (!hotTableRef.current?.hotInstance || Object.keys(columnWidths).length === 0) return;
+    
+    const instance = hotTableRef.current.hotInstance;
+    const currentColumns = instance.getSettings().columns;
+    
+    // Обновляем ширины колонок
+    const updatedColumns = currentColumns.map((col, index) => {
+      const columns = ['selected', 'id', 'domain', 'org_type', 'competitiveness', 'notes', 'action'];
+      const columnKey = columns[index];
+      
+      if (columnKey && columnWidths[columnKey]) {
+        return { ...col, width: columnWidths[columnKey] };
+      }
+      return col;
+    });
+    
+    instance.updateSettings({ columns: updatedColumns });
+    console.log('📏 Applied column widths to table');
+  }, [columnWidths]);
 
   const handleAfterChange = (changes, source) => {
     if (!changes || source === 'loadData') return;
@@ -145,27 +169,24 @@ const CompetitorsTable = ({
     }
   };
 
-  // ✅ ИСПРАВЛЕНО: SHIFT-выделение (скопировано из KeywordsTable)
+  // ✅ SHIFT-выделение
   useEffect(() => {
     const instance = hotTableRef.current?.hotInstance;
     if (!instance) return;
 
     const handleMouseDown = (e) => {
-      // Проверяем, что клик по чекбоксу
       const checkbox = e.target.closest('input[type="checkbox"]');
       if (!checkbox) return;
 
-      // Проверяем, что это чекбокс из нашей таблицы
       const td = checkbox.closest('td');
       if (!td) return;
 
       const coords = instance.getCoords(td);
       
-      if (!coords || coords.col !== 0) return; // Только первая колонка (чекбоксы)
+      if (!coords || coords.col !== 0) return;
 
       const currentRow = coords.row;
 
-      // ✅ SHIFT-ВЫДЕЛЕНИЕ
       if (e.shiftKey && lastClickedRowRef.current !== null) {
         e.preventDefault();
         e.stopPropagation();
@@ -175,10 +196,8 @@ const CompetitorsTable = ({
 
         console.log(`✅ Shift-click: selecting rows ${startRow} to ${endRow}`);
 
-        // Определяем, выделяем или снимаем выделение
         const shouldSelect = !checkbox.checked;
 
-        // Собираем ID для выделения
         const rangeIds = [];
         for (let i = startRow; i <= endRow; i++) {
           if (tableData[i]) {
@@ -188,17 +207,13 @@ const CompetitorsTable = ({
 
         let newSelectedIds;
         if (shouldSelect) {
-          // Добавляем все ID из диапазона
           newSelectedIds = [...new Set([...selectedIds, ...rangeIds])];
         } else {
-          // Убираем все ID из диапазона
           newSelectedIds = selectedIds.filter(id => !rangeIds.includes(id));
         }
 
-        // Обновляем состояние
         onSelectionChange(newSelectedIds);
 
-        // Обновляем чекбоксы в таблице
         const newData = tableData.map((row, idx) => {
           if (idx >= startRow && idx <= endRow) {
             return { ...row, selected: shouldSelect };
@@ -211,7 +226,6 @@ const CompetitorsTable = ({
         return;
       }
 
-      // Сохраняем последний кликнутый ряд
       lastClickedRowRef.current = currentRow;
     };
 

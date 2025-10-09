@@ -1877,7 +1877,9 @@ def parse_serp_response(
                 if clean_domain in school_domains:
                     school_sites_count += 1
                     has_school_sites = True
-                    log_print(f"        🏫 САЙТ ШКОЛЫ-КОНКУРЕНТА")
+                    log_print(f"        🏫 САЙТ ШКОЛЫ-КОНКУРЕНТА: {clean_domain}")
+                else:
+                    log_print(f"        ℹ️ НЕ ШКОЛА: {clean_domain}")
             
             # ВСЕ ОСТАЛЬНЫЕ ТИПЫ
             else:
@@ -2208,15 +2210,17 @@ def get_campaign_domain(campaign_id: int, connection) -> str:
 
 def get_school_domains(connection) -> set:
     """
-    Получает список доменов школ-конкурентов из БД (только обработанные, is_new=FALSE)
+    Получает список доменов школ-конкурентов из БД
+    ТОЛЬКО обработанные школы (is_new=FALSE и org_type='Школа')
     """
     try:
         cursor = connection.cursor()
-        # ✅ ИСПРАВЛЕНО: читаем из competitor_schools, только обработанные (is_new=FALSE)
+        # ✅ ИСПРАВЛЕНО: только обработанные школы (is_new=FALSE) с типом "Школа"
         cursor.execute("""
             SELECT domain 
             FROM competitor_schools 
-            WHERE is_new = FALSE
+            WHERE is_new = FALSE 
+            AND org_type = 'Школа'
         """)
         
         results = cursor.fetchall()
@@ -2232,9 +2236,9 @@ def get_school_domains(connection) -> set:
                     domain = domain[4:]
                 domains.add(domain)
         
-        log_print(f"📋 Загружено школ-конкурентов (обработанных): {len(domains)}")
+        log_print(f"📋 Загружено ОБРАБОТАННЫХ школ (org_type='Школа', is_new=FALSE): {len(domains)}")
         if domains:
-            log_print(f"   Примеры: {list(domains)[:5]}")
+            log_print(f"   Примеры доменов школ: {list(domains)[:10]}")
         
         return domains
         
