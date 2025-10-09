@@ -1,11 +1,10 @@
-// frontend/src/components/CompetitorsTable.jsx - ИСПРАВЛЕННАЯ ВЕРСИЯ
+// frontend/src/components/CompetitorsTable.jsx - ФИНАЛЬНАЯ ВЕРСИЯ
 import React, { useRef, useEffect, useState } from 'react';
 import { HotTable } from '@handsontable/react';
 import { registerAllModules } from 'handsontable/registry';
 import Handsontable from 'handsontable';
 import 'handsontable/dist/handsontable.full.css';
 
-// ✅ КРИТИЧНО: Регистрируем все модули для сортировки и фильтров
 registerAllModules();
 
 const CompetitorsTable = ({ 
@@ -34,11 +33,8 @@ const CompetitorsTable = ({
     }
   }, []);
 
-  // ✅ Обработчик изменения ширины столбца (как в KeywordsTable)
+  // ✅ Обработчик изменения ширины столбца
   const handleAfterColumnResize = (newSize, column) => {
-    const instance = hotTableRef.current?.hotInstance;
-    if (!instance) return;
-
     const columns = ['selected', 'id', 'domain', 'org_type', 'competitiveness', 'notes', 'action'];
     const columnKey = columns[column];
     
@@ -93,27 +89,6 @@ const CompetitorsTable = ({
     
     instance.render();
   }, [tableData]);
-
-  // ✅ ДОБАВЛЕНО: Применение сохранённых ширин при изменении columnWidths
-  useEffect(() => {
-    if (!hotTableRef.current?.hotInstance || Object.keys(columnWidths).length === 0) return;
-    
-    const instance = hotTableRef.current.hotInstance;
-    
-    // Обновляем настройки таблицы с новыми ширинами
-    const currentColumns = instance.getSettings().columns;
-    const columns = ['selected', 'id', 'domain', 'org_type', 'competitiveness', 'notes', 'action'];
-    
-    const updatedColumns = currentColumns.map((col, index) => {
-      const columnKey = columns[index];
-      if (columnKey && columnWidths[columnKey]) {
-        return { ...col, width: columnWidths[columnKey] };
-      }
-      return col;
-    });
-    
-    instance.updateSettings({ columns: updatedColumns }, false);
-  }, [columnWidths]);
 
   const handleAfterChange = (changes, source) => {
     if (!changes || source === 'loadData') return;
@@ -195,8 +170,6 @@ const CompetitorsTable = ({
         const startRow = Math.min(lastClickedRowRef.current, currentRow);
         const endRow = Math.max(lastClickedRowRef.current, currentRow);
 
-        console.log(`✅ Shift-click: selecting rows ${startRow} to ${endRow}`);
-
         const shouldSelect = !checkbox.checked;
 
         const rangeIds = [];
@@ -271,60 +244,63 @@ const CompetitorsTable = ({
     return td;
   }
 
-  const columns = [
-    { 
-      data: 'selected', 
-      type: 'checkbox', 
-      width: columnWidths['selected'] || 40, 
-      className: 'htCenter', 
-      title: '', 
-      readOnly: false 
-    },
-    { 
-      data: 'id', 
-      title: '№', 
-      type: 'numeric', 
-      width: columnWidths['id'] || 50, 
-      readOnly: true 
-    },
-    { 
-      data: 'domain', 
-      title: 'Домен', 
-      type: 'text', 
-      width: columnWidths['domain'] || 300, 
-      readOnly: true 
-    },
-    { 
-      data: 'org_type', 
-      title: 'Тип организации', 
-      type: 'dropdown',
-      source: ['Школа', 'База репетиторов', 'Не школа', 'Партнёр'],
-      width: columnWidths['org_type'] || 180, 
-      readOnly: false 
-    },
-    { 
-      data: 'competitiveness', 
-      title: 'Конкурентность', 
-      type: 'numeric', 
-      width: columnWidths['competitiveness'] || 130, 
-      readOnly: true,
-      className: 'htCenter'
-    },
-    { 
-      data: 'notes', 
-      title: 'Заметки', 
-      type: 'text', 
-      width: columnWidths['notes'] || 250, 
-      readOnly: false 
-    },
-    {
-      data: 'domain',
-      title: 'Действие',
-      width: columnWidths['action'] || 120,
-      readOnly: true,
-      renderer: openSiteRenderer
-    }
-  ];
+  // ✅ ИСПРАВЛЕНО: Создаём колонки с учётом сохранённых ширин
+  const getColumns = () => {
+    return [
+      { 
+        data: 'selected', 
+        type: 'checkbox', 
+        width: columnWidths['selected'] || 40, 
+        className: 'htCenter', 
+        title: '', 
+        readOnly: false 
+      },
+      { 
+        data: 'id', 
+        title: '№', 
+        type: 'numeric', 
+        width: columnWidths['id'] || 50, 
+        readOnly: true 
+      },
+      { 
+        data: 'domain', 
+        title: 'Домен', 
+        type: 'text', 
+        width: columnWidths['domain'] || 300, 
+        readOnly: true 
+      },
+      { 
+        data: 'org_type', 
+        title: 'Тип организации', 
+        type: 'dropdown',
+        source: ['Школа', 'База репетиторов', 'Не школа', 'Партнёр'],
+        width: columnWidths['org_type'] || 180, 
+        readOnly: false 
+      },
+      { 
+        data: 'competitiveness', 
+        title: 'Конкурентность', 
+        type: 'numeric', 
+        width: columnWidths['competitiveness'] || 130, 
+        readOnly: true,
+        className: 'htCenter'
+      },
+      { 
+        data: 'notes', 
+        title: 'Заметки', 
+        type: 'text', 
+        width: columnWidths['notes'] || 250, 
+        readOnly: false 
+      },
+      {
+        data: 'domain',
+        title: 'Действие',
+        width: columnWidths['action'] || 120,
+        readOnly: true,
+        renderer: openSiteRenderer
+      }
+    ];
+  };
 
   return (
     <div style={{ width: '100%', height: '100%', overflow: 'hidden' }}>
@@ -336,7 +312,7 @@ const CompetitorsTable = ({
         <HotTable
           ref={hotTableRef}
           data={tableData}
-          columns={columns}
+          columns={getColumns()}
           colHeaders={true}
           rowHeaders={false}
           width="100%"

@@ -54,7 +54,10 @@ const Sidebar = ({
           {/* Кнопка "Школы-конкуренты" с badge */}
           <button 
             className="competitors-btn" 
-            onClick={onOpenCompetitors}
+            onClick={() => {
+                localStorage.setItem('showCompetitors', 'true'); // ✅ ДОБАВЛЕНО
+                onOpenCompetitors();
+              }}
             style={{ position: 'relative' }}
           >
             Школы-конкуренты

@@ -40,6 +40,11 @@ const CompetitorsView = ({ onClose }) => {
       setLoading(false);
     }
   };
+  
+  const handleClose = () => {
+    localStorage.setItem('showCompetitors', 'false'); 
+    onClose();
+  };
 
   const loadStats = async () => {
     try {

@@ -56,7 +56,10 @@ function App() {
       show: false,
       keyword: ''
     });
-  const [showCompetitors, setShowCompetitors] = useState(false);
+  const [showCompetitors, setShowCompetitors] = useState(() => {
+      const saved = localStorage.getItem('showCompetitors');
+      return saved === 'true';
+    });
 
   // Копирование в буфер обмена
   const copyToClipboard = (text) => {
