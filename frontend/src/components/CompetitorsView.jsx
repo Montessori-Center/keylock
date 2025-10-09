@@ -206,12 +206,12 @@ const CompetitorsView = ({ onClose }) => {
           </button>
           {/* ✅ НОВАЯ КНОПКА: Принять изменения */}
           <button 
-            className="btn btn-green" 
-            onClick={handleAcceptChanges}
-            disabled={!stats || stats.newPending === 0}
-          >
-            Принять изменения {stats && stats.newPending > 0 && `(${stats.newPending})`}
-          </button>
+              className="btn btn-green" 
+              onClick={handleAcceptChanges}
+              disabled={!stats || !stats.newPending || stats.newPending === 0}
+            >
+              Принять изменения {stats && stats.newPending > 0 && `(${stats.newPending})`}
+            </button>
         </div>
 
         {/* Обертка для таблицы */}

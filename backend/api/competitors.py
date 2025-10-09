@@ -19,25 +19,23 @@ def get_db_connection():
 
 @competitors_bp.route('/list', methods=['GET'])
 def get_competitors():
-    """Получение списка всех конкурентов с расчётом конкурентности"""
+    """Получение списка всех конкурентов"""
     connection = None
     try:
         print("📋 GET /api/competitors/list called")
         connection = get_db_connection()
         cursor = connection.cursor()
         
-        # ✅ ОБНОВЛЕНО: Добавлено поле is_new
         cursor.execute("""
             SELECT 
                 c.id,
                 c.domain,
                 c.org_type,
                 c.notes,
-                c.is_new,
+                COALESCE(c.is_new, FALSE) as is_new,
                 c.last_seen_at,
                 c.created_at,
                 c.updated_at,
-                COUNT(DISTINCT sca.serp_analysis_id) as appearances_count,
                 (
                     SELECT COUNT(DISTINCT sa.keyword_id)
                     FROM serp_competitor_appearances sca2
@@ -50,14 +48,14 @@ def get_competitors():
                     )
                 ) as competitiveness
             FROM competitor_schools c
-            LEFT JOIN serp_competitor_appearances sca ON c.id = sca.competitor_id
-            GROUP BY c.id, c.domain, c.org_type, c.notes, c.is_new, c.last_seen_at, c.created_at, c.updated_at
             ORDER BY competitiveness DESC, c.domain ASC
         """)
         
         competitors = cursor.fetchall()
         
-        # Преобразуем datetime в строки
+        print(f"✅ Loaded {len(competitors)} competitors")
+        
+        # Преобразуем данные
         for comp in competitors:
             if comp.get('last_seen_at'):
                 comp['last_seen_at'] = comp['last_seen_at'].isoformat()
@@ -65,8 +63,9 @@ def get_competitors():
                 comp['created_at'] = comp['created_at'].isoformat()
             if comp.get('updated_at'):
                 comp['updated_at'] = comp['updated_at'].isoformat()
-            # ✅ Преобразуем is_new в boolean
-            comp['is_new'] = bool(comp.get('is_new', False))
+            # Преобразуем is_new в boolean
+            comp['is_new'] = bool(comp.get('is_new', 0))
+            print(f"  - {comp['domain']}: is_new={comp['is_new']}, competitiveness={comp.get('competitiveness', 0)}")
         
         cursor.close()
         
