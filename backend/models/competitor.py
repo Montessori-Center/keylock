@@ -15,6 +15,7 @@ class CompetitorSchool(db.Model):
     competitiveness = db.Column(db.Integer, default=0, comment='Частота появлений в SERP')
     last_seen_at = db.Column(db.DateTime, nullable=True, comment='Последнее появление в SERP')
     notes = db.Column(db.Text, comment='Заметки пользователя')
+    is_new = db.Column(db.Boolean, default=False)  # ✅ ДОБАВЛЕНО
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -27,6 +28,7 @@ class CompetitorSchool(db.Model):
             'competitiveness': self.competitiveness,
             'last_seen_at': self.last_seen_at.isoformat() if self.last_seen_at else None,
             'notes': self.notes,
+            'is_new': self.is_new,  # ✅ ДОБАВЛЕНО
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }

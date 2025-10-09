@@ -26,14 +26,14 @@ def get_competitors():
         connection = get_db_connection()
         cursor = connection.cursor()
         
-        # Получаем список конкурентов с расчётом конкурентности
-        # Конкурентность = количество уникальных ключевых слов, в последнем SERP которых встречается домен
+        # ✅ ОБНОВЛЕНО: Добавлено поле is_new
         cursor.execute("""
             SELECT 
                 c.id,
                 c.domain,
                 c.org_type,
                 c.notes,
+                c.is_new,
                 c.last_seen_at,
                 c.created_at,
                 c.updated_at,
@@ -51,7 +51,7 @@ def get_competitors():
                 ) as competitiveness
             FROM competitor_schools c
             LEFT JOIN serp_competitor_appearances sca ON c.id = sca.competitor_id
-            GROUP BY c.id, c.domain, c.org_type, c.notes, c.last_seen_at, c.created_at, c.updated_at
+            GROUP BY c.id, c.domain, c.org_type, c.notes, c.is_new, c.last_seen_at, c.created_at, c.updated_at
             ORDER BY competitiveness DESC, c.domain ASC
         """)
         
@@ -65,6 +65,8 @@ def get_competitors():
                 comp['created_at'] = comp['created_at'].isoformat()
             if comp.get('updated_at'):
                 comp['updated_at'] = comp['updated_at'].isoformat()
+            # ✅ Преобразуем is_new в boolean
+            comp['is_new'] = bool(comp.get('is_new', False))
         
         cursor.close()
         

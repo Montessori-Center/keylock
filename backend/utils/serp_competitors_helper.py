@@ -3,44 +3,35 @@
 Вспомогательные функции для работы с конкурентами в SERP-анализе
 """
 
-def save_serp_competitors(connection, serp_analysis_id, organic_results, paid_results, maps_results, campaign_id):
+def save_serp_competitors(connection, serp_analysis_id: int, organic_results: list, paid_results: list, maps_results: list, campaign_id: int):
     """
     Сохранение конкурентов из SERP-анализа в БД
-    
-    Args:
-        connection: подключение к БД
-        serp_analysis_id: ID записи SERP-анализа
-        organic_results: список органических результатов
-        paid_results: список рекламных результатов
-        maps_results: список результатов с карт
-        campaign_id: ID кампании (для исключения нашего сайта)
     """
     cursor = connection.cursor()
     
     try:
-        # Получаем домен нашего сайта, чтобы исключить его
-        cursor.execute("""
-            SELECT domain FROM campaign_sites WHERE campaign_id = %s
-        """, (campaign_id,))
-        our_site = cursor.fetchone()
-        our_domain = our_site['domain'].lower() if our_site and our_site.get('domain') else None
+        # Получаем домен нашего сайта
+        our_domain = get_campaign_domain(campaign_id, connection)
+        if our_domain:
+            our_domain = our_domain.lower()
+            print(f"   📌 Наш домен: {our_domain}")
         
-        # Собираем все домены из всех типов результатов
+        # Собираем все домены из результатов
         all_domains = []
         
-        # Органика
+        # Органические результаты
         for item in organic_results:
             domain = item.get('domain', '').lower().strip()
             if domain and domain != our_domain:
                 all_domains.append({
                     'domain': domain,
-                    'position': item.get('position'),
+                    'position': item.get('organic_position'),
                     'url': item.get('url', ''),
                     'title': item.get('title', ''),
                     'result_type': 'organic'
                 })
         
-        # Реклама
+        # Рекламные результаты
         for item in paid_results:
             domain = item.get('domain', '').lower().strip()
             if domain and domain != our_domain:
@@ -70,34 +61,34 @@ def save_serp_competitors(connection, serp_analysis_id, organic_results, paid_re
         for item in all_domains:
             domain = item['domain']
             
-            # Проверяем/добавляем домен в competitor_schools
-            cursor.execute("""
-                INSERT IGNORE INTO competitor_schools (domain, org_type, created_at)
-                VALUES (%s, 'Школа', NOW())
-            """, (domain,))
+            # ✅ ИЗМЕНЕНО: Проверяем существование домена и добавляем с флагом is_new
+            cursor.execute("SELECT id, is_new FROM competitor_schools WHERE domain = %s", (domain,))
+            existing = cursor.fetchone()
             
-            # Получаем ID конкурента
-            cursor.execute("""
-                SELECT id FROM competitor_schools WHERE domain = %s
-            """, (domain,))
-            competitor = cursor.fetchone()
-            
-            if competitor:
-                competitor_id = competitor['id']
-                
-                # Добавляем запись о появлении
+            if not existing:
+                # Новый домен - добавляем с is_new=TRUE
                 cursor.execute("""
-                    INSERT INTO serp_competitor_appearances 
-                    (serp_analysis_id, competitor_id, position, result_type, url, title, created_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, NOW())
-                """, (
-                    serp_analysis_id,
-                    competitor_id,
-                    item['position'],
-                    item['result_type'],
-                    item['url'],
-                    item['title']
-                ))
+                    INSERT INTO competitor_schools (domain, org_type, is_new, created_at)
+                    VALUES (%s, 'Школа', TRUE, NOW())
+                """, (domain,))
+                competitor_id = cursor.lastrowid
+                print(f"   ✅ Добавлен НОВЫЙ конкурент: {domain} (id={competitor_id})")
+            else:
+                competitor_id = existing['id']
+            
+            # Добавляем запись о появлении
+            cursor.execute("""
+                INSERT INTO serp_competitor_appearances 
+                (serp_analysis_id, competitor_id, position, result_type, url, title, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, NOW())
+            """, (
+                serp_analysis_id,
+                competitor_id,
+                item['position'],
+                item['result_type'],
+                item['url'],
+                item['title']
+            ))
         
         # Обновляем конкурентность после добавления
         update_competitors_competitiveness(connection)
@@ -112,7 +103,6 @@ def save_serp_competitors(connection, serp_analysis_id, organic_results, paid_re
         traceback.print_exc()
     finally:
         cursor.close()
-
 
 def update_competitors_competitiveness(connection):
     """
