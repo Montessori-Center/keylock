@@ -248,6 +248,48 @@ const api = {
   getCampaigns: async () => {
     const response = await axios.get(`${API_BASE_URL}/keywords/campaigns`);
     return response.data;
+  },
+  
+  // Получить список конкурентов
+  getCompetitors: async () => {
+    const response = await axios.get(`${API_BASE_URL}/competitors/list`);
+    return response.data;
+  },
+
+  // Получить статистику конкурентов
+  getCompetitorsStats: async () => {
+    const response = await axios.get(`${API_BASE_URL}/competitors/stats`);
+    return response.data;
+  },
+
+  // Добавить нового конкурента
+  addCompetitor: async (competitorData) => {
+    const response = await axios.post(`${API_BASE_URL}/competitors/add`, competitorData);
+    return response.data;
+  },
+
+  // Обновить данные конкурента
+  updateCompetitor: async (id, field, value) => {
+    const response = await axios.post(`${API_BASE_URL}/competitors/update`, {
+      id,
+      field,
+      value
+    });
+    return response.data;
+  },
+
+  // Удалить конкурентов
+  deleteCompetitors: async (ids) => {
+    const response = await axios.post(`${API_BASE_URL}/competitors/delete`, {
+      ids
+    });
+    return response.data;
+  },
+
+  // Пересчитать конкурентность
+  updateCompetitiveness: async () => {
+    const response = await axios.post(`${API_BASE_URL}/competitors/update-competitiveness`);
+    return response.data;
   }
 };
 

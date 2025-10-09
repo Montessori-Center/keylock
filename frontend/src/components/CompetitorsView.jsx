@@ -4,8 +4,16 @@ import CompetitorsTable from './CompetitorsTable';
 import AddCompetitorModal from './Modals/AddCompetitorModal';
 import ChangeFieldCompetitorModal from './Modals/ChangeFieldCompetitorModal';
 import ApplyFiltersModal from './Modals/ApplyFiltersModal';
-import api from '../services/api';
+import axios from 'axios';
 import { toast } from 'react-toastify';
+
+// Создаём axios instance для API запросов
+const apiClient = axios.create({
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000',
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
 
 const CompetitorsView = ({ onClose }) => {
   const [competitors, setCompetitors] = useState([]);
@@ -27,7 +35,7 @@ const CompetitorsView = ({ onClose }) => {
   const loadCompetitors = async () => {
     setLoading(true);
     try {
-      const response = await api.get('/api/competitors/list');
+      const response = await apiClient.get('/api/competitors/list');
       if (response.data.success) {
         setCompetitors(response.data.competitors || []);
       } else {
@@ -43,7 +51,7 @@ const CompetitorsView = ({ onClose }) => {
 
   const loadStats = async () => {
     try {
-      const response = await api.get('/api/competitors/stats');
+      const response = await apiClient.get('/api/competitors/stats');
       if (response.data.success) {
         setStats(response.data.stats);
       }
@@ -54,7 +62,7 @@ const CompetitorsView = ({ onClose }) => {
 
   const handleAdd = async (competitorData) => {
     try {
-      const response = await api.post('/api/competitors/add', competitorData);
+      const response = await apiClient.post('/api/competitors/add', competitorData);
       if (response.data.success) {
         toast.success('Конкурент добавлен');
         loadCompetitors();
@@ -69,7 +77,7 @@ const CompetitorsView = ({ onClose }) => {
 
   const handleDataChange = async (id, field, value) => {
     try {
-      const response = await api.post('/api/competitors/update', {
+      const response = await apiClient.post('/api/competitors/update', {
         id,
         field,
         value
@@ -98,7 +106,7 @@ const CompetitorsView = ({ onClose }) => {
     }
 
     try {
-      const response = await api.post('/api/competitors/delete', {
+      const response = await apiClient.post('/api/competitors/delete', {
         ids: selectedIds
       });
 
@@ -143,7 +151,7 @@ const CompetitorsView = ({ onClose }) => {
     try {
       // Обновляем каждую выбранную запись
       const promises = selectedIds.map(id => 
-        api.post('/api/competitors/update', { id, field, value })
+        apiClient.post('/api/competitors/update', { id, field, value })
       );
 
       await Promise.all(promises);
