@@ -140,7 +140,7 @@ def add_competitor():
 
 @competitors_bp.route('/update', methods=['POST'])
 def update_competitor():
-    """Обновление данных конкурента"""
+    """Обновление данных конкурента (при ручном изменении снимается флаг is_new)"""
     connection = None
     try:
         data = request.json
@@ -149,32 +149,29 @@ def update_competitor():
         value = data.get('value')
         
         if not competitor_id or not field:
-            return jsonify({'success': False, 'error': 'Недостаточно данных'}), 400
+            return jsonify({'success': False, 'error': 'ID и поле обязательны'}), 400
         
-        # Разрешённые поля для обновления
-        allowed_fields = ['org_type', 'notes', 'domain']
+        allowed_fields = ['org_type', 'notes']
         if field not in allowed_fields:
             return jsonify({'success': False, 'error': 'Недопустимое поле'}), 400
         
         connection = get_db_connection()
         cursor = connection.cursor()
         
-        # Если обновляем домен, проверяем уникальность
-        if field == 'domain':
-            value = value.strip().lower().replace('http://', '').replace('https://', '').replace('www.', '')
-            if '/' in value:
-                value = value.split('/')[0]
-            
-            cursor.execute(
-                "SELECT id FROM competitor_schools WHERE domain = %s AND id != %s",
-                (value, competitor_id)
-            )
-            if cursor.fetchone():
-                return jsonify({'success': False, 'error': 'Такой домен уже существует'}), 400
+        # При изменении org_type снимаем флаг is_new
+        if field == 'org_type':
+            cursor.execute(f"""
+                UPDATE competitor_schools 
+                SET {field} = %s, is_new = FALSE, updated_at = NOW()
+                WHERE id = %s
+            """, (value, competitor_id))
+        else:
+            cursor.execute(f"""
+                UPDATE competitor_schools 
+                SET {field} = %s, updated_at = NOW()
+                WHERE id = %s
+            """, (value, competitor_id))
         
-        # Обновляем
-        query = f"UPDATE competitor_schools SET {field} = %s, updated_at = NOW() WHERE id = %s"
-        cursor.execute(query, (value, competitor_id))
         connection.commit()
         cursor.close()
         
@@ -245,7 +242,8 @@ def get_competitor_stats():
                 SUM(CASE WHEN org_type = 'Школа' THEN 1 ELSE 0 END) as schools,
                 SUM(CASE WHEN org_type = 'База репетиторов' THEN 1 ELSE 0 END) as tutor_bases,
                 SUM(CASE WHEN org_type = 'Не школа' THEN 1 ELSE 0 END) as not_schools,
-                SUM(CASE WHEN org_type = 'Партнёр' THEN 1 ELSE 0 END) as partners
+                SUM(CASE WHEN org_type = 'Партнёр' THEN 1 ELSE 0 END) as partners,
+                SUM(CASE WHEN is_new = TRUE THEN 1 ELSE 0 END) as newPending
             FROM competitor_schools
         """)
         
@@ -312,6 +310,43 @@ def update_competitiveness():
         if connection:
             connection.rollback()
         print(f"❌ Error updating competitiveness: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+        
+    finally:
+        if connection:
+            connection.close()
+
+@competitors_bp.route('/accept-changes', methods=['POST'])
+def accept_competitors_changes():
+    """
+    Принятие изменений - снимает флаг is_new со всех новых школ
+    """
+    connection = None
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # Снимаем флаг is_new со всех новых школ
+        cursor.execute("""
+            UPDATE competitor_schools
+            SET is_new = FALSE,
+                updated_at = NOW()
+            WHERE is_new = TRUE
+        """)
+        
+        connection.commit()
+        updated_count = cursor.rowcount
+        cursor.close()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Принято изменений: {updated_count}'
+        })
+        
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        print(f"❌ Error accepting changes: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
         
     finally:

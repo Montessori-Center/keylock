@@ -288,7 +288,12 @@ const api = {
   updateCompetitiveness: async () => {
     const response = await axios.post(`${API_BASE_URL}/competitors/update-competitiveness`);
     return response.data;
-  }
+  },
+  
+  acceptCompetitorsChanges: async () => {
+    const response = await axios.post(`${API_BASE_URL}/competitors/accept-changes`);
+    return response.data;
+  },
 };
 
 export default api;

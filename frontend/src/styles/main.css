@@ -921,3 +921,65 @@ body {
 .competitors-header .competitors-stats {
   display: none; /* Статистика теперь внизу */
 }
+
+/* ✅ Стили для новых школ-конкурентов */
+.new-competitor-row {
+  background-color: #fff3cd !important;
+  border-left: 4px solid #ffc107 !important;
+}
+
+.new-competitor-row td {
+  background-color: #fff3cd !important;
+  font-weight: 600 !important;
+}
+
+/* ✅ Badge для кнопки "Школы-конкуренты" */
+.competitors-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background-color: #f44336;
+  color: white;
+  border-radius: 50%;
+  min-width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: bold;
+  padding: 0 5px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  animation: badge-pulse 2s ease-in-out infinite;
+}
+
+@keyframes badge-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 2px 4px rgba(244, 67, 54, 0.4);
+  }
+  50% {
+    transform: scale(1.1);
+    box-shadow: 0 3px 6px rgba(244, 67, 54, 0.6);
+  }
+}
+
+/* ✅ Кнопка конкурентов должна иметь относительное позиционирование */
+.competitors-btn {
+  position: relative;
+  width: 100%;
+  padding: 10px 15px;
+  background-color: #1976d2;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  transition: background-color 0.2s;
+}
+
+.competitors-btn:hover {
+  background-color: #1565c0;
+}

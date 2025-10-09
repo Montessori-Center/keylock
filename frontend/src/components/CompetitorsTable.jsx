@@ -13,7 +13,42 @@ const CompetitorsTable = ({
 }) => {
   const hotTableRef = useRef(null);
   const [tableData, setTableData] = useState([]);
+  const [columnWidths, setColumnWidths] = useState({});
   const lastClickedRowRef = useRef(null);
+
+  // ✅ Загрузка сохраненных ширин столбцов при монтировании
+  useEffect(() => {
+    const savedWidths = localStorage.getItem('competitorsTableColumnWidths');
+    if (savedWidths) {
+      try {
+        const widths = JSON.parse(savedWidths);
+        setColumnWidths(widths);
+        console.log('📏 Loaded saved competitors column widths:', widths);
+      } catch (e) {
+        console.error('Error loading column widths:', e);
+      }
+    }
+  }, []);
+
+  // ✅ Обработчик изменения ширины столбца
+  const handleAfterColumnResize = (newSize, column) => {
+    const instance = hotTableRef.current?.hotInstance;
+    if (!instance) return;
+
+    const columns = ['selected', 'id', 'domain', 'org_type', 'competitiveness', 'notes', 'action'];
+    const columnKey = columns[column];
+    
+    if (columnKey) {
+      const newWidths = {
+        ...columnWidths,
+        [columnKey]: newSize
+      };
+      
+      setColumnWidths(newWidths);
+      localStorage.setItem('competitorsTableColumnWidths', JSON.stringify(newWidths));
+      console.log(`📏 Saved competitors column width: ${columnKey} = ${newSize}px`);
+    }
+  };
 
   // Преобразуем данные конкурентов в формат таблицы
   useEffect(() => {
@@ -25,7 +60,7 @@ const CompetitorsTable = ({
         org_type: comp.org_type || 'Школа',
         competitiveness: comp.competitiveness || 0,
         notes: comp.notes || '',
-        is_new: comp.is_new || false  // ✅ НОВОЕ: флаг новой школы
+        is_new: comp.is_new || false
       }));
       setTableData(data);
     } else {
@@ -33,7 +68,7 @@ const CompetitorsTable = ({
     }
   }, [competitors, selectedIds]);
 
-  // ✅ НОВОЕ: Применение стилей для новых записей
+  // ✅ Применение стилей для новых записей
   useEffect(() => {
     if (!hotTableRef.current?.hotInstance || tableData.length === 0) return;
     
@@ -44,7 +79,6 @@ const CompetitorsTable = ({
         const cellProperties = {};
         const rowData = this.instance.getSourceDataAtRow(row);
         
-        // ✅ Подсветка новых школ
         if (rowData && rowData.is_new) {
           cellProperties.className = 'new-competitor-row';
         }
@@ -55,6 +89,36 @@ const CompetitorsTable = ({
     
     instance.render();
   }, [tableData]);
+
+  const handleAfterChange = (changes, source) => {
+    if (!changes || source === 'loadData') return;
+
+    const checkboxChanges = changes.filter(([row, prop]) => prop === 'selected');
+    if (checkboxChanges.length > 0) {
+      const newSelectedIds = [];
+      tableData.forEach((row, index) => {
+        const change = checkboxChanges.find(([r]) => r === index);
+        if (change) {
+          if (change[3]) {
+            newSelectedIds.push(row.id);
+          }
+        } else if (row.selected) {
+          newSelectedIds.push(row.id);
+        }
+      });
+      onSelectionChange(newSelectedIds);
+    }
+
+    const dataChanges = changes.filter(([row, prop]) => prop !== 'selected');
+    if (dataChanges.length > 0 && onDataChange) {
+      dataChanges.forEach(([row, prop, oldValue, newValue]) => {
+        const rowData = tableData[row];
+        if (rowData && prop && newValue !== oldValue) {
+          onDataChange(rowData.id, prop, newValue);
+        }
+      });
+    }
+  };
 
   const handleAfterSelectionEnd = (row, column, row2, column2) => {
     if (column === 0) return;
@@ -69,62 +133,84 @@ const CompetitorsTable = ({
         newSelectedIds.push(rowData[1]);
       }
     }
-    
+
     if (newSelectedIds.length > 0) {
+      const updatedData = tableData.map(item => ({
+        ...item,
+        selected: newSelectedIds.includes(item.id)
+      }));
+      
+      hot.loadData(updatedData);
       onSelectionChange(newSelectedIds);
     }
   };
 
-  const handleAfterChange = (changes, source) => {
-    if (!changes || source === 'loadData') return;
-    
-    const hot = hotTableRef.current?.hotInstance;
-    if (!hot) return;
+  // ✅ SHIFT-выделение
+  useEffect(() => {
+    const instance = hotTableRef.current?.hotInstance;
+    if (!instance) return;
 
-    changes.forEach(([row, prop, oldValue, newValue]) => {
-      const rowData = hot.getDataAtRow(row);
-      if (!rowData) return;
-      
-      const id = rowData[1];
-      
-      if (prop === 'selected') {
-        if (newValue && !selectedIds.includes(id)) {
-          onSelectionChange([...selectedIds, id]);
-        } else if (!newValue && selectedIds.includes(id)) {
-          onSelectionChange(selectedIds.filter(selectedId => selectedId !== id));
+    const handleMouseDown = (event) => {
+      if (event.shiftKey && event.target.type === 'checkbox') {
+        event.preventDefault();
+        
+        const td = event.target.closest('td');
+        if (!td) return;
+
+        const coords = instance.getCoords(td);
+        if (!coords || coords.col !== 0) return;
+
+        const currentRow = coords.row;
+        
+        if (lastClickedRowRef.current !== null && lastClickedRowRef.current !== currentRow) {
+          const startRow = Math.min(lastClickedRowRef.current, currentRow);
+          const endRow = Math.max(lastClickedRowRef.current, currentRow);
+          
+          const rangeIds = [];
+          for (let i = startRow; i <= endRow; i++) {
+            const rowData = instance.getDataAtRow(i);
+            if (rowData && rowData[1]) {
+              rangeIds.push(rowData[1]);
+            }
+          }
+
+          const shouldSelect = !selectedIds.includes(tableData[currentRow].id);
+          let newSelectedIds;
+
+          if (shouldSelect) {
+            newSelectedIds = [...new Set([...selectedIds, ...rangeIds])];
+          } else {
+            newSelectedIds = selectedIds.filter(id => !rangeIds.includes(id));
+          }
+
+          onSelectionChange(newSelectedIds);
+
+          const newData = tableData.map((row, idx) => {
+            if (idx >= startRow && idx <= endRow) {
+              return { ...row, selected: shouldSelect };
+            }
+            return row;
+          });
+          
+          instance.loadData(newData);
+          
+          return;
         }
-      } else if (prop === 'org_type' || prop === 'notes') {
-        onDataChange(id, prop, newValue);
+
+        lastClickedRowRef.current = currentRow;
       }
-    });
-  };
+    };
 
-  const handleAfterOnCellMouseDown = (event, coords, td) => {
-    if (coords.row < 0) return;
-    
-    const hot = hotTableRef.current?.hotInstance;
-    if (!hot) return;
+    const tableElement = instance.rootElement;
+    tableElement.addEventListener('mousedown', handleMouseDown, true);
 
-    if (event.shiftKey && lastClickedRowRef.current !== null) {
-      const startRow = Math.min(lastClickedRowRef.current, coords.row);
-      const endRow = Math.max(lastClickedRowRef.current, coords.row);
-      
-      const newSelectedIds = [];
-      for (let i = startRow; i <= endRow; i++) {
-        const rowData = hot.getDataAtRow(i);
-        if (rowData && rowData[1]) {
-          newSelectedIds.push(rowData[1]);
-        }
-      }
-      
-      onSelectionChange(newSelectedIds);
-    }
-    
-    lastClickedRowRef.current = coords.row;
-  };
+    return () => {
+      tableElement.removeEventListener('mousedown', handleMouseDown, true);
+    };
+  }, [tableData, selectedIds, onSelectionChange]);
 
-  // ✅ ИСПРАВЛЕНО: Рендер кнопки "Открыть сайт"
-  function openSiteRenderer(instance, td, row, col, prop, value, cellProperties) {
+  // ✅ Рендерер для ссылки "Открыть сайт"
+  const openSiteRenderer = (instance, td, row, col, prop, value, cellProperties) => {
     Handsontable.renderers.TextRenderer.apply(this, arguments);
     
     const rowData = instance.getDataAtRow(row);
@@ -141,7 +227,6 @@ const CompetitorsTable = ({
       link.style.textDecoration = 'none';
       link.style.cursor = 'pointer';
       
-      // ✅ КРИТИЧНО: Останавливаем всплытие события
       link.addEventListener('mousedown', (e) => {
         e.stopPropagation();
       });
@@ -155,13 +240,13 @@ const CompetitorsTable = ({
     }
     
     return td;
-  }
+  };
 
   const columns = [
     { 
       data: 'selected', 
       type: 'checkbox', 
-      width: 40, 
+      width: columnWidths['selected'] || 40, 
       className: 'htCenter', 
       title: '', 
       readOnly: false 
@@ -170,14 +255,14 @@ const CompetitorsTable = ({
       data: 'id', 
       title: '№', 
       type: 'numeric', 
-      width: 50, 
+      width: columnWidths['id'] || 50, 
       readOnly: true 
     },
     { 
       data: 'domain', 
       title: 'Домен', 
       type: 'text', 
-      width: 300, 
+      width: columnWidths['domain'] || 300, 
       readOnly: true 
     },
     { 
@@ -185,14 +270,14 @@ const CompetitorsTable = ({
       title: 'Тип организации', 
       type: 'dropdown',
       source: ['Школа', 'База репетиторов', 'Не школа', 'Партнёр'],
-      width: 180, 
+      width: columnWidths['org_type'] || 180, 
       readOnly: false 
     },
     { 
       data: 'competitiveness', 
       title: 'Конкурентность', 
       type: 'numeric', 
-      width: 130, 
+      width: columnWidths['competitiveness'] || 130, 
       readOnly: true,
       className: 'htCenter'
     },
@@ -200,13 +285,13 @@ const CompetitorsTable = ({
       data: 'notes', 
       title: 'Заметки', 
       type: 'text', 
-      width: 250, 
+      width: columnWidths['notes'] || 250, 
       readOnly: false 
     },
     {
       data: 'domain',
       title: 'Действие',
-      width: 120,
+      width: columnWidths['action'] || 120,
       readOnly: true,
       renderer: openSiteRenderer
     }
@@ -232,7 +317,7 @@ const CompetitorsTable = ({
           manualColumnResize={true}
           afterChange={handleAfterChange}
           afterSelectionEnd={handleAfterSelectionEnd}
-          afterOnCellMouseDown={handleAfterOnCellMouseDown}
+          afterColumnResize={handleAfterColumnResize}
           contextMenu={false}
           selectionMode="range"
           outsideClickDeselects={false}
