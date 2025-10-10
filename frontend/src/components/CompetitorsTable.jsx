@@ -1,5 +1,5 @@
-// frontend/src/components/CompetitorsTable.jsx - ФИНАЛЬНАЯ ВЕРСИЯ
-import React, { useRef, useEffect, useState } from 'react';
+// frontend/src/components/CompetitorsTable.jsx - ИСПРАВЛЕНО БЕЗ ПРЕДУПРЕЖДЕНИЙ
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { HotTable } from '@handsontable/react';
 import { registerAllModules } from 'handsontable/registry';
 import Handsontable from 'handsontable';
@@ -33,10 +33,101 @@ const CompetitorsTable = ({
     }
   }, []);
 
+  // ✅ Рендерер для ссылки "Открыть сайт" - определяем до getColumns
+  function openSiteRenderer(instance, td, row, col, prop, value, cellProperties) {
+    Handsontable.renderers.TextRenderer(instance, td, row, col, prop, value, cellProperties);
+    
+    const rowData = instance.getDataAtRow(row);
+    const domain = rowData[2];
+    
+    if (domain) {
+      td.innerHTML = '';
+      const link = document.createElement('a');
+      link.href = `https://${domain}`;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = 'Открыть сайт';
+      link.style.color = '#4285f4';
+      link.style.textDecoration = 'none';
+      link.style.cursor = 'pointer';
+      
+      link.addEventListener('mousedown', (e) => {
+        e.stopPropagation();
+      });
+      link.addEventListener('click', (e) => {
+        e.stopPropagation();
+      });
+      
+      td.appendChild(link);
+    } else {
+      td.innerHTML = '';
+    }
+    
+    return td;
+  }
+
+  // ✅ Функция для получения колонок с применёнными ширинами - обёрнута в useCallback
+  const getColumns = useCallback(() => {
+    return [
+      { 
+        data: 'selected', 
+        type: 'checkbox', 
+        width: columnWidths['selected'] || 40, 
+        className: 'htCenter', 
+        title: '', 
+        readOnly: false 
+      },
+      { 
+        data: 'id', 
+        title: '№', 
+        type: 'numeric', 
+        width: columnWidths['id'] || 50, 
+        readOnly: true 
+      },
+      { 
+        data: 'domain', 
+        title: 'Домен', 
+        type: 'text', 
+        width: columnWidths['domain'] || 300, 
+        readOnly: true 
+      },
+      { 
+        data: 'org_type', 
+        title: 'Тип организации', 
+        type: 'dropdown',
+        source: ['Школа', 'База репетиторов', 'Не школа', 'Партнёр'],
+        width: columnWidths['org_type'] || 180, 
+        readOnly: false 
+      },
+      { 
+        data: 'competitiveness', 
+        title: 'Конкурентность', 
+        type: 'numeric', 
+        width: columnWidths['competitiveness'] || 130, 
+        readOnly: true,
+        className: 'htCenter'
+      },
+      { 
+        data: 'notes', 
+        title: 'Заметки', 
+        type: 'text', 
+        width: columnWidths['notes'] || 250, 
+        readOnly: false 
+      },
+      {
+        data: 'domain',
+        title: 'Действие',
+        width: columnWidths['action'] || 120,
+        readOnly: true,
+        renderer: openSiteRenderer
+      }
+    ];
+  }, [columnWidths]); // ✅ Зависит только от columnWidths
+
   // ✅ Обработчик изменения ширины столбца
-  const handleAfterColumnResize = (newSize, column) => {
-    const columns = ['selected', 'id', 'domain', 'org_type', 'competitiveness', 'notes', 'action'];
-    const columnKey = columns[column];
+  const handleAfterColumnResize = useCallback((newSize, column) => {
+    const columns = getColumns();
+    const columnKey = columns[column]?.data;
     
     if (columnKey) {
       const newWidths = {
@@ -48,7 +139,7 @@ const CompetitorsTable = ({
       localStorage.setItem('competitorsTableColumnWidths', JSON.stringify(newWidths));
       console.log(`📏 Saved competitors column width: ${columnKey} = ${newSize}px`);
     }
-  };
+  }, [columnWidths, getColumns]);
 
   // Преобразуем данные конкурентов в формат таблицы
   useEffect(() => {
@@ -89,6 +180,21 @@ const CompetitorsTable = ({
     
     instance.render();
   }, [tableData]);
+
+  // ✅ Обновление таблицы при изменении columnWidths - теперь без предупреждений
+  useEffect(() => {
+    if (!hotTableRef.current?.hotInstance) return;
+    
+    const instance = hotTableRef.current.hotInstance;
+    const newColumns = getColumns();
+    
+    instance.updateSettings({
+      columns: newColumns,
+      colHeaders: newColumns.map(col => col.title || '')
+    });
+    
+    console.log('📊 Updated competitors columns with widths');
+  }, [getColumns]);
 
   const handleAfterChange = (changes, source) => {
     if (!changes || source === 'loadData') return;
@@ -210,97 +316,6 @@ const CompetitorsTable = ({
       tableElement.removeEventListener('mousedown', handleMouseDown, true);
     };
   }, [tableData, selectedIds, onSelectionChange]);
-
-  // ✅ Рендерер для ссылки "Открыть сайт"
-  function openSiteRenderer(instance, td, row, col, prop, value, cellProperties) {
-    Handsontable.renderers.TextRenderer(instance, td, row, col, prop, value, cellProperties);
-    
-    const rowData = instance.getDataAtRow(row);
-    const domain = rowData[2];
-    
-    if (domain) {
-      td.innerHTML = '';
-      const link = document.createElement('a');
-      link.href = `https://${domain}`;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      link.textContent = 'Открыть сайт';
-      link.style.color = '#4285f4';
-      link.style.textDecoration = 'none';
-      link.style.cursor = 'pointer';
-      
-      link.addEventListener('mousedown', (e) => {
-        e.stopPropagation();
-      });
-      link.addEventListener('click', (e) => {
-        e.stopPropagation();
-      });
-      
-      td.appendChild(link);
-    } else {
-      td.innerHTML = '';
-    }
-    
-    return td;
-  }
-
-  // ✅ ИСПРАВЛЕНО: Создаём колонки с учётом сохранённых ширин
-  const getColumns = () => {
-    return [
-      { 
-        data: 'selected', 
-        type: 'checkbox', 
-        width: columnWidths['selected'] || 40, 
-        className: 'htCenter', 
-        title: '', 
-        readOnly: false 
-      },
-      { 
-        data: 'id', 
-        title: '№', 
-        type: 'numeric', 
-        width: columnWidths['id'] || 50, 
-        readOnly: true 
-      },
-      { 
-        data: 'domain', 
-        title: 'Домен', 
-        type: 'text', 
-        width: columnWidths['domain'] || 300, 
-        readOnly: true 
-      },
-      { 
-        data: 'org_type', 
-        title: 'Тип организации', 
-        type: 'dropdown',
-        source: ['Школа', 'База репетиторов', 'Не школа', 'Партнёр'],
-        width: columnWidths['org_type'] || 180, 
-        readOnly: false 
-      },
-      { 
-        data: 'competitiveness', 
-        title: 'Конкурентность', 
-        type: 'numeric', 
-        width: columnWidths['competitiveness'] || 130, 
-        readOnly: true,
-        className: 'htCenter'
-      },
-      { 
-        data: 'notes', 
-        title: 'Заметки', 
-        type: 'text', 
-        width: columnWidths['notes'] || 250, 
-        readOnly: false 
-      },
-      {
-        data: 'domain',
-        title: 'Действие',
-        width: columnWidths['action'] || 120,
-        readOnly: true,
-        renderer: openSiteRenderer
-      }
-    ];
-  };
 
   return (
     <div style={{ width: '100%', height: '100%', overflow: 'hidden' }}>
