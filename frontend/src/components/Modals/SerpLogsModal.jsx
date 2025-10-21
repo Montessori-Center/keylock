@@ -449,6 +449,17 @@ const SerpLogsModal = ({ show, onHide, selectedKeywordIds = null }) => {
                 
                 {renderOrganicOnly(selectedLog)}
               </Tab>
+              
+              {/* ВКЛАДКА 3: СЫРЫЕ ДАННЫЕ */}
+                <Tab eventKey="raw" title="🔧 Сырые данные">
+                  <Alert variant="info" className="mb-3">
+                    <small>
+                      Полный JSON-ответ от DataForSeo API (raw_response)
+                    </small>
+                  </Alert>
+                  
+                  {renderRawData(selectedLog)}
+                </Tab>
             </Tabs>
 
           </Card.Body>
@@ -642,7 +653,7 @@ const getTypeBadge = (type) => {
   return badges[type] || <Badge bg="secondary">{type}</Badge>;
 };
 
-  // НОВАЯ ФУНКЦИЯ: Только органика
+  // Только органика
   const renderOrganicOnly = (log) => {
     if (!log.organic_results || log.organic_results.length === 0) {
       return <Alert variant="warning">Нет органических результатов</Alert>;
@@ -693,6 +704,61 @@ const getTypeBadge = (type) => {
       </Table>
     );
   };
+  
+  // Отображение сырых данных
+    const renderRawData = (log) => {
+      if (!log.raw_response) {
+        return (
+          <Alert variant="warning">
+            Raw-ответ отсутствует для этого анализа
+          </Alert>
+        );
+      }
+    
+      // Форматируем JSON для красивого отображения
+      let formattedJson = '';
+      try {
+        const rawData = typeof log.raw_response === 'string' 
+          ? JSON.parse(log.raw_response) 
+          : log.raw_response;
+        formattedJson = JSON.stringify(rawData, null, 2);
+      } catch (e) {
+        formattedJson = typeof log.raw_response === 'string' 
+          ? log.raw_response 
+          : JSON.stringify(log.raw_response);
+      }
+    
+      return (
+        <div>
+          <textarea
+            readOnly
+            value={formattedJson}
+            style={{
+              width: '100%',
+              minHeight: '500px',
+              fontFamily: 'monospace',
+              fontSize: '12px',
+              padding: '10px',
+              border: '1px solid #ddd',
+              borderRadius: '4px',
+              backgroundColor: '#f8f9fa'
+            }}
+          />
+          <div className="mt-2">
+            <Button 
+              size="sm" 
+              variant="outline-secondary"
+              onClick={() => {
+                navigator.clipboard.writeText(formattedJson);
+                alert('JSON скопирован в буфер обмена!');
+              }}
+            >
+              📋 Скопировать JSON
+            </Button>
+          </div>
+        </div>
+      );
+    };
 
   return (
     <Modal show={show} onHide={onHide} size="xl">

@@ -1890,8 +1890,19 @@ def parse_serp_response(
             log_print()
         
         # Определяем интент
-        intent_type = 'Коммерческий' if has_ads else 'Информационный'
+        # Вычисляем процент школ
         school_percentage = (school_sites_count / total_organic_sites * 100) if total_organic_sites > 0 else 0
+        
+        # Определяем интент с учетом процента школ
+        # Новая логика:
+        # - 60% школ, если есть реклама ИЛИ карты
+        # - 70% школ, если НЕТ ни рекламы, ни карт
+        if has_ads or has_google_maps:
+            # Есть реклама или карты - порог 60%
+            intent_type = 'Коммерческий' if school_percentage >= 60 else 'Информационный'
+        else:
+            # Нет ни рекламы, ни карт - порог 70%
+            intent_type = 'Коммерческий' if school_percentage >= 70 else 'Информационный'
         
         # ИТОГИ
         log_print(f"\n{'=' * 70}")
