@@ -1412,23 +1412,33 @@ def debug_serp_log(log_id):
 
 @dataforseo_bp.route('/locations', methods=['GET'])
 def get_locations():
-    """Получение списка доступных локаций"""
+    """Получение списка доступных локаций из БД"""
     try:
-        country = request.args.get('country')
-        dataforseo_client = get_dataforseo_client()
-        locations = dataforseo_client.get_locations(country)
+        from models.references import ReferencesModel
         
-        popular = [
-            {'code': 1012852, 'name': 'Kyiv, Kyiv city, Ukraine', 'name_ru': 'Киев, Украина', 'se_domain': 'google.com.ua'},
-        ]
+        country = request.args.get('country')
+        
+        # Получаем только локации с флагом display='L'
+        locations = ReferencesModel.get_locations(
+            display_only=True, 
+            country_iso_code=country if country else None
+        )
+        
+        # Форматируем для совместимости с фронтендом
+        formatted_locations = []
+        for loc in locations:
+            formatted_locations.append({
+                'code': loc['location_code'],
+                'name': loc['location_name'],
+                'country': loc['country_iso_code'],
+                'type': loc['location_type']
+            })
         
         return jsonify({
             'success': True,
-            'popular': popular,
-            'all': locations.get('tasks', [{}])[0].get('result', []) if locations else []
+            'popular': formatted_locations,
+            'all': formatted_locations
         })
-    except ValueError as e:
-        return jsonify({'success': False, 'error': f'DataForSeo API не настроен: {str(e)}'}), 400
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
         
@@ -1547,161 +1557,18 @@ def test_serp_single():
 
 @dataforseo_bp.route('/languages', methods=['GET'])
 def get_languages():
-    """Получение списка доступных языков"""
+    """Получение списка доступных языков из БД"""
     try:
-        dataforseo_client = get_dataforseo_client()
-        languages = dataforseo_client.get_languages()
+        from models.references import ReferencesModel
         
-        main_languages = [
-            {'code': 'uk', 'name': 'Українська'},
-            {'code': 'ru', 'name': 'Русский'},
-            {'code': 'en', 'name': 'English'},
-            {'code': 'de', 'name': 'Deutsch'},
-            {'code': 'fr', 'name': 'Français'},
-            {'code': 'es', 'name': 'Español'},
-            {'code': 'it', 'name': 'Italiano'},
-            {'code': 'pl', 'name': 'Polski'},
-        ]
-        
-        # Полный список всех языков
-        all_languages = [
-            {'code': 'af', 'name': 'Afrikaans'},
-            {'code': 'ak', 'name': 'Akan'},
-            {'code': 'sq', 'name': 'Albanian'},
-            {'code': 'am', 'name': 'Amharic'},
-            {'code': 'ar', 'name': 'Arabic'},
-            {'code': 'hy', 'name': 'Armenian'},
-            {'code': 'az', 'name': 'Azeri'},
-            {'code': 'ban', 'name': 'Balinese'},
-            {'code': 'eu', 'name': 'Basque'},
-            {'code': 'be', 'name': 'Belarusian'},
-            {'code': 'bn', 'name': 'Bengali'},
-            {'code': 'bs', 'name': 'Bosnian'},
-            {'code': 'bg', 'name': 'Bulgarian'},
-            {'code': 'my', 'name': 'Burmese'},
-            {'code': 'ca', 'name': 'Catalan'},
-            {'code': 'ceb', 'name': 'Cebuano'},
-            {'code': 'ny', 'name': 'Chichewa'},
-            {'code': 'zh-CN', 'name': 'Chinese (Simplified)'},
-            {'code': 'zh-TW', 'name': 'Chinese (Traditional)'},
-            {'code': 'hr', 'name': 'Croatian'},
-            {'code': 'cs', 'name': 'Czech'},
-            {'code': 'da', 'name': 'Danish'},
-            {'code': 'nl', 'name': 'Dutch'},
-            {'code': 'en', 'name': 'English'},
-            {'code': 'es-419', 'name': 'Español (Latinoamérica)'},
-            {'code': 'et', 'name': 'Estonian'},
-            {'code': 'ee', 'name': 'Ewe'},
-            {'code': 'fo', 'name': 'Faroese'},
-            {'code': 'fa', 'name': 'Farsi'},
-            {'code': 'fil', 'name': 'Filipino'},
-            {'code': 'fi', 'name': 'Finnish'},
-            {'code': 'fr', 'name': 'Français'},
-            {'code': 'fy', 'name': 'Frisian'},
-            {'code': 'gaa', 'name': 'Ga'},
-            {'code': 'gl', 'name': 'Galician'},
-            {'code': 'lg', 'name': 'Ganda'},
-            {'code': 'ka', 'name': 'Georgian'},
-            {'code': 'de', 'name': 'Deutsch'},
-            {'code': 'el', 'name': 'Greek'},
-            {'code': 'gu', 'name': 'Gujarati'},
-            {'code': 'ht', 'name': 'Haitian'},
-            {'code': 'ha', 'name': 'Hausa'},
-            {'code': 'he', 'name': 'Hebrew'},
-            {'code': 'iw', 'name': 'Hebrew (old)'},
-            {'code': 'hi', 'name': 'Hindi'},
-            {'code': 'hu', 'name': 'Hungarian'},
-            {'code': 'is', 'name': 'Icelandic'},
-            {'code': 'bem', 'name': 'IciBemba'},
-            {'code': 'ig', 'name': 'Igbo'},
-            {'code': 'id', 'name': 'Indonesian'},
-            {'code': 'ga', 'name': 'Irish'},
-            {'code': 'it', 'name': 'Italiano'},
-            {'code': 'ja', 'name': 'Japanese'},
-            {'code': 'kn', 'name': 'Kannada'},
-            {'code': 'kk', 'name': 'Kazakh'},
-            {'code': 'km', 'name': 'Khmer'},
-            {'code': 'rw', 'name': 'Kinyarwanda'},
-            {'code': 'rn', 'name': 'Kirundi'},
-            {'code': 'kg', 'name': 'Kongo'},
-            {'code': 'ko', 'name': 'Korean'},
-            {'code': 'mfe', 'name': 'Kreol morisien'},
-            {'code': 'crs', 'name': 'Kreol Seselwa'},
-            {'code': 'kri', 'name': 'Krio'},
-            {'code': 'ckb', 'name': 'Kurdish'},
-            {'code': 'ky', 'name': 'Kyrgyz'},
-            {'code': 'lo', 'name': 'Lao'},
-            {'code': 'lv', 'name': 'Latvian'},
-            {'code': 'ln', 'name': 'Lingala'},
-            {'code': 'lt', 'name': 'Lithuanian'},
-            {'code': 'ach', 'name': 'Luo'},
-            {'code': 'mk', 'name': 'Macedonian'},
-            {'code': 'mg', 'name': 'Malagasy'},
-            {'code': 'ms', 'name': 'Malay'},
-            {'code': 'ml', 'name': 'Malayam'},
-            {'code': 'mt', 'name': 'Maltese'},
-            {'code': 'mi', 'name': 'Maori'},
-            {'code': 'mr', 'name': 'Marathi'},
-            {'code': 'mn', 'name': 'Mongolian'},
-            {'code': 'sr-ME', 'name': 'Montenegro'},
-            {'code': 'ne', 'name': 'Nepali'},
-            {'code': 'nso', 'name': 'Northern Sotho'},
-            {'code': 'no', 'name': 'Norwegian'},
-            {'code': 'nyn', 'name': 'Nyankole'},
-            {'code': 'om', 'name': 'Oromo'},
-            {'code': 'ps', 'name': 'Pashto'},
-            {'code': 'pcm', 'name': 'Pidgin'},
-            {'code': 'pl', 'name': 'Polski'},
-            {'code': 'pt', 'name': 'Português'},
-            {'code': 'pt-BR', 'name': 'Português (Brasil)'},
-            {'code': 'pt-PT', 'name': 'Português (Portugal)'},
-            {'code': 'pa', 'name': 'Punjabi'},
-            {'code': 'qu', 'name': 'Quechua'},
-            {'code': 'ro', 'name': 'Romanian'},
-            {'code': 'rm', 'name': 'Romansh'},
-            {'code': 'ru', 'name': 'Русский'},
-            {'code': 'sr', 'name': 'Serbian'},
-            {'code': 'sr-Latn', 'name': 'Serbian (Latin)'},
-            {'code': 'st', 'name': 'Sesotho'},
-            {'code': 'sn', 'name': 'Shona'},
-            {'code': 'loz', 'name': 'Silozi'},
-            {'code': 'sd', 'name': 'Sindhi'},
-            {'code': 'si', 'name': 'Sinhalese'},
-            {'code': 'sk', 'name': 'Slovak'},
-            {'code': 'sl', 'name': 'Slovenian'},
-            {'code': 'so', 'name': 'Somali'},
-            {'code': 'es', 'name': 'Español'},
-            {'code': 'sw', 'name': 'Swahili'},
-            {'code': 'sv', 'name': 'Swedish'},
-            {'code': 'tg', 'name': 'Tajik'},
-            {'code': 'ta', 'name': 'Tamil'},
-            {'code': 'te', 'name': 'Telugu'},
-            {'code': 'th', 'name': 'Thai'},
-            {'code': 'ti', 'name': 'Tigrinya'},
-            {'code': 'to', 'name': 'Tonga (Tonga Islands)'},
-            {'code': 'lua', 'name': 'Tshiluba'},
-            {'code': 'tn', 'name': 'Tswana'},
-            {'code': 'tum', 'name': 'Tumbuka'},
-            {'code': 'tr', 'name': 'Turkish'},
-            {'code': 'tk', 'name': 'Turkmen'},
-            {'code': 'uk', 'name': 'Українська'},
-            {'code': 'ur', 'name': 'Urdu'},
-            {'code': 'uz', 'name': 'Uzbek'},
-            {'code': 'vi', 'name': 'Vietnamese'},
-            {'code': 'wo', 'name': 'Wolof'},
-            {'code': 'xh', 'name': 'Xhosa'},
-            {'code': 'yo', 'name': 'Yoruba'},
-            {'code': 'zu', 'name': 'Zulu'},
-        ]
+        # Получаем только языки с флагом display='L'
+        languages = ReferencesModel.get_languages(display_only=True)
         
         return jsonify({
             'success': True,
-            'main': main_languages,
-            'all': all_languages
+            'main': languages,
+            'all': languages
         })
-
-    except ValueError as e:
-        return jsonify({'success': False, 'error': f'DataForSeo API не настроен: {str(e)}'}), 400
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 

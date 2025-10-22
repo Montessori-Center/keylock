@@ -1,8 +1,7 @@
 # app.py - исправленная версия
-from flask import Flask, request, make_response
+from flask import Flask, request, make_response, render_template
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
-from flask import render_template
 from config import Config
 from sqlalchemy import text
 from datetime import datetime

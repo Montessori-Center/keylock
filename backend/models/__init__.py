@@ -10,5 +10,6 @@ __all__ = [
     'CompetitorSchool',
     'SerpAnalysisHistory',
     'SerpCompetitorAppearance',
-    'CampaignSite'
+    'CampaignSite',
+    'ReferencesModel'
 ]

@@ -99,3 +99,10 @@ Cleanup completed: 0 keywords deleted
 ==================================================
 Cleanup completed: 0 keywords deleted
 ==================================================
+✅ Используются сохраненные настройки БД: 127.0.0.1:3305/sql8_keylock
+🗑️  Starting trash cleanup for keywords older than 2025-09-22 03:00:01
+✅ No keywords to delete
+
+==================================================
+Cleanup completed: 0 keywords deleted
+==================================================

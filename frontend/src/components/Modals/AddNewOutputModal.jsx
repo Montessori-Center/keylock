@@ -59,38 +59,34 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
   const loadLocations = async () => {
     setLoadingLocations(true);
     try {
-      // Популярные локации
-      const popularLocations = [
-        { code: 1012852, name: 'Kyiv, Kyiv city, Ukraine', se_domain: 'google.com.ua' }
-      ];
-      setLocations(popularLocations);
-    } catch (error) {
+      const response = await fetch('/api/dataforseo/locations');
+      const data = await response.json();
+      
+  if (data.success && data.popular) {
+    setLocations(data.popular);
+  } catch (error) {
       console.error('Error loading locations:', error);
     } finally {
       setLoadingLocations(false);
     }
   };
 
-  const loadLanguages = () => {
-    // Список языков
-    const languagesList = [
-      { code: 'uk', name: 'Українська' },
-      { code: 'ru', name: 'Русский' },
-      { code: 'en', name: 'English' },
-      { code: 'de', name: 'Deutsch' },
-      { code: 'fr', name: 'Français' },
-      { code: 'es', name: 'Español' },
-      { code: 'it', name: 'Italiano' },
-      { code: 'pl', name: 'Polski' },
-      { code: 'pt', name: 'Português' },
-      { code: 'zh-CN', name: 'Chinese (Simplified)' },
-      { code: 'ja', name: 'Japanese' },
-      { code: 'ar', name: 'Arabic' },
-      { code: 'hi', name: 'Hindi' },
-      { code: 'tr', name: 'Turkish' },
-      { code: 'ko', name: 'Korean' }
-    ];
-    setLanguages(languagesList);
+  const loadLanguages = async () => {
+    try {
+      const response = await fetch('/api/dataforseo/languages');
+      const data = await response.json();
+      
+      if (data.success && data.main) {
+        // Преобразуем формат для совместимости
+        const formattedLanguages = data.main.map(lang => ({
+          code: lang.language_code,
+          name: lang.language_name
+        }));
+        setLanguages(formattedLanguages);
+      }
+    } catch (error) {
+      console.error('Error loading languages:', error);
+    }
   };
 
   const handleLocationChange = (locationName) => {
