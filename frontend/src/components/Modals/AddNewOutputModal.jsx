@@ -62,9 +62,10 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
       const response = await fetch('/api/dataforseo/locations');
       const data = await response.json();
       
-  if (data.success && data.popular) {
-    setLocations(data.popular);
-  } catch (error) {
+      if (data.success && data.popular) {
+        setLocations(data.popular);
+      }
+    } catch (error) {
       console.error('Error loading locations:', error);
     } finally {
       setLoadingLocations(false);
@@ -89,13 +90,13 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
     }
   };
 
-  const handleLocationChange = (locationName) => {
-    const location = locations.find(l => l.name === locationName);
+  const handleLocationChange = (locationCode) => {
+    const location = locations.find(l => l.code === parseInt(locationCode));
     if (location) {
       setParams(prev => ({
         ...prev,
-        location_name: location.name,
-        location_code: location.code
+        location_code: location.code,
+        location_name: location.name
       }));
     }
   };
