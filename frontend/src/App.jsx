@@ -208,10 +208,7 @@ function App() {
         localStorage.setItem('selectedAdGroupId', adGroup.id.toString());
         console.log(`💾 Saved selected ad group ID: ${adGroup.id}`);
       }
-      
-      // ✅ ИСПРАВЛЕНИЕ: Сбрасываем флаг конкурентов при выборе группы
-      localStorage.setItem('showCompetitors', 'false');
-      setShowCompetitors(false);
+      // ✅ УДАЛИЛИ строки про showCompetitors
     };
 
   const loadCampaigns = async () => {
@@ -749,9 +746,12 @@ function App() {
         <div className={`content-area ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
           {/* ИЗМЕНЕНО: Условный рендеринг - показываем либо конкурентов, либо ключевые слова */}
           {showCompetitors ? (
-            // Отображение таблицы конкурентов
-            <CompetitorsView onClose={() => setShowCompetitors(false)} />
-          ) : (
+              // Отображение таблицы конкурентов
+              <CompetitorsView onClose={() => {
+                setShowCompetitors(false);
+                localStorage.setItem('showCompetitors', 'false'); // ✅ ДОБАВЛЕНО
+              }} />
+            ) : (
             // Отображение ключевых слов (как раньше)
             <>
               <div className="action-buttons">
