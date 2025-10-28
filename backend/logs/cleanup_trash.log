@@ -106,3 +106,42 @@ Cleanup completed: 0 keywords deleted
 ==================================================
 Cleanup completed: 0 keywords deleted
 ==================================================
+✅ Используются сохраненные настройки БД: 127.0.0.1:3305/sql8_keylock
+🗑️  Starting trash cleanup for keywords older than 2025-09-23 03:00:01
+✅ No keywords to delete
+
+==================================================
+Cleanup completed: 0 keywords deleted
+==================================================
+✅ Используются сохраненные настройки БД: 127.0.0.1:3305/sql8_keylock
+🗑️  Starting trash cleanup for keywords older than 2025-09-24 03:00:01
+📋 Found 3 keywords to delete:
+   - ID 188: Да (deleted 2025-09-23 18:03:43)
+   - ID 195: ТЕСТ!А (deleted 2025-09-23 17:47:53)
+   - ID 201: jghjghjg (deleted 2025-09-23 18:03:43)
+✅ Deleted 3 keywords from trash
+
+==================================================
+Cleanup completed: 3 keywords deleted
+==================================================
+✅ Используются сохраненные настройки БД: 127.0.0.1:3305/sql8_keylock
+🗑️  Starting trash cleanup for keywords older than 2025-09-25 03:00:01
+✅ No keywords to delete
+
+==================================================
+Cleanup completed: 0 keywords deleted
+==================================================
+✅ Используются сохраненные настройки БД: 127.0.0.1:3305/sql8_keylock
+🗑️  Starting trash cleanup for keywords older than 2025-09-26 03:00:02
+✅ No keywords to delete
+
+==================================================
+Cleanup completed: 0 keywords deleted
+==================================================
+✅ Используются сохраненные настройки БД: 127.0.0.1:3305/sql8_keylock
+🗑️  Starting trash cleanup for keywords older than 2025-09-27 03:00:01
+✅ No keywords to delete
+
+==================================================
+Cleanup completed: 0 keywords deleted
+==================================================

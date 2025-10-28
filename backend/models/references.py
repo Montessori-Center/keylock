@@ -1,17 +1,28 @@
-# models/references.py
-import mysql.connector
+# backend/models/references.py
+import pymysql.cursors
+from config import Config
+
 
 class ReferencesModel:
-    def __init__(self, db_config):
-        self.db_config = db_config
+    """Модель для работы с языками и локациями"""
     
-    def get_connection(self):
-        return mysql.connector.connect(**self.db_config)
+    @staticmethod
+    def get_connection():
+        """Создание подключения к БД"""
+        return pymysql.connect(
+            host=Config.DB_HOST,
+            port=Config.DB_PORT,
+            user=Config.DB_USER,
+            password=Config.DB_PASSWORD,
+            database=Config.DB_NAME,
+            cursorclass=pymysql.cursors.DictCursor
+        )
     
-    def get_languages(self, display_only=True):
+    @staticmethod
+    def get_languages(display_only=True):
         """Получение списка языков"""
-        connection = self.get_connection()
-        cursor = connection.cursor(dictionary=True)
+        connection = ReferencesModel.get_connection()
+        cursor = connection.cursor()
         
         query = "SELECT id, language_name, language_code FROM languages"
         if display_only:
@@ -26,10 +37,11 @@ class ReferencesModel:
         
         return languages
     
-    def get_locations(self, display_only=True, country_iso_code=None):
+    @staticmethod
+    def get_locations(display_only=True, country_iso_code=None):
         """Получение списка локаций"""
-        connection = self.get_connection()
-        cursor = connection.cursor(dictionary=True)
+        connection = ReferencesModel.get_connection()
+        cursor = connection.cursor()
         
         query = """
             SELECT id, location_code, location_name, 
@@ -59,10 +71,11 @@ class ReferencesModel:
         
         return locations
     
-    def get_language_by_code(self, language_code):
+    @staticmethod
+    def get_language_by_code(language_code):
         """Получение языка по коду"""
-        connection = self.get_connection()
-        cursor = connection.cursor(dictionary=True)
+        connection = ReferencesModel.get_connection()
+        cursor = connection.cursor()
         
         cursor.execute(
             "SELECT * FROM languages WHERE language_code = %s",
@@ -75,10 +88,11 @@ class ReferencesModel:
         
         return language
     
-    def get_location_by_code(self, location_code):
+    @staticmethod
+    def get_location_by_code(location_code):
         """Получение локации по коду"""
-        connection = self.get_connection()
-        cursor = connection.cursor(dictionary=True)
+        connection = ReferencesModel.get_connection()
+        cursor = connection.cursor()
         
         cursor.execute(
             "SELECT * FROM locations WHERE location_code = %s",
