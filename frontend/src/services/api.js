@@ -248,6 +248,18 @@ const api = {
     return response.data;
   },
   
+      // Создать новую кампанию
+    createCampaign: async (data) => {
+      const response = await axios.post(`${API_BASE_URL}/keywords/create-campaign`, data);
+      return response.data;
+    },
+    
+    // Создать новую группу объявлений
+    createAdGroup: async (data) => {
+      const response = await axios.post(`${API_BASE_URL}/keywords/create-adgroup`, data);
+      return response.data;
+    },
+  
   // Получить список конкурентов
   getCompetitors: async () => {
     const response = await axios.get(`${API_BASE_URL}/competitors/list`);

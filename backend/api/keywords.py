@@ -865,3 +865,118 @@ def delete_permanently():
     finally:
         if connection:
             connection.close()
+            
+@keywords_bp.route('/create-campaign', methods=['POST'])
+def create_campaign():
+    """Создание новой кампании"""
+    connection = None
+    try:
+        data = request.json
+        name = data.get('name', '').strip()
+        
+        if not name:
+            return jsonify({'success': False, 'error': 'Name is required'}), 400
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # Проверка существования кампании с таким именем
+        cursor.execute("SELECT id FROM campaigns WHERE name = %s", (name,))
+        if cursor.fetchone():
+            return jsonify({'success': False, 'error': 'Campaign with this name already exists'}), 400
+        
+        # Создание кампании
+        cursor.execute("""
+            INSERT INTO campaigns (name, status) 
+            VALUES (%s, 'Enabled')
+        """, (name,))
+        
+        campaign_id = cursor.lastrowid
+        connection.commit()
+        
+        cursor.close()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Campaign created successfully',
+            'campaign': {
+                'id': campaign_id,
+                'name': name,
+                'status': 'Enabled'
+            }
+        })
+        
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        print(f"Error in create_campaign: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if connection:
+            connection.close()
+
+
+@keywords_bp.route('/create-adgroup', methods=['POST'])
+def create_adgroup():
+    """Создание новой группы объявлений"""
+    connection = None
+    try:
+        data = request.json
+        name = data.get('name', '').strip()
+        campaign_id = data.get('campaign_id')
+        
+        if not name:
+            return jsonify({'success': False, 'error': 'Name is required'}), 400
+        
+        if not campaign_id:
+            return jsonify({'success': False, 'error': 'Campaign ID is required'}), 400
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # Проверка существования кампании
+        cursor.execute("SELECT id FROM campaigns WHERE id = %s", (campaign_id,))
+        if not cursor.fetchone():
+            return jsonify({'success': False, 'error': 'Campaign not found'}), 404
+        
+        # Проверка существования группы с таким именем в этой кампании
+        cursor.execute("""
+            SELECT id FROM ad_groups 
+            WHERE campaign_id = %s AND name = %s
+        """, (campaign_id, name))
+        if cursor.fetchone():
+            return jsonify({'success': False, 'error': 'Ad group with this name already exists in this campaign'}), 400
+        
+        # Создание группы объявлений
+        cursor.execute("""
+            INSERT INTO ad_groups (campaign_id, name, status) 
+            VALUES (%s, %s, 'Enabled')
+        """, (campaign_id, name))
+        
+        adgroup_id = cursor.lastrowid
+        connection.commit()
+        
+        cursor.close()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Ad group created successfully',
+            'adGroup': {
+                'id': adgroup_id,
+                'name': name,
+                'campaign_id': campaign_id,
+                'status': 'Enabled',
+                'newChanges': 0,
+                'batchColors': [],
+                'hasChanges': False
+            }
+        })
+        
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        print(f"Error in create_adgroup: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if connection:
+            connection.close()

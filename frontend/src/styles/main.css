@@ -953,6 +953,23 @@ body {
   animation: badge-pulse 2s ease-in-out infinite;
 }
 
+/* Стили для кнопки создания в сайдбаре */
+.sidebar-content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.btn-success {
+  background-color: #34a853;
+  color: white;
+  border: none;
+}
+
+.btn-success:hover {
+  background-color: #2d8e47;
+}
+
 @keyframes badge-pulse {
   0%, 100% {
     transform: scale(1);

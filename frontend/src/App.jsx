@@ -15,6 +15,7 @@ import ChangeFieldModal from './components/Modals/ChangeFieldModal';
 import TrashModal from './components/Modals/TrashModal';
 import SerpProgressModal from './components/Modals/SerpProgressModal';
 import LiveProgressModal from './components/Modals/LiveProgressModal';
+import CreateCampaignModal from './components/Modals/CreateCampaignModal';
 import CompetitorsView from './components/CompetitorsView';
 import api from './services/api';
 import { toast } from 'react-toastify';
@@ -46,6 +47,7 @@ function App() {
   const [showChangeField, setShowChangeField] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
   const [showSerpLogs, setShowSerpLogs] = useState(false);
+  const [showCreateCampaign, setShowCreateCampaign] = useState(false);
   const [serpProgress, setSerpProgress] = useState({
     show: false, 
     current: 0, 
@@ -206,6 +208,10 @@ function App() {
         localStorage.setItem('selectedAdGroupId', adGroup.id.toString());
         console.log(`💾 Saved selected ad group ID: ${adGroup.id}`);
       }
+      
+      // ✅ ИСПРАВЛЕНИЕ: Сбрасываем флаг конкурентов при выборе группы
+      localStorage.setItem('showCompetitors', 'false');
+      setShowCompetitors(false);
     };
 
   const loadCampaigns = async () => {
@@ -284,6 +290,39 @@ function App() {
       toast.error('Ошибка отклонения изменений');
     }
   };
+  
+  const handleCreateObject = async (data) => {
+      try {
+        if (data.type === 'campaign') {
+          const response = await api.createCampaign({ name: data.name });
+          if (response.success) {
+            toast.success('Кампания создана');
+            await loadCampaigns();
+          } else {
+            toast.error(response.error || 'Ошибка создания кампании');
+          }
+        } else if (data.type === 'adgroup') {
+          const response = await api.createAdGroup({
+            name: data.name,
+            campaign_id: data.parentCampaignId
+          });
+          if (response.success) {
+            toast.success('Группа объявлений создана');
+            await loadCampaigns();
+            
+            // Автоматически выбираем новую группу
+            const newAdGroup = response.adGroup;
+            setSelectedAdGroup(newAdGroup);
+            localStorage.setItem('selectedAdGroupId', newAdGroup.id.toString());
+          } else {
+            toast.error(response.error || 'Ошибка создания группы');
+          }
+        }
+      } catch (error) {
+        console.error('Error creating object:', error);
+        toast.error('Ошибка создания объекта');
+      }
+    };
 
   const handleAddKeywords = async (keywordsText) => {
     if (!selectedAdGroup) {
@@ -704,6 +743,7 @@ function App() {
           selectedAdGroup={selectedAdGroup}
           onSelectAdGroup={handleAdGroupSelect}
           onOpenCompetitors={() => setShowCompetitors(true)}
+          onCreateClick={() => setShowCreateCampaign(true)}
         />
         
         <div className={`content-area ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
@@ -905,6 +945,15 @@ function App() {
         show={liveProgress.show}
         keyword={liveProgress.keyword}
       />
+      
+      {showCreateCampaign && (
+          <CreateCampaignModal
+            show={showCreateCampaign}
+            onHide={() => setShowCreateCampaign(false)}
+            onSubmit={handleCreateObject}
+            campaigns={campaigns}
+          />
+        )}
       
       {showTrash && (
         <TrashModal

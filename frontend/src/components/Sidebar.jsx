@@ -10,7 +10,8 @@ const Sidebar = ({
   selectedCampaign, 
   selectedAdGroup, 
   onSelectAdGroup,
-  onOpenCompetitors
+  onOpenCompetitors,
+  onCreateClick
 }) => {
   const [expandedCampaigns, setExpandedCampaigns] = useState([1]);
   const [competitorsPending, setCompetitorsPending] = useState(0);
@@ -138,6 +139,24 @@ const Sidebar = ({
           )}
         </div>
       )}
+      <div style={{ 
+          marginTop: 'auto', 
+          paddingTop: '20px', 
+          borderTop: '1px solid #dadce0' 
+        }}>
+          <button 
+            className="btn btn-success" 
+            onClick={onCreateClick}
+            style={{ 
+              width: '100%',
+              padding: '10px',
+              fontSize: '14px',
+              fontWeight: '500'
+            }}
+          >
+            + Создать
+          </button>
+        </div>
     </div>
   );
 };
