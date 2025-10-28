@@ -654,56 +654,67 @@ const getTypeBadge = (type) => {
 };
 
   // Только органика
-  const renderOrganicOnly = (log) => {
-    if (!log.organic_results || log.organic_results.length === 0) {
-      return <Alert variant="warning">Нет органических результатов</Alert>;
-    }
-
+  // Отображение только органики
+// Отображение только органики
+const renderOrganicOnly = (log) => {
+  if (!log.organic_results || log.organic_results.length === 0) {
     return (
-      <Table size="sm" striped hover>
-        <thead>
-          <tr>
-            <th width="90">Орг. поз.</th>
-            <th width="90">Факт. поз.</th>
-            <th width="300">Домен</th>
-            <th>Заголовок</th>
-          </tr>
-        </thead>
-        <tbody>
-          {log.organic_results.map((item, idx) => {
-            const isOurSite = log.analysis_result.has_our_site && 
-                             item.organic_position === log.analysis_result.our_organic_position;
-            
-            return (
-              <tr 
-                key={idx}
-                style={isOurSite ? {
-                  backgroundColor: '#d4edda',
-                  fontWeight: '500'
-                } : {}}
-              >
-                <td className="text-center">
-                  <Badge bg="secondary">{item.organic_position}</Badge>
-                </td>
-                <td className="text-center">
-                  <Badge bg="primary">{item.actual_position}</Badge>
-                </td>
-                <td>
-                  <strong>{item.domain}</strong>
-                  {isOurSite && 
-                    <Badge bg="success" className="ms-2">Наш сайт</Badge>
-                  }
-                </td>
-                <td>
-                  <small>{item.title}</small>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </Table>
+      <Alert variant="warning">
+        Нет органических результатов для этого запроса
+      </Alert>
     );
-  };
+  }
+
+  return (
+    <Table size="sm" striped hover>
+      <thead>
+        <tr>
+          <th width="90">Орг. поз.</th>
+          <th width="90">Факт. поз.</th>
+          <th width="300">Домен</th>
+          <th>Заголовок</th>
+        </tr>
+      </thead>
+      <tbody>
+        {log.organic_results.map((item, idx) => {
+          // ✅ ИСПРАВЛЕНО: вычисляем органическую позицию как порядковый номер (idx + 1)
+          const organicPosition = idx + 1;
+          
+          const isOurSite = log.analysis_result.has_our_site && 
+                           organicPosition === log.analysis_result.our_organic_position;
+          
+          return (
+            <tr 
+              key={idx}
+              style={isOurSite ? {
+                backgroundColor: '#d4edda',
+                fontWeight: '500'
+              } : {}}
+            >
+              <td className="text-center">
+                {/* ✅ ИСПРАВЛЕНО: используем вычисленную органическую позицию */}
+                <Badge bg="secondary">{organicPosition}</Badge>
+              </td>
+              <td className="text-center">
+                {/* ✅ Фактическая позиция из данных */}
+                <Badge bg="primary">{item.actual_position || 'N/A'}</Badge>
+              </td>
+              <td>
+                <strong>{item.domain}</strong>
+                {isOurSite && 
+                  <Badge bg="success" className="ms-2">Наш сайт</Badge>
+                }
+              </td>
+              <td>
+                <small>{item.title}</small>
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </Table>
+  );
+};
   
   // Отображение сырых данных
     const renderRawData = (log) => {

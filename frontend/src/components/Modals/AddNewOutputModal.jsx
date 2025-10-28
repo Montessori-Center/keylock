@@ -15,8 +15,8 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
   };
   
   const [keywordText, setKeywordText] = useState('');
-
-  const [params, setParams] = useState({
+  
+ const [params, setParams] = useState({
     seed_keywords: [],
     location_name: 'Ukraine',
     location_code: 1012852,
@@ -107,13 +107,13 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
       return;
     }
     
-    if (params.seed_keywords.length > 700) {
-      alert('Максимум 700 ключевых слов за один запрос');
+    if (params.seed_keywords.length > 20) {
+      alert('Максимум 20 ключевых слов за один запрос');
       return;
     }
     
-    if (params.limit > 700) {
-      alert('Максимальный лимит для live запроса - 700');
+    if (params.limit > 20) {
+      alert('Максимальный лимит для live запроса - 20');
       return;
     }
     
@@ -162,7 +162,7 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
             <Form.Label>
               Seed ключевые слова:
               <small className="text-muted ms-2">
-                ({params.seed_keywords.length} / 700)
+                ({params.seed_keywords.length} / 20)
               </small>
             </Form.Label>
             <Form.Control
@@ -174,7 +174,7 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
               style={{ resize: 'vertical' }}
             />
             <Form.Text className="text-muted">
-              Введите от 1 до 700 ключевых слов для получения релевантной выдачи. Разделители: запятая или новая строка.
+              Введите от 1 до 20 ключевых слов для получения релевантной выдачи. Разделители: запятая или новая строка.
             </Form.Text>
           </Form.Group>
 
