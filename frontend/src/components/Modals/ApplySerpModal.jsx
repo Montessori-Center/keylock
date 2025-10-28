@@ -4,19 +4,19 @@ import { Modal, Button, Form, Row, Col, Alert } from 'react-bootstrap';
 
 const ApplySerpModal = ({ show, onHide, onApply, selectedKeywords }) => {
   const [params, setParams] = useState({
-    keyword_ids: [],
-    location_code: 1012852,  // ← Kyiv
-    location_name: 'Kyiv, Kyiv city, Ukraine',  // ← ИЗМЕНЕНО
-    language_code: 'ru',
-    language_name: 'Russian',
-    device: 'desktop',
-    os: 'windows',
-    depth: 20,               // Глубина до 20 результатов
-    calculate_rectangles: false,
-    browser_screen_width: 1920,
-    browser_screen_height: 1080,
-    se_domain: 'google.com.ua'
-  });
+      keyword_ids: [],
+      location_code: null,
+      location_name: '',
+      language_code: '',
+      language_name: '',
+      device: 'desktop',
+      os: 'windows',
+      depth: 20,
+      calculate_rectangles: false,
+      browser_screen_width: 1920,
+      browser_screen_height: 1080,
+      se_domain: ''
+    });
 
   // Список локаций загружается из БД
   const [locations, setLocations] = useState([]);
@@ -48,6 +48,30 @@ const ApplySerpModal = ({ show, onHide, onApply, selectedKeywords }) => {
       loadLanguages();
     }
   }, [show]);
+  
+  // Установка значений по умолчанию после загрузки данных
+    useEffect(() => {
+      if (locations.length > 0 && !params.location_code) {
+        const defaultLocation = locations[0];
+        setParams(prev => ({
+          ...prev,
+          location_code: defaultLocation.code,
+          location_name: defaultLocation.name,
+          se_domain: defaultLocation.se_domain
+        }));
+      }
+    }, [locations]);
+    
+    useEffect(() => {
+      if (languages.length > 0 && !params.language_code) {
+        const defaultLanguage = languages[0];
+        setParams(prev => ({
+          ...prev,
+          language_code: defaultLanguage.code,
+          language_name: defaultLanguage.name
+        }));
+      }
+    }, [languages]);
 
   const loadLocations = async () => {
     try {

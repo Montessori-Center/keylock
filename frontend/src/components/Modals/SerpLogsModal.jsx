@@ -332,14 +332,12 @@ const SerpLogsModal = ({ show, onHide, selectedKeywordIds = null }) => {
                       <Col md={6}>
                         <div className="mb-1">
                           <strong style={{ fontSize: '0.9rem' }}>Локация:</strong>
-                          <div style={{ fontSize: '0.85rem', color: '#666' }}>
-                            {(() => {
-                              const locationCode = selectedLog.location_code;
-                              if (locationCode === 1012852) return 'Kyiv, Kyiv city, Ukraine';
-                              if (locationCode === 2804) return 'Ukraine';
-                              return `Location code: ${locationCode}`;
-                            })()}
-                          </div>
+                          <div className="mb-1">
+                              <strong style={{ fontSize: '0.9rem' }}>Локация:</strong>
+                              <div style={{ fontSize: '0.85rem', color: '#666' }}>
+                                {selectedLog.location_name || `Location code: ${selectedLog.location_code}`}
+                              </div>
+                            </div>
                         </div>
                       </Col>
                       <Col md={6}>

@@ -16,18 +16,18 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
   
   const [keywordText, setKeywordText] = useState('');
   
-  const [params, setParams] = useState({
-    seed_keywords: [],
-    location_name: 'Ukraine',
-    location_code: 2804,  // ✅ ИСПРАВЛЕНО: код Украины для API
-    language_code: 'ru',
-    limit: 700,
-    search_partners: false,
-    date_from: getDefaultDateFrom(),
-    date_to: getDefaultDateTo(),
-    include_seed_keyword: true,
-    sort_by: 'relevance'
-  });
+    const [params, setParams] = useState({
+      seed_keywords: [],
+      location_name: '',
+      location_code: null,
+      language_code: '',
+      limit: 700,
+      search_partners: false,
+      date_from: getDefaultDateFrom(),
+      date_to: getDefaultDateTo(),
+      include_seed_keyword: true,
+      sort_by: 'relevance'
+    });
 
   const [locations, setLocations] = useState([]);
   const [languages, setLanguages] = useState([]);
@@ -55,6 +55,28 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
       }));
     }
   }, [selectedKeywords, show]);
+  
+  // Установка значений по умолчанию после загрузки данных
+    useEffect(() => {
+      if (locations.length > 0 && !params.location_code) {
+        const defaultLocation = locations[0];
+        setParams(prev => ({
+          ...prev,
+          location_code: defaultLocation.code,
+          location_name: defaultLocation.name_ru || defaultLocation.name
+        }));
+      }
+    }, [locations]);
+    
+    useEffect(() => {
+      if (languages.length > 0 && !params.language_code) {
+        const defaultLanguage = languages[0];
+        setParams(prev => ({
+          ...prev,
+          language_code: defaultLanguage.code
+        }));
+      }
+    }, [languages]);
 
   const loadLocations = async () => {
     setLoadingLocations(true);
