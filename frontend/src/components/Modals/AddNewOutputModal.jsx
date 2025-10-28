@@ -1,4 +1,4 @@
-// src/components/Modals/AddNewOutputModal.jsx - ИСПРАВЛЕННАЯ ВЕРСИЯ
+// frontend/src/components/Modals/AddNewOutputModal.jsx - ИСПРАВЛЕННАЯ ВЕРСИЯ
 import React, { useState, useEffect } from 'react';
 import { Modal, Button, Form, Row, Col, Alert } from 'react-bootstrap';
 
@@ -16,10 +16,10 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
   
   const [keywordText, setKeywordText] = useState('');
   
- const [params, setParams] = useState({
+  const [params, setParams] = useState({
     seed_keywords: [],
     location_name: 'Ukraine',
-    location_code: 1012852,
+    location_code: 2804,  // ✅ ИСПРАВЛЕНО: код Украины для API
     language_code: 'ru',
     limit: 700,
     search_partners: false,
@@ -90,9 +90,11 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
     }
   };
 
+  // ✅ ИСПРАВЛЕНО: используем location_code вместо location_name
   const handleLocationChange = (locationCode) => {
     const location = locations.find(l => l.code === parseInt(locationCode));
     if (location) {
+      console.log('Selected location:', location);
       setParams(prev => ({
         ...prev,
         location_code: location.code,
@@ -102,24 +104,28 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
   };
 
   const handleSubmit = () => {
-    if (params.seed_keywords.length === 0) {
-      alert('Добавьте хотя бы одно ключевое слово');
-      return;
-    }
-    
-    if (params.seed_keywords.length > 20) {
-      alert('Максимум 20 ключевых слов за один запрос');
-      return;
-    }
-    
-    if (params.limit > 20) {
-      alert('Максимальный лимит для live запроса - 20');
-      return;
-    }
-    
-    onAdd(params);
-    onHide();
-  };
+      if (params.seed_keywords.length === 0) {
+        alert('Добавьте хотя бы одно ключевое слово');
+        return;
+      }
+      
+      // ✅ ИСПРАВЛЕНО: максимум 20 seed-слов согласно документации API
+      if (params.seed_keywords.length > 20) {
+        alert('Максимум 20 seed-слов за один запрос (согласно ограничениям DataForSeo API)');
+        return;
+      }
+      
+      // ✅ Проверка длины каждого ключевого слова
+      const tooLongKeywords = params.seed_keywords.filter(k => k.length > 80);
+      if (tooLongKeywords.length > 0) {
+        alert(`Некоторые ключевые слова превышают 80 символов:\n${tooLongKeywords.slice(0, 3).join('\n')}`);
+        return;
+      }
+      
+      console.log('Отправляем параметры:', params);
+      onAdd(params);
+      onHide();
+    };
 
   const handleKeywordsChange = (text) => {
     setKeywordText(text);
@@ -130,6 +136,7 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
       .map(k => k.trim())
       .filter(k => k.length > 0);
     
+    console.log('Parsed keywords:', keywords.length, keywords);
     setParams(prev => ({ ...prev, seed_keywords: keywords }));
   };
 
@@ -174,7 +181,8 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
               style={{ resize: 'vertical' }}
             />
             <Form.Text className="text-muted">
-              Введите от 1 до 20 ключевых слов для получения релевантной выдачи. Разделители: запятая или новая строка.
+              Введите от 1 до 20 seed-слов для получения релевантной выдачи. 
+              Максимум 80 символов на слово. Разделители: запятая или новая строка.
             </Form.Text>
           </Form.Group>
 
@@ -182,13 +190,14 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
             <Col md={6}>
               <Form.Group className="mb-3">
                 <Form.Label>Локация:</Form.Label>
+                {/* ✅ ИСПРАВЛЕНО: используем location_code в value */}
                 <Form.Select 
-                  value={params.location_name}
+                  value={params.location_code}
                   onChange={(e) => handleLocationChange(e.target.value)}
                   disabled={loadingLocations}
                 >
                   {locations.map(loc => (
-                    <option key={loc.code} value={loc.name}>
+                    <option key={loc.code} value={loc.code}>
                       {loc.name_ru || loc.name} ({loc.code})
                     </option>
                   ))}
@@ -322,7 +331,7 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
             Стоимость: <strong>${baseCost.toFixed(3)}</strong>
             <br />
             <small>
-              Количество seed-слов: {params.seed_keywords.length} | 
+              Seed-слов: {params.seed_keywords.length} | 
               Лимит результатов: {params.limit}
             </small>
           </Alert>

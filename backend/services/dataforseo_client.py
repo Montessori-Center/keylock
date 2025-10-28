@@ -100,34 +100,42 @@ class DataForSeoClient:
                 debug_print(f"❌ Response: {e.response.text}")
             raise
     
-    def get_keywords_for_keywords(self,
-        keywords: List[str],
-        location_code: int = 2804,  # Ukraine
-        language_code: str = "ru",
-        search_partners: bool = False,
-        sort_by: str = "search_volume",
+    def get_keywords_for_keywords(
+        self, 
+        keywords: List[str], 
+        location_code: int = 2804,
+        language_code: str = 'ru',
         limit: int = 700,
+        search_partners: bool = False,
+        sort_by: str = 'relevance',
         include_seed_keyword: bool = True,
-        date_from: str = "2024-01-01",
+        date_from: str = None,
         date_to: str = None
     ) -> Dict:
+        """
+        Получение ключевых слов на основе seed-фраз
+        """
+        debug_print(f"🔑 get_keywords_for_keywords вызван")
+        debug_print(f"   Seed keywords: {keywords[:3]}... (всего {len(keywords)})")
         
-        debug_print(f"🔍 get_keywords_for_keywords вызван с параметрами:")
-        debug_print(f"   - keywords: {keywords[:3]}... (всего {len(keywords)})")
-        debug_print(f"   - location_code: {location_code}")
-        debug_print(f"   - language_code: {language_code}")
-        debug_print(f"   - limit: {limit}")
+        # ✅ ДОБАВЬ ПРОВЕРКУ:
+        if len(keywords) > 20:
+            raise ValueError("Максимум 20 seed-слов согласно ограничениям API")
+        
+        for kw in keywords:
+            if len(kw) > 80:
+                raise ValueError(f"Ключевое слово '{kw[:50]}...' превышает 80 символов")
         
         endpoint = "/keywords_data/google_ads/keywords_for_keywords/live"
         
         # Структура запроса согласно официальной документации
         data = [{
-            "keywords": keywords[:700],  # Ограничение API - макс 700 ключевых слов
+            "keywords": keywords[:20],  # ✅ ИСПРАВЛЕНО: максимум 20
             "location_code": location_code,
             "language_code": language_code,
             "search_partners": search_partners,
             "sort_by": sort_by,
-            "limit": limit,
+            "limit": limit,  # это лимит РЕЗУЛЬТАТОВ (до 700)
             "include_seed_keyword": include_seed_keyword,
             "date_from": date_from,
         }]
