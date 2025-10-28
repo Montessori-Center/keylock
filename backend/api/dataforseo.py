@@ -238,16 +238,15 @@ def get_new_keywords():
             dataforseo_client = get_dataforseo_client()
             
             response = dataforseo_client.get_keywords_for_keywords(
-                keywords=seed_keywords,
-                location_code=location_code,
-                language_code=language_code,
-                search_partners=search_partners,
-                sort_by=sort_by,
-                limit=limit,
-                include_seed_keyword=include_seed_keyword,
-                date_from=date_from,
-                date_to=date_to
-            )
+            keywords=seed_keywords,
+            location_code=location_code,
+            language_code=language_code,
+            search_partners=search_partners,
+            sort_by=sort_by,
+            include_seed_keyword=include_seed_keyword,
+            date_from=date_from,
+            date_to=date_to
+        )
             
             # Проверяем ответ
             if not response.get('tasks'):

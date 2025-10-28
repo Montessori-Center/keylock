@@ -19,7 +19,7 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
     const [params, setParams] = useState({
       seed_keywords: [],
       location_name: '',
-      location_code: null,
+      location_code: '',
       language_code: '',
       limit: 700,
       search_partners: false,

@@ -5,7 +5,7 @@ import { Modal, Button, Form, Row, Col, Alert } from 'react-bootstrap';
 const ApplySerpModal = ({ show, onHide, onApply, selectedKeywords }) => {
   const [params, setParams] = useState({
       keyword_ids: [],
-      location_code: null,
+      location_code: '',
       location_name: '',
       language_code: '',
       language_name: '',
