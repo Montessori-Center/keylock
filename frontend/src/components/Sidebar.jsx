@@ -17,12 +17,12 @@ const Sidebar = ({
   const [competitorsPending, setCompetitorsPending] = useState(0);
 
   const toggleCampaign = (campaignId) => {
-    setExpandedCampaigns(prev => 
-      prev.includes(campaignId) 
-        ? prev.filter(id => id !== campaignId)
-        : [...prev, campaignId]
-    );
-  };
+      setExpandedCampaigns(prev => 
+        prev.includes(campaignId) 
+          ? prev.filter(id => id !== campaignId)  // Если уже открыта - закрываем
+          : [campaignId]  // ✅ ИСПРАВЛЕНО: открываем только эту, закрывая остальные
+      );
+    };
 
   // Загрузка статистики конкурентов для badge
   useEffect(() => {
@@ -43,6 +43,20 @@ const Sidebar = ({
     const interval = setInterval(loadCompetitorsStats, 30000);
     return () => clearInterval(interval);
   }, []);
+  
+  // Автоматическое раскрытие кампании с выбранной группой
+    useEffect(() => {
+      if (selectedAdGroup && campaigns.length > 0) {
+        // Находим кампанию, которой принадлежит выбранная группа
+        const parentCampaign = campaigns.find(campaign => 
+          (campaign.adGroups || campaign.ad_groups)?.some(ag => ag.id === selectedAdGroup.id)
+        );
+        
+        if (parentCampaign && !expandedCampaigns.includes(parentCampaign.id)) {
+          setExpandedCampaigns([parentCampaign.id]);
+        }
+      }
+    }, [selectedAdGroup, campaigns]);
 
   return (
       <div className={`sidebar ${isOpen ? 'open' : 'closed'}`}>

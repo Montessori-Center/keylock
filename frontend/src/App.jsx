@@ -474,68 +474,85 @@ function App() {
     }
   };
 
-  const loadAdGroupsStats = async (campaignsData = null) => {
-    try {
-      const campaignsToUse = campaignsData || campaigns;
-      
-      if (!campaignsToUse || campaignsToUse.length === 0) {
-        return;
-      }
-
-      const adGroupsWithStats = await Promise.all(
-        campaignsToUse[0]?.adGroups?.map(async (adGroup) => {
-          try {
-            const response = await api.getKeywords(adGroup.id);
-            
-            const newChangesCount = response.success 
-              ? response.data.filter(kw => kw.is_new === true).length 
-              : 0;
-            
-            const uniqueColors = response.success
-              ? [...new Set(response.data
-                  .filter(kw => kw.is_new === true && kw.batch_color)
-                  .map(kw => kw.batch_color))]
-              : [];
-            
-            return {
-              ...adGroup,
-              newChanges: newChangesCount,
-              batchColors: uniqueColors,
-              hasChanges: newChangesCount > 0
-            };
-          } catch (error) {
-            return { 
-              ...adGroup, 
-              newChanges: 0, 
-              batchColors: [],
-              hasChanges: false 
-            };
-          }
-        }) || []
-      );
-
-      const updatedCampaigns = campaignsToUse.map(campaign => ({
-        ...campaign,
-        adGroups: adGroupsWithStats
-      }));
-      
-      setCampaigns(updatedCampaigns);
-      
-      if (selectedAdGroup) {
-        const updatedSelectedGroup = adGroupsWithStats.find(
-          ag => ag.id === selectedAdGroup.id
-        );
-        if (updatedSelectedGroup) {
-          setSelectedAdGroup(updatedSelectedGroup);
+  const loadAdGroupsStats = async (campaignsToUse = null) => {
+      try {
+        const campaignsData = campaignsToUse || campaigns;
+        
+        if (!campaignsData || campaignsData.length === 0) {
+          console.warn('No campaigns to load stats for');
+          return;
         }
+    
+        console.log('📊 Loading stats for campaigns:', campaignsData.length);
+        
+        // ✅ ИСПРАВЛЕНО: обрабатываем каждую кампанию отдельно
+        const updatedCampaigns = await Promise.all(
+          campaignsData.map(async (campaign) => {
+            // Для каждой кампании загружаем статистику её групп объявлений
+            const adGroupsWithStats = await Promise.all(
+              (campaign.adGroups || []).map(async (adGroup) => {
+                try {
+                  const response = await api.getKeywords(adGroup.id);
+                  
+                  const newChangesCount = response.success && response.data
+                    ? response.data.filter(kw => kw.is_new === true).length 
+                    : 0;
+                  
+                  const uniqueColors = response.success
+                    ? [...new Set(response.data
+                        .filter(kw => kw.is_new === true && kw.batch_color)
+                        .map(kw => kw.batch_color))]
+                    : [];
+                  
+                  return {
+                    ...adGroup,
+                    newChanges: newChangesCount,
+                    batchColors: uniqueColors,
+                    hasChanges: newChangesCount > 0
+                  };
+                } catch (error) {
+                  console.error(`Error loading stats for ad group ${adGroup.id}:`, error);
+                  return { 
+                    ...adGroup, 
+                    newChanges: 0, 
+                    batchColors: [],
+                    hasChanges: false 
+                  };
+                }
+              })
+            );
+    
+            return {
+              ...campaign,
+              adGroups: adGroupsWithStats
+            };
+          })
+        );
+        
+        console.log('✅ Stats loaded for all campaigns');
+        setCampaigns(updatedCampaigns);
+        
+        // Обновляем выбранную группу если она есть
+        if (selectedAdGroup) {
+          // Ищем обновлённую версию выбранной группы
+          for (const campaign of updatedCampaigns) {
+            const updatedSelectedGroup = campaign.adGroups.find(
+              ag => ag.id === selectedAdGroup.id
+            );
+            if (updatedSelectedGroup) {
+              setSelectedAdGroup(updatedSelectedGroup);
+              break;
+            }
+          }
+        }
+        
+        return updatedCampaigns;
+        
+      } catch (error) {
+        console.error('❌ Error loading ad groups stats:', error);
+        return campaignsToUse || campaigns;
       }
-      
-      return updatedCampaigns;
-      
-    } catch (error) {
-      console.error('Error loading ad groups stats:', error);
-    }
-  };
+    };
 
   const handleChangeField = async (field, value) => {
     try {
