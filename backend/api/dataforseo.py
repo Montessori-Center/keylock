@@ -280,7 +280,7 @@ def get_new_keywords():
         
         # Парсим ответ
         try:
-            keywords_data = dataforseo_client.parse_keywords_response(response)
+            keywords_data = dataforseo_client.parse_keywords_response(response, limit=limit)
             log_print(f"📈 Получено ключевых слов: {len(keywords_data)}")
         except Exception as e:
             log_print(f"❌ Ошибка парсинга: {str(e)}")

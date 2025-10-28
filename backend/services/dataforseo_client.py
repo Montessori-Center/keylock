@@ -105,7 +105,6 @@ class DataForSeoClient:
         keywords: List[str], 
         location_code: int = 2804,
         language_code: str = 'ru',
-        limit: int = 700,
         search_partners: bool = False,
         sort_by: str = 'relevance',
         include_seed_keyword: bool = True,
@@ -135,7 +134,6 @@ class DataForSeoClient:
             "language_code": language_code,
             "search_partners": search_partners,
             "sort_by": sort_by,
-            "limit": limit,  # это лимит РЕЗУЛЬТАТОВ (до 700)
             "include_seed_keyword": include_seed_keyword,
             "date_from": date_from,
         }]
@@ -147,12 +145,16 @@ class DataForSeoClient:
         debug_print(f"📋 Структура запроса создана")
         return self._make_request("POST", endpoint, data)
     
-    def parse_keywords_response(self, response: Dict) -> List[Dict]:
+    def parse_keywords_response(self, response: Dict, limit: int = None) -> List[Dict]:
         """
         Парсинг ответа с ключевыми словами (только основные данные)
         Интент и SERP данные будут определены отдельно через SERP анализ
+        
+        Args:
+            response: Ответ от DataForSeo API
+            limit: Максимальное количество результатов (обрезается после сортировки)
         """
-        debug_print(f"🔄 parse_keywords_response начат")
+        debug_print(f"🔄 parse_keywords_response начат (limit={limit})")
         keywords_data = []
         
         if not response.get("tasks"):
@@ -249,6 +251,13 @@ class DataForSeoClient:
             debug_print(f"📝 Первое ключевое слово: {keywords_data[0]['keyword']}")
             debug_print(f"📝 Объем поиска: {keywords_data[0]['avg_monthly_searches']}")
             debug_print(f"📝 Конкуренция: {keywords_data[0]['competition']}")
+            
+        # Обрезаем результаты согласно лимиту
+        if limit and len(keywords_data) > limit:
+            debug_print(f"✂️ Обрезаем результаты: {len(keywords_data)} → {limit}")
+            keywords_data = keywords_data[:limit]
+        
+        debug_print(f"✅ parse_keywords_response завершён: {len(keywords_data)} keywords")
         
         return keywords_data
     
