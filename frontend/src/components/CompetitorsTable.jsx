@@ -196,35 +196,42 @@ const CompetitorsTable = ({
     console.log('📊 Updated competitors columns with widths');
   }, [getColumns]);
 
-  const handleAfterChange = (changes, source) => {
-    if (!changes || source === 'loadData') return;
-
-    const checkboxChanges = changes.filter(([row, prop]) => prop === 'selected');
-    if (checkboxChanges.length > 0) {
-      const newSelectedIds = [];
-      tableData.forEach((row, index) => {
-        const change = checkboxChanges.find(([r]) => r === index);
-        if (change) {
-          if (change[3]) {
-            newSelectedIds.push(row.id);
+  // ✅ ИСПРАВЛЕНО: Обработка изменений с учётом сортировки
+    const handleAfterChange = useCallback((changes, source) => {
+      if (source === 'loadData' || !changes) return;
+      
+      const checkboxChanges = changes.filter(([row, prop]) => prop === 'selected');
+      if (checkboxChanges.length > 0) {
+        const instance = hotTableRef.current?.hotInstance;
+        if (!instance) return;
+    
+        const newSelectedIds = [...selectedIds];
+        
+        checkboxChanges.forEach(([visualRow, prop, oldValue, newValue]) => {
+          // ✅ Преобразуем визуальный индекс в физический
+          const physicalRow = instance.toPhysicalRow(visualRow);
+          const rowData = tableData[physicalRow];
+          
+          if (rowData) {
+            const rowId = rowData.id;
+            
+            if (newValue && !newSelectedIds.includes(rowId)) {
+              newSelectedIds.push(rowId);
+            } else if (!newValue && newSelectedIds.includes(rowId)) {
+              const index = newSelectedIds.indexOf(rowId);
+              newSelectedIds.splice(index, 1);
+            }
           }
-        } else if (row.selected) {
-          newSelectedIds.push(row.id);
-        }
-      });
-      onSelectionChange(newSelectedIds);
-    }
-
-    const dataChanges = changes.filter(([row, prop]) => prop !== 'selected');
-    if (dataChanges.length > 0 && onDataChange) {
-      dataChanges.forEach(([row, prop, oldValue, newValue]) => {
-        const rowData = tableData[row];
-        if (rowData && prop && newValue !== oldValue) {
-          onDataChange(rowData.id, prop, newValue);
-        }
-      });
-    }
-  };
+        });
+        
+        onSelectionChange(newSelectedIds);
+      }
+      
+      const dataChanges = changes.filter(([row, prop]) => prop !== 'selected');
+      if (dataChanges.length > 0 && onDataChange) {
+        onDataChange(dataChanges);
+      }
+    }, [tableData, selectedIds, onSelectionChange, onDataChange]);
 
   const handleAfterSelectionEnd = (row, column, row2, column2) => {
     if (column === 0) return;
@@ -251,71 +258,77 @@ const CompetitorsTable = ({
     }
   };
 
-  // ✅ SHIFT-выделение
-  useEffect(() => {
-    const instance = hotTableRef.current?.hotInstance;
-    if (!instance) return;
-
-    const handleMouseDown = (e) => {
-      const checkbox = e.target.closest('input[type="checkbox"]');
-      if (!checkbox) return;
-
-      const td = checkbox.closest('td');
-      if (!td) return;
-
-      const coords = instance.getCoords(td);
-      
-      if (!coords || coords.col !== 0) return;
-
-      const currentRow = coords.row;
-
-      if (e.shiftKey && lastClickedRowRef.current !== null) {
-        e.preventDefault();
-        e.stopPropagation();
-
-        const startRow = Math.min(lastClickedRowRef.current, currentRow);
-        const endRow = Math.max(lastClickedRowRef.current, currentRow);
-
-        const shouldSelect = !checkbox.checked;
-
-        const rangeIds = [];
-        for (let i = startRow; i <= endRow; i++) {
-          if (tableData[i]) {
-            rangeIds.push(tableData[i].id);
-          }
-        }
-
-        let newSelectedIds;
-        if (shouldSelect) {
-          newSelectedIds = [...new Set([...selectedIds, ...rangeIds])];
-        } else {
-          newSelectedIds = selectedIds.filter(id => !rangeIds.includes(id));
-        }
-
-        onSelectionChange(newSelectedIds);
-
-        const newData = tableData.map((row, idx) => {
-          if (idx >= startRow && idx <= endRow) {
-            return { ...row, selected: shouldSelect };
-          }
-          return row;
-        });
+  // ✅ ИСПРАВЛЕНО: Перехватываем клики по чекбоксам с преобразованием индексов
+    useEffect(() => {
+      if (!hotTableRef.current?.hotInstance) return;
+    
+      const handleMouseDown = (e) => {
+        const checkbox = e.target.closest('input[type="checkbox"]');
+        if (!checkbox) return;
+    
+        const td = checkbox.closest('td');
+        if (!td) return;
+    
+        const instance = hotTableRef.current.hotInstance;
+        const coords = instance.getCoords(td);
         
-        instance.loadData(newData);
-        
-        return;
-      }
-
-      lastClickedRowRef.current = currentRow;
-    };
-
-    const tableElement = instance.rootElement;
-    tableElement.addEventListener('mousedown', handleMouseDown, true);
-
-    return () => {
-      tableElement.removeEventListener('mousedown', handleMouseDown, true);
-    };
-  }, [tableData, selectedIds, onSelectionChange]);
+        if (!coords || coords.col !== 0) return;
+    
+        const visualRow = coords.row;  // ✅ Визуальный индекс
+        const physicalRow = instance.toPhysicalRow(visualRow);  // ✅ Физический индекс
+    
+        // ✅ SHIFT-ВЫДЕЛЕНИЕ
+        if (e.shiftKey && lastClickedRowRef.current !== null) {
+          e.preventDefault();
+          e.stopPropagation();
+    
+          const visualStartRow = lastClickedRowRef.current;
+          const physicalStartRow = instance.toPhysicalRow(visualStartRow);
+          
+          const startRow = Math.min(physicalStartRow, physicalRow);
+          const endRow = Math.max(physicalStartRow, physicalRow);
+    
+          console.log(`✅ Shift-click competitors: visual [${Math.min(visualStartRow, visualRow)}-${Math.max(visualStartRow, visualRow)}] -> physical [${startRow}-${endRow}]`);
+    
+          const shouldSelect = !checkbox.checked;
+    
+          const rangeIds = [];
+          for (let i = startRow; i <= endRow; i++) {
+            if (tableData[i]) {
+              rangeIds.push(tableData[i].id);
+            }
+          }
+    
+          let newSelectedIds;
+          if (shouldSelect) {
+            newSelectedIds = [...new Set([...selectedIds, ...rangeIds])];
+          } else {
+            newSelectedIds = selectedIds.filter(id => !rangeIds.includes(id));
+          }
+    
+          onSelectionChange(newSelectedIds);
+    
+          const newData = tableData.map(row => ({
+            ...row,
+            selected: newSelectedIds.includes(row.id)
+          }));
+          
+          instance.loadData(newData);
+          
+          return;
+        }
+    
+        // ✅ ОБЫЧНЫЙ КЛИК
+        lastClickedRowRef.current = visualRow;
+      };
+    
+      const tableElement = hotTableRef.current.hotInstance.rootElement;
+      tableElement.addEventListener('mousedown', handleMouseDown, true);
+    
+      return () => {
+        tableElement.removeEventListener('mousedown', handleMouseDown, true);
+      };
+    }, [tableData, selectedIds, onSelectionChange]);
 
   return (
     <div style={{ width: '100%', height: '100%', overflow: 'hidden' }}>

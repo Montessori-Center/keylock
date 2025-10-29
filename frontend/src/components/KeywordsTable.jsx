@@ -85,83 +85,89 @@ const KeywordsTable = ({
     },
   };
 
-  // ✅ НОВЫЙ ПОДХОД: Перехватываем клики по чекбоксам напрямую через DOM
-  useEffect(() => {
-    if (!hotTableRef.current?.hotInstance) return;
-
-    const handleMouseDown = (e) => {
-      // Проверяем, что клик по чекбоксу
-      const checkbox = e.target.closest('input[type="checkbox"]');
-      if (!checkbox) return;
-
-      // Проверяем, что это чекбокс из нашей таблицы
-      const td = checkbox.closest('td');
-      if (!td) return;
-
-      const instance = hotTableRef.current.hotInstance;
-      const coords = instance.getCoords(td);
-      
-      if (!coords || coords.col !== 0) return; // Только первая колонка (чекбоксы)
-
-      const currentRow = coords.row;
-
-      // ✅ SHIFT-ВЫДЕЛЕНИЕ
-      if (e.shiftKey && lastClickedRowRef.current !== null) {
-        e.preventDefault();
-        e.stopPropagation();
-
-        const startRow = Math.min(lastClickedRowRef.current, currentRow);
-        const endRow = Math.max(lastClickedRowRef.current, currentRow);
-
-        console.log(`✅ Shift-click: selecting rows ${startRow} to ${endRow}`);
-
-        // Определяем, выделяем или снимаем выделение
-        const shouldSelect = !checkbox.checked;
-
-        // Собираем ID для выделения
-        const rangeIds = [];
-        for (let i = startRow; i <= endRow; i++) {
-          if (tableData[i]) {
-            rangeIds.push(tableData[i].id);
-          }
-        }
-
-        let newSelectedIds;
-        if (shouldSelect) {
-          // Добавляем все ID из диапазона
-          newSelectedIds = [...new Set([...selectedIds, ...rangeIds])];
-        } else {
-          // Убираем все ID из диапазона
-          newSelectedIds = selectedIds.filter(id => !rangeIds.includes(id));
-        }
-
-        // Обновляем состояние
-        onSelectionChange(newSelectedIds);
-
-        // Обновляем чекбоксы в таблице
-        const newData = tableData.map((row, idx) => {
-          if (idx >= startRow && idx <= endRow) {
-            return { ...row, selected: shouldSelect };
-          }
-          return row;
-        });
+  // ✅ ИСПРАВЛЕНО: Перехватываем клики по чекбоксам с преобразованием индексов
+    useEffect(() => {
+      if (!hotTableRef.current?.hotInstance) return;
+    
+      const handleMouseDown = (e) => {
+        // Проверяем, что клик по чекбоксу
+        const checkbox = e.target.closest('input[type="checkbox"]');
+        if (!checkbox) return;
+    
+        // Проверяем, что это чекбокс из нашей таблицы
+        const td = checkbox.closest('td');
+        if (!td) return;
+    
+        const instance = hotTableRef.current.hotInstance;
+        const coords = instance.getCoords(td);
         
-        instance.loadData(newData);
+        if (!coords || coords.col !== 0) return; // Только первая колонка (чекбоксы)
+    
+        const visualRow = coords.row;  // ✅ Визуальный индекс
+        const physicalRow = instance.toPhysicalRow(visualRow);  // ✅ Физический индекс
+    
+        // ✅ SHIFT-ВЫДЕЛЕНИЕ
+        if (e.shiftKey && lastClickedRowRef.current !== null) {
+          e.preventDefault();
+          e.stopPropagation();
+    
+          // ✅ Преобразуем оба индекса в физические
+          const visualStartRow = lastClickedRowRef.current;
+          const physicalStartRow = instance.toPhysicalRow(visualStartRow);
+          
+          const startRow = Math.min(physicalStartRow, physicalRow);
+          const endRow = Math.max(physicalStartRow, physicalRow);
+    
+          console.log(`✅ Shift-click: visual [${Math.min(visualStartRow, visualRow)}-${Math.max(visualStartRow, visualRow)}] -> physical [${startRow}-${endRow}]`);
+    
+          // Определяем, выделяем или снимаем выделение
+          const shouldSelect = !checkbox.checked;
+    
+          // Собираем ID для выделения используя ФИЗИЧЕСКИЕ индексы
+          const rangeIds = [];
+          for (let i = startRow; i <= endRow; i++) {
+            if (tableData[i]) {
+              rangeIds.push(tableData[i].id);
+            }
+          }
+    
+          let newSelectedIds;
+          if (shouldSelect) {
+            // Добавляем все ID из диапазона
+            newSelectedIds = [...new Set([...selectedIds, ...rangeIds])];
+          } else {
+            // Убираем все ID из диапазона
+            newSelectedIds = selectedIds.filter(id => !rangeIds.includes(id));
+          }
+    
+          // Обновляем состояние
+          onSelectionChange(newSelectedIds);
+    
+          // Обновляем чекбоксы в таблице используя ID, а не индексы
+          const newData = tableData.map(row => ({
+            ...row,
+            selected: newSelectedIds.includes(row.id)
+          }));
+          
+          instance.loadData(newData);
+          
+          return;
+        }
+    
+        // ✅ ОБЫЧНЫЙ КЛИК - используем физический индекс
+        lastClickedRowRef.current = visualRow;  // Сохраняем визуальный для следующего shift-клика
         
-        return;
-      }
-
-      // Сохраняем последний кликнутый ряд
-      lastClickedRowRef.current = currentRow;
-    };
-
-    const tableElement = hotTableRef.current.hotInstance.rootElement;
-    tableElement.addEventListener('mousedown', handleMouseDown, true);
-
-    return () => {
-      tableElement.removeEventListener('mousedown', handleMouseDown, true);
-    };
-  }, [tableData, selectedIds, onSelectionChange]);
+        // Обработка обычного клика - здесь можно добавить дополнительную логику если нужно
+        // Но основная обработка идёт через handleAfterChange
+      };
+    
+      const tableElement = hotTableRef.current.hotInstance.rootElement;
+      tableElement.addEventListener('mousedown', handleMouseDown, true);
+    
+      return () => {
+        tableElement.removeEventListener('mousedown', handleMouseDown, true);
+      };
+    }, [tableData, selectedIds, onSelectionChange]);
 
   // Загрузка сохраненных ширин столбцов при монтировании
   useEffect(() => {
@@ -342,31 +348,42 @@ const KeywordsTable = ({
     console.log('📊 Updated visible columns:', newColumns.map(c => c.data));
   }, [visibleColumns, columnWidths]);
 
-  // Обработка обычных изменений (без Shift)
-  const handleAfterChange = (changes, source) => {
-    if (source === 'loadData' || !changes) return;
+  // ✅ ИСПРАВЛЕНО: Обработка обычных изменений с учётом сортировки
+    const handleAfterChange = (changes, source) => {
+      if (source === 'loadData' || !changes) return;
+      
+      const checkboxChanges = changes.filter(([row, prop]) => prop === 'selected');
+      if (checkboxChanges.length > 0) {
+        const instance = hotTableRef.current?.hotInstance;
+        if (!instance) return;
     
-    const checkboxChanges = changes.filter(([row, prop]) => prop === 'selected');
-    if (checkboxChanges.length > 0) {
-      const newSelectedIds = [];
-      tableData.forEach((row, index) => {
-        const change = checkboxChanges.find(([r]) => r === index);
-        if (change) {
-          if (change[3]) {
-            newSelectedIds.push(row.id);
+        const newSelectedIds = [...selectedIds];  // Начинаем с текущих выделенных
+        
+        checkboxChanges.forEach(([visualRow, prop, oldValue, newValue]) => {
+          // ✅ Преобразуем визуальный индекс в физический
+          const physicalRow = instance.toPhysicalRow(visualRow);
+          const rowData = tableData[physicalRow];
+          
+          if (rowData) {
+            const rowId = rowData.id;
+            
+            if (newValue && !newSelectedIds.includes(rowId)) {
+              newSelectedIds.push(rowId);
+            } else if (!newValue && newSelectedIds.includes(rowId)) {
+              const index = newSelectedIds.indexOf(rowId);
+              newSelectedIds.splice(index, 1);
+            }
           }
-        } else if (row.selected) {
-          newSelectedIds.push(row.id);
-        }
-      });
-      onSelectionChange(newSelectedIds);
-    }
-    
-    const dataChanges = changes.filter(([row, prop]) => prop !== 'selected');
-    if (dataChanges.length > 0 && onDataChange) {
-      onDataChange(dataChanges);
-    }
-  };
+        });
+        
+        onSelectionChange(newSelectedIds);
+      }
+      
+      const dataChanges = changes.filter(([row, prop]) => prop !== 'selected');
+      if (dataChanges.length > 0 && onDataChange) {
+        onDataChange(dataChanges);
+      }
+    };
 
   if (loading) {
     return <div className="loading">Загрузка данных...</div>;
