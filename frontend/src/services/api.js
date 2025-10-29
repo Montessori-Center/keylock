@@ -158,7 +158,7 @@ const api = {
   },
 
   // SERP Logs - УЛУЧШЕННАЯ ФУНКЦИЯ с фильтрацией
-  getSerpLogs: (params = {}) => {
+  getSerpLogs: async (params = {}) => {
       const queryParams = new URLSearchParams();
       
       if (params.limit) queryParams.append('limit', params.limit);
@@ -167,14 +167,15 @@ const api = {
       if (params.ad_group_id) queryParams.append('ad_group_id', params.ad_group_id);
       if (params.latest_only !== undefined) queryParams.append('latest_only', params.latest_only);
       
-      return apiCall(`/api/dataforseo/serp-logs?${queryParams.toString()}`);
+      const response = await axios.get(`${API_BASE_URL}/dataforseo/serp-logs?${queryParams.toString()}`);
+      return response.data;
     },
     
-    recalculateSchoolPercentages: (logIds) => {
-      return apiCall('/api/dataforseo/recalculate-school-percentages', {
-        method: 'POST',
-        body: JSON.stringify({ log_ids: logIds })
+    recalculateSchoolPercentages: async (logIds) => {
+      const response = await axios.post(`${API_BASE_URL}/dataforseo/recalculate-school-percentages`, {
+        log_ids: logIds
       });
+      return response.data;
     },
 
   // Settings
