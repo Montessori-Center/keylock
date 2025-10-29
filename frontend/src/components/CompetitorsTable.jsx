@@ -227,9 +227,23 @@ const CompetitorsTable = ({
         onSelectionChange(newSelectedIds);
       }
       
+      // ✅ ИСПРАВЛЕНО: Обработка изменений данных (не чекбоксов)
       const dataChanges = changes.filter(([row, prop]) => prop !== 'selected');
       if (dataChanges.length > 0 && onDataChange) {
-        onDataChange(dataChanges);
+        const instance = hotTableRef.current?.hotInstance;
+        if (!instance) return;
+    
+        // Обрабатываем каждое изменение
+        dataChanges.forEach(([visualRow, prop, oldValue, newValue]) => {
+          // ✅ Преобразуем визуальный индекс в физический
+          const physicalRow = instance.toPhysicalRow(visualRow);
+          const rowData = tableData[physicalRow];
+          
+          if (rowData && rowData.id) {
+            // ✅ Вызываем onDataChange с правильными параметрами: (id, field, value)
+            onDataChange(rowData.id, prop, newValue);
+          }
+        });
       }
     }, [tableData, selectedIds, onSelectionChange, onDataChange]);
 
