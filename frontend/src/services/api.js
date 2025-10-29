@@ -158,31 +158,24 @@ const api = {
   },
 
   // SERP Logs - УЛУЧШЕННАЯ ФУНКЦИЯ с фильтрацией
-  getSerpLogs: async (params = {}) => {
-    try {
-      const { limit = 50, keywordId = null, keywordIds = null, latestOnly = false } = params;
+  getSerpLogs: (params = {}) => {
+      const queryParams = new URLSearchParams();
       
-      let url = `${API_BASE_URL}/dataforseo/serp-logs?limit=${limit}`;
+      if (params.limit) queryParams.append('limit', params.limit);
+      if (params.keyword_id) queryParams.append('keyword_id', params.keyword_id);
+      if (params.keyword_ids) queryParams.append('keyword_ids', params.keyword_ids);
+      if (params.ad_group_id) queryParams.append('ad_group_id', params.ad_group_id);
+      if (params.latest_only !== undefined) queryParams.append('latest_only', params.latest_only);
       
-      if (keywordId) {
-        url += `&keyword_id=${keywordId}`;
-      }
-      
-      if (keywordIds && Array.isArray(keywordIds) && keywordIds.length > 0) {
-        url += `&keyword_ids=${keywordIds.join(',')}`;
-      }
-      
-      if (latestOnly) {
-        url += `&latest_only=true`;
-      }
-      
-      const response = await axios.get(url);
-      return response.data;
-    } catch (error) {
-      console.error('❌ getSerpLogs error:', error);
-      throw error;
-    }
-  },
+      return apiCall(`/api/dataforseo/serp-logs?${queryParams.toString()}`);
+    },
+    
+    recalculateSchoolPercentages: (logIds) => {
+      return apiCall('/api/dataforseo/recalculate-school-percentages', {
+        method: 'POST',
+        body: JSON.stringify({ log_ids: logIds })
+      });
+    },
 
   // Settings
   getSettings: async () => {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Button, Alert, Table, Badge, Tabs, Tab, ButtonGroup, Row, Col, Card } from 'react-bootstrap';
-import { FaSearch, FaClock, FaHistory, FaTimes } from 'react-icons/fa';
+import { Modal, Button, Alert, Table, Badge, Tabs, Tab, ButtonGroup, Row, Col, Card, Spinner } from 'react-bootstrap';
+import { FaSearch, FaClock, FaHistory, FaTimes, FaSync } from 'react-icons/fa';
 import api from '../../services/api';
 
 const parseRawResponse = (log) => {
@@ -21,7 +21,7 @@ const parseRawResponse = (log) => {
   return null;
 };
 
-const SerpLogsModal = ({ show, onHide, selectedKeywordIds = null }) => {
+const SerpLogsModal = ({ show, onHide, selectedKeywordIds = null, adGroupId = null }) => {
   const [logs, setLogs] = useState([]);
   const [filteredLogs, setFilteredLogs] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -30,21 +30,26 @@ const SerpLogsModal = ({ show, onHide, selectedKeywordIds = null }) => {
   const [selectedLog, setSelectedLog] = useState(null);
   const [isFiltered, setIsFiltered] = useState(false);
   const [historyMode, setHistoryMode] = useState('latest');
+  const [recalculating, setRecalculating] = useState(false);
   
   // Новый state для вкладок в деталях
   const [detailsTab, setDetailsTab] = useState('full');
 
   useEffect(() => {
-    if (show) {
-      if (selectedKeywordIds && selectedKeywordIds.length > 0) {
-        setIsFiltered(true);
-        loadLogsForSelected('latest');
-      } else {
-        setIsFiltered(false);
-        loadAllLogs();
+      if (show) {
+        if (adGroupId) {
+          // Приоритет у adGroupId
+          setIsFiltered(true);
+          loadLogsForAdGroup(adGroupId, 'latest');
+        } else if (selectedKeywordIds && selectedKeywordIds.length > 0) {
+          setIsFiltered(true);
+          loadLogsForSelected('latest');
+        } else {
+          setIsFiltered(false);
+          loadAllLogs();
+        }
       }
-    }
-  }, [show, selectedKeywordIds]);
+    }, [show, selectedKeywordIds, adGroupId]);
 
   const loadAllLogs = async () => {
     setLoading(true);
@@ -68,6 +73,35 @@ const SerpLogsModal = ({ show, onHide, selectedKeywordIds = null }) => {
       setLoading(false);
     }
   };
+  
+  const loadLogsForAdGroup = async (adGroupId, mode) => {
+      setLoading(true);
+      setError(null);
+      
+      try {
+        const latestOnly = mode === 'latest';
+        
+        console.log(`📊 Loading logs for ad_group: ${adGroupId}, mode: ${mode}`);
+        
+        const response = await api.getSerpLogs({
+          ad_group_id: adGroupId,
+          latest_only: latestOnly
+        });
+        
+        if (response.success) {
+          setLogs(response.logs || []);
+          setFilteredLogs(response.logs || []);
+          console.log(`📊 Loaded ${response.logs.length} logs for ad_group ${adGroupId} (mode: ${mode})`);
+        } else {
+          setError(response.error || 'Ошибка загрузки логов');
+        }
+      } catch (err) {
+        console.error('Error loading SERP logs:', err);
+        setError('Ошибка загрузки данных');
+      } finally {
+        setLoading(false);
+      }
+    };
 
   const loadLogsForSelected = async (mode) => {
     setLoading(true);
@@ -101,11 +135,53 @@ const SerpLogsModal = ({ show, onHide, selectedKeywordIds = null }) => {
   };
 
   const handleHistoryModeChange = (mode) => {
-    setHistoryMode(mode);
-    if (isFiltered && selectedKeywordIds && selectedKeywordIds.length > 0) {
-      loadLogsForSelected(mode);
-    }
-  };
+      setHistoryMode(mode);
+      if (adGroupId) {
+        loadLogsForAdGroup(adGroupId, mode);
+      } else if (isFiltered && selectedKeywordIds && selectedKeywordIds.length > 0) {
+        loadLogsForSelected(mode);
+      }
+    };
+    
+    const handleRecalculate = async () => {
+      if (filteredLogs.length === 0) {
+        alert('Нет логов для пересчета');
+        return;
+      }
+    
+      if (!confirm(`Вы уверены, что хотите пересчитать процент школ для ${filteredLogs.length} анализов?\n\nБудут пересчитаны ТОЛЬКО отображаемые в данный момент логи.`)) {
+        return;
+      }
+    
+      setRecalculating(true);
+    
+      try {
+        const logIds = filteredLogs.map(log => log.id);
+        console.log(`🔄 Recalculating school percentages for ${logIds.length} logs`);
+    
+        const response = await api.recalculateSchoolPercentages(logIds);
+    
+        if (response.success) {
+          alert(`✅ Успешно пересчитано: ${response.updated}/${response.total}\n${response.errors.length > 0 ? 'Ошибки: ' + response.errors.join('\n') : ''}`);
+          
+          // Перезагружаем данные
+          if (adGroupId) {
+            loadLogsForAdGroup(adGroupId, historyMode);
+          } else if (isFiltered && selectedKeywordIds && selectedKeywordIds.length > 0) {
+            loadLogsForSelected(historyMode);
+          } else {
+            loadAllLogs();
+          }
+        } else {
+          alert(`❌ Ошибка пересчета: ${response.error}`);
+        }
+      } catch (err) {
+        console.error('Error recalculating:', err);
+        alert('Ошибка при пересчете данных');
+      } finally {
+        setRecalculating(false);
+      }
+    };
 
   const clearFilter = () => {
     setIsFiltered(false);
@@ -777,7 +853,10 @@ const renderOrganicOnly = (log) => {
           SERP Анализ - История
           {isFiltered && (
             <Badge bg="primary" className="ms-3">
-              Фильтр: {selectedKeywordIds.length} слов
+              {adGroupId ? 
+                `Группа объявлений` : 
+                `Фильтр: ${selectedKeywordIds.length} слов`
+              }
             </Badge>
           )}
         </Modal.Title>
@@ -796,10 +875,13 @@ const renderOrganicOnly = (log) => {
           </Alert>
         ) : (
           <>
-            {isFiltered && selectedKeywordIds.length > 0 && (
+            {isFiltered && (
               <Alert variant="info" className="d-flex justify-content-between align-items-center">
                 <div>
-                  <strong>Фильтр активен:</strong> Показаны анализы для {selectedKeywordIds.length} выбранных слов
+                  <strong>Фильтр активен:</strong> {adGroupId ? 
+                    'Показаны анализы для выбранной группы объявлений' :
+                    `Показаны анализы для ${selectedKeywordIds.length} выбранных слов`
+                  }
                   <div className="mt-2">
                     <ButtonGroup size="sm">
                       <Button 
@@ -832,8 +914,33 @@ const renderOrganicOnly = (log) => {
             
             <Tabs activeKey={activeTab} onSelect={setActiveTab} className="mb-3">
               <Tab eventKey="list" title={`📋 Список анализов (${filteredLogs.length})`}>
-                {renderLogsTable()}
-              </Tab>
+                  <div className="mb-3 d-flex justify-content-between align-items-center">
+                    <div>
+                      <Button 
+                        variant="success" 
+                        size="sm"
+                        onClick={handleRecalculate}
+                        disabled={recalculating || filteredLogs.length === 0}
+                      >
+                        {recalculating ? (
+                          <>
+                            <Spinner animation="border" size="sm" className="me-2" />
+                            Пересчёт...
+                          </>
+                        ) : (
+                          <>
+                            <FaSync className="me-1" />
+                            Переоценить данные
+                          </>
+                        )}
+                      </Button>
+                      <small className="text-muted ms-3">
+                        Пересчитает процент школ для {filteredLogs.length} отображаемых анализов
+                      </small>
+                    </div>
+                  </div>
+                  {renderLogsTable()}
+                </Tab>
               <Tab eventKey="details" title="📊 Детали">
                 {renderLogDetails()}
               </Tab>
@@ -845,7 +952,9 @@ const renderOrganicOnly = (log) => {
         <Button 
           variant="primary" 
           onClick={() => {
-            if (isFiltered && selectedKeywordIds.length > 0) {
+            if (adGroupId) {
+              loadLogsForAdGroup(adGroupId, historyMode);
+            } else if (isFiltered && selectedKeywordIds.length > 0) {
               loadLogsForSelected(historyMode);
             } else {
               loadAllLogs();

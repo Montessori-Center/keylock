@@ -108,6 +108,24 @@ function App() {
     });
   };
   
+  const handleShowSerpLogsForAdGroup = () => {
+      if (!selectedAdGroup) {
+        toast.error('Выберите группу объявлений');
+        return;
+      }
+      setShowSerpLogs(true);
+    };
+    
+    // И обнови вызов модального окна:
+    {showSerpLogs && (
+      <SerpLogsModal
+        show={showSerpLogs}
+        onHide={() => setShowSerpLogs(false)}
+        selectedKeywordIds={selectedKeywordIds.length > 0 ? selectedKeywordIds : null}
+        adGroupId={selectedKeywordIds.length === 0 ? selectedAdGroup?.id : null}
+      />
+    )};
+  
   useEffect(() => {
     const initializeApp = async () => {
       console.log('🚀 Initializing app...');
