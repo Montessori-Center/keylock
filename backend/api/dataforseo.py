@@ -1100,6 +1100,75 @@ def get_serp_logs():
         
         # ... остальной код форматирования логов остается без изменений ...
         
+        # Форматируем логи для фронтенда
+        formatted_logs = []
+        for log in logs:
+            try:
+                # Парсим JSON поля
+                analysis_result = {}
+                organic_results = []
+                paid_results = []
+                
+                # Сначала пробуем получить из analysis_result (новый формат)
+                if log.get('analysis_result'):
+                    try:
+                        analysis_result = json.loads(log['analysis_result']) if isinstance(log['analysis_result'], str) else log['analysis_result']
+                    except:
+                        analysis_result = {}
+                
+                # Парсим parsed_items
+                if log.get('parsed_items'):
+                    try:
+                        parsed_items = json.loads(log['parsed_items']) if isinstance(log['parsed_items'], str) else log['parsed_items']
+                        organic_results = parsed_items.get('organic', [])
+                        paid_results = parsed_items.get('paid', [])
+                    except:
+                        pass
+                
+                # Если analysis_result пустой, берём из старых полей
+                if not analysis_result:
+                    analysis_result = {
+                        'has_ads': log.get('has_ads', False),
+                        'has_google_maps': log.get('has_maps', False),
+                        'has_our_site': log.get('has_our_site', False),
+                        'has_school_sites': log.get('has_school_sites', False),
+                        'our_organic_position': None,
+                        'our_actual_position': None,
+                        'school_percentage': log.get('school_percentage', 0),
+                        'intent_type': log.get('intent_type', 'Информационный'),
+                        'total_organic': log.get('organic_count', 0),
+                        'paid_count': log.get('paid_count', 0),
+                        'maps_count': log.get('maps_count', 0)
+                    }
+                
+                formatted_log = {
+                    'id': log['id'],
+                    'keyword_id': log.get('keyword_id'),
+                    'keyword_text': log.get('keyword_text', ''),
+                    'created_at': log['created_at'].isoformat() if log.get('created_at') else None,
+                    'location_code': log.get('location_code'),
+                    'language_code': log.get('language_code'),
+                    'device': log.get('device'),
+                    'cost': float(log.get('cost', 0)),
+                    'analysis_result': analysis_result,
+                    'organic_results': organic_results,
+                    'paid_results': paid_results,
+                    'raw_response': log.get('raw_response'),
+                    'parsed_items': log.get('parsed_items')
+                }
+                
+                formatted_logs.append(formatted_log)
+                
+            except Exception as e:
+                log_print(f"⚠️ Error formatting log {log.get('id')}: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                continue
+        
+        cursor.close()
+        
+        log_print(f"📊 Returning {len(formatted_logs)} SERP logs")
+        
         return jsonify({
             'success': True,
             'count': len(formatted_logs),
