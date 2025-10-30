@@ -9,6 +9,7 @@ const TrashModal = ({ show, onHide, adGroupId, onRestore }) => {
   const [selectedIds, setSelectedIds] = useState([]);
   const [loading, setLoading] = useState(false);
   const [autoDeleteDays, setAutoDeleteDays] = useState(30);
+  const [autoDeleteEnabled, setAutoDeleteEnabled] = useState(true); // ✅ ДОБАВЛЕНО
 
   useEffect(() => {
     if (show && adGroupId) {
@@ -23,11 +24,25 @@ const TrashModal = ({ show, onHide, adGroupId, onRestore }) => {
       if (response.success) {
         setTrashKeywords(response.data);
         setAutoDeleteDays(response.auto_delete_days);
+        setAutoDeleteEnabled(response.auto_delete_enabled !== false); // ✅ ДОБАВЛЕНО
       }
     } catch (error) {
       console.error('Error loading trash:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ✅ ДОБАВЛЕНО: Обработчик изменения чекбокса автоудаления
+  const handleAutoDeleteToggle = async (checked) => {
+    try {
+      const response = await api.updateTrashAutoDeleteSetting(adGroupId, checked);
+      if (response.success) {
+        setAutoDeleteEnabled(checked);
+        alert(response.message);
+      }
+    } catch (error) {
+      alert('Ошибка изменения настройки: ' + error.message);
     }
   };
 
@@ -120,11 +135,28 @@ const TrashModal = ({ show, onHide, adGroupId, onRestore }) => {
         ) : (
           <>
             <Alert variant="info">
-              <FaClock className="me-2" />
-              Удаленные ключевые слова хранятся <strong>{autoDeleteDays} дней</strong>, 
-              после чего удаляются автоматически.
-              <br />
-              <small>Вы можете восстановить их в любой момент до автоматического удаления.</small>
+              <div className="d-flex justify-content-between align-items-start">
+                <div>
+                  <FaClock className="me-2" />
+                  Удаленные ключевые слова хранятся <strong>{autoDeleteDays} дней</strong>, 
+                  после чего удаляются автоматически.
+                  <br />
+                  <small>Вы можете восстановить их в любой момент до автоматического удаления.</small>
+                </div>
+                {/* ✅ ДОБАВЛЕНО: Чекбокс управления автоудалением */}
+                <div className="ms-3">
+                  <Form.Check
+                    type="switch"
+                    id="auto-delete-switch"
+                    label="Автоудаление"
+                    checked={autoDeleteEnabled}
+                    onChange={(e) => handleAutoDeleteToggle(e.target.checked)}
+                  />
+                  <small className="text-muted">
+                    {autoDeleteEnabled ? 'Включено' : 'Отключено'}
+                  </small>
+                </div>
+              </div>
             </Alert>
 
             {trashKeywords.length === 0 ? (
@@ -189,7 +221,7 @@ const TrashModal = ({ show, onHide, adGroupId, onRestore }) => {
                   <small>
                     <strong>Внимание:</strong> Ключевые слова с меткой 
                     <Badge bg="danger" className="mx-1">3д</Badge> или меньше 
-                    будут удалены в ближайшие дни!
+                    будут удалены в ближайшие дни{autoDeleteEnabled ? '!' : ' (если автоудаление включено).'}
                   </small>
                 </Alert>
               </>

@@ -219,6 +219,14 @@ const api = {
     return response.data;
   },
   
+  updateTrashAutoDeleteSetting: async (adGroupId, enabled) => {
+    const response = await axios.post(`${API_BASE_URL}/keywords/trash/auto-delete-setting`, {
+      ad_group_id: adGroupId,
+      enabled: enabled
+    });
+    return response.data;
+  },
+  
   // Campaign sites
   getCampaignSites: async () => {
     const response = await axios.get(`${API_BASE_URL}/settings/campaign-sites`);

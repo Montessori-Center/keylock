@@ -32,6 +32,19 @@ def cleanup_old_trash():
         
         cursor = connection.cursor()
         
+        # ✅ ДОБАВЛЕНО: Проверяем настройку автоудаления
+        cursor.execute("""
+            SELECT setting_value FROM app_settings 
+            WHERE setting_key = 'trash_auto_delete_enabled'
+        """)
+        auto_delete_row = cursor.fetchone()
+        auto_delete_enabled = auto_delete_row['setting_value'] == 'true' if auto_delete_row else True
+        
+        if not auto_delete_enabled:
+            print("⏸️  Auto-delete is DISABLED. Skipping cleanup.")
+            cursor.close()
+            return 0
+        
         # Вычисляем дату отсечки
         cutoff_date = datetime.now() - timedelta(days=AUTO_DELETE_DAYS)
         
@@ -49,6 +62,7 @@ def cleanup_old_trash():
         
         if not keywords_to_delete:
             print("✅ No keywords to delete")
+            cursor.close()
             return 0
         
         print(f"📋 Found {len(keywords_to_delete)} keywords to delete:")

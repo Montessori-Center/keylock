@@ -733,8 +733,14 @@ def get_trash_keywords(ad_group_id):
         connection = get_db_connection()
         cursor = connection.cursor()
         
-        # Получаем удаленные слова с расчетом дней до автоудаления
-        # Предполагаем, что автоудаление через 30 дней
+        # ✅ ДОБАВЛЕНО: Получаем настройку автоудаления
+        cursor.execute("""
+            SELECT setting_value FROM app_settings 
+            WHERE setting_key = 'trash_auto_delete_enabled'
+        """)
+        auto_delete_row = cursor.fetchone()
+        auto_delete_enabled = auto_delete_row['setting_value'] == 'true' if auto_delete_row else True
+        
         AUTO_DELETE_DAYS = 30
         
         query = """
@@ -776,6 +782,7 @@ def get_trash_keywords(ad_group_id):
             'success': True,
             'data': trash_data,
             'auto_delete_days': AUTO_DELETE_DAYS,
+            'auto_delete_enabled': auto_delete_enabled,  # ✅ ДОБАВЛЕНО
             'total': len(trash_data)
         })
         
@@ -821,6 +828,45 @@ def restore_keywords():
         if connection:
             connection.rollback()
         print(f"Error in restore_keywords: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if connection:
+            connection.close()
+            
+@keywords_bp.route('/trash/auto-delete-setting', methods=['POST'])
+def update_trash_auto_delete_setting():
+    """Обновление настройки автоудаления корзины"""
+    connection = None
+    try:
+        data = request.json
+        ad_group_id = data.get('ad_group_id')
+        enabled = data.get('enabled', True)
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # Сохраняем настройку в app_settings
+        cursor.execute("""
+            INSERT INTO app_settings (setting_key, setting_value) 
+            VALUES ('trash_auto_delete_enabled', %s)
+            ON DUPLICATE KEY UPDATE 
+            setting_value = %s, 
+            updated_at = CURRENT_TIMESTAMP
+        """, (str(enabled).lower(), str(enabled).lower()))
+        
+        connection.commit()
+        cursor.close()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Автоудаление {"включено" if enabled else "отключено"}',
+            'enabled': enabled
+        })
+        
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        print(f"Error in update_trash_auto_delete_setting: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
     finally:
         if connection:

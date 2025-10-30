@@ -217,6 +217,10 @@ def get_new_keywords():
         date_from = data.get('date_from', '2024-01-01')
         date_to = data.get('date_to')
         
+        # ✅ ДОБАВЛЕНО: Параметр для учёта корзины как дублей
+        exclude_trash_duplicates = data.get('exclude_trash_duplicates', True)
+        log_print(f"🗑️  Exclude trash duplicates: {exclude_trash_duplicates}")
+        
         if not seed_keywords:
             return jsonify({'success': False, 'error': 'No seed keywords provided'}), 400
         
@@ -238,15 +242,15 @@ def get_new_keywords():
             dataforseo_client = get_dataforseo_client()
             
             response = dataforseo_client.get_keywords_for_keywords(
-            keywords=seed_keywords,
-            location_code=location_code,
-            language_code=language_code,
-            search_partners=search_partners,
-            sort_by=sort_by,
-            include_seed_keyword=include_seed_keyword,
-            date_from=date_from,
-            date_to=date_to
-        )
+                keywords=seed_keywords,
+                location_code=location_code,
+                language_code=language_code,
+                search_partners=search_partners,
+                sort_by=sort_by,
+                include_seed_keyword=include_seed_keyword,
+                date_from=date_from,
+                date_to=date_to
+            )
             
             # Проверяем ответ
             if not response.get('tasks'):
@@ -291,49 +295,97 @@ def get_new_keywords():
         # Добавляем ключевые слова в БД
         added_count = 0
         updated_count = 0
+        restored_count = 0
         errors = []
         
         for kw_data in keywords_data:
             try:
                 keyword_text = kw_data['keyword']
                 
-                # Проверяем существование
-                cursor.execute(
-                    "SELECT * FROM keywords WHERE ad_group_id = %s AND keyword = %s",
-                    (ad_group_id, keyword_text)
-                )
+                # ✅ ИЗМЕНЕНО: Проверяем существование с учётом exclude_trash_duplicates
+                if exclude_trash_duplicates:
+                    # Учитываем ВСЕ записи (включая Removed) как дубли
+                    cursor.execute(
+                        "SELECT * FROM keywords WHERE ad_group_id = %s AND keyword = %s",
+                        (ad_group_id, keyword_text)
+                    )
+                else:
+                    # Учитываем только активные (не Removed) как дубли
+                    cursor.execute(
+                        "SELECT * FROM keywords WHERE ad_group_id = %s AND keyword = %s AND status != 'Removed'",
+                        (ad_group_id, keyword_text)
+                    )
+                
                 existing = cursor.fetchone()
                 
                 if existing:
-                    # Обновляем существующее (только основные данные)
-                    update_query = """
-                        UPDATE keywords SET 
-                            avg_monthly_searches = %s,
-                            competition = %s,
-                            competition_percent = %s,
-                            min_top_of_page_bid = %s,
-                            max_top_of_page_bid = %s,
-                            three_month_change = %s,
-                            yearly_change = %s,
-                            max_cpc = %s,
-                            updated_at = NOW()
-                        WHERE id = %s
-                    """
-                    
-                    update_data = (
-                        kw_data.get('avg_monthly_searches', 0),
-                        kw_data.get('competition', 'Неизвестно'),
-                        kw_data.get('competition_percent', 0),
-                        kw_data.get('min_top_of_page_bid', 0),
-                        kw_data.get('max_top_of_page_bid', 0),
-                        kw_data.get('three_month_change'),
-                        kw_data.get('yearly_change'),
-                        kw_data.get('cpc', existing['max_cpc']),
-                        existing['id']
-                    )
-                    
-                    cursor.execute(update_query, update_data)
-                    updated_count += 1
+                    # ✅ ДОБАВЛЕНО: Логика восстановления из корзины
+                    if existing['status'] == 'Removed' and not exclude_trash_duplicates:
+                        # Восстанавливаем слово из корзины
+                        update_query = """
+                            UPDATE keywords SET 
+                                status = 'Enabled',
+                                is_new = TRUE,
+                                batch_color = %s,
+                                avg_monthly_searches = %s,
+                                competition = %s,
+                                competition_percent = %s,
+                                min_top_of_page_bid = %s,
+                                max_top_of_page_bid = %s,
+                                three_month_change = %s,
+                                yearly_change = %s,
+                                max_cpc = %s,
+                                updated_at = NOW()
+                            WHERE id = %s
+                        """
+                        
+                        update_data = (
+                            batch_color,
+                            kw_data.get('avg_monthly_searches', 0),
+                            kw_data.get('competition', 'Неизвестно'),
+                            kw_data.get('competition_percent', 0),
+                            kw_data.get('min_top_of_page_bid', 0),
+                            kw_data.get('max_top_of_page_bid', 0),
+                            kw_data.get('three_month_change'),
+                            kw_data.get('yearly_change'),
+                            kw_data.get('cpc', existing['max_cpc']),
+                            existing['id']
+                        )
+                        
+                        cursor.execute(update_query, update_data)
+                        restored_count += 1
+                        log_print(f"  ✅ Восстановлено из корзины: {keyword_text}")
+                    else:
+                        # Обновляем существующее (только основные данные)
+                        update_query = """
+                            UPDATE keywords SET 
+                                avg_monthly_searches = %s,
+                                competition = %s,
+                                competition_percent = %s,
+                                min_top_of_page_bid = %s,
+                                max_top_of_page_bid = %s,
+                                three_month_change = %s,
+                                yearly_change = %s,
+                                max_cpc = %s,
+                                updated_at = NOW()
+                            WHERE id = %s
+                        """
+                        
+                        update_data = (
+                            kw_data.get('avg_monthly_searches', 0),
+                            kw_data.get('competition', 'Неизвестно'),
+                            kw_data.get('competition_percent', 0),
+                            kw_data.get('min_top_of_page_bid', 0),
+                            kw_data.get('max_top_of_page_bid', 0),
+                            kw_data.get('three_month_change'),
+                            kw_data.get('yearly_change'),
+                            kw_data.get('cpc', existing['max_cpc']),
+                            existing['id']
+                        )
+                        
+                        cursor.execute(update_query, update_data)
+                        updated_count += 1
+                        log_print(f"  🔄 Обновлено: {keyword_text}")
                 else:
                     # Создаем новое
                     insert_query = """
@@ -371,6 +423,7 @@ def get_new_keywords():
                     
                     cursor.execute(insert_query, insert_data)
                     added_count += 1
+                    log_print(f"  ➕ Добавлено новое: {keyword_text}")
                     
             except Exception as e:
                 errors.append(f"Error processing '{kw_data.get('keyword', 'unknown')}': {str(e)}")
@@ -378,13 +431,23 @@ def get_new_keywords():
         # Сохраняем в БД
         connection.commit()
         
+        # ✅ ИЗМЕНЕНО: Добавлен restored_count в статистику
+        message_parts = [f'Обработано {len(keywords_data)} ключевых слов']
+        if added_count > 0:
+            message_parts.append(f'добавлено: {added_count}')
+        if updated_count > 0:
+            message_parts.append(f'обновлено: {updated_count}')
+        if restored_count > 0:
+            message_parts.append(f'восстановлено из корзины: {restored_count}')
+        
         result = {
             'success': True,
-            'message': f'Обработано {len(keywords_data)} ключевых слов. Добавлено: {added_count}, обновлено: {updated_count}',
+            'message': '. '.join(message_parts).capitalize(),
             'stats': {
                 'total_results': len(keywords_data),
                 'added': added_count,
                 'updated': updated_count,
+                'restored': restored_count,  # ✅ ДОБАВЛЕНО
                 'errors': len(errors),
                 'cost': request_cost
             },
@@ -393,6 +456,8 @@ def get_new_keywords():
         
         if errors:
             result['errors'] = errors[:10]
+        
+        log_print(f"✅ Завершено: добавлено={added_count}, обновлено={updated_count}, восстановлено={restored_count}")
         
         return jsonify(result)
         

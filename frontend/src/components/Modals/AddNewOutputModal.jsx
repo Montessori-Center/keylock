@@ -26,7 +26,8 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
       date_from: getDefaultDateFrom(),
       date_to: getDefaultDateTo(),
       include_seed_keyword: true,
-      sort_by: 'relevance'
+      sort_by: 'relevance',
+      exclude_trash_duplicates: true
     });
 
   const [locations, setLocations] = useState([]);
@@ -342,6 +343,24 @@ const AddNewOutputModal = ({ show, onHide, onAdd, selectedKeywords }) => {
                 </Form.Select>
                 <Form.Text className="text-muted">
                   Добавить исходные слова в выдачу
+                </Form.Text>
+              </Form.Group>
+            </Col>
+            <Col md={6}>
+              <Form.Group className="mb-3">
+                <Form.Label>Учитывать корзину как дубли:</Form.Label>
+                <Form.Select
+                  value={params.exclude_trash_duplicates ? 'true' : 'false'}
+                  onChange={(e) => setParams(prev => ({ 
+                    ...prev, 
+                    exclude_trash_duplicates: e.target.value === 'true' 
+                  }))}
+                >
+                  <option value="true">Да</option>
+                  <option value="false">Нет</option>
+                </Form.Select>
+                <Form.Text className="text-muted">
+                  Слова из корзины воспринимаются как дубли
                 </Form.Text>
               </Form.Group>
             </Col>
