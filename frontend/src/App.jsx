@@ -924,12 +924,13 @@ function App() {
       )}
       
       {showSerpLogs && (
-          <SerpLogsModal
-            show={showSerpLogs}
-            onHide={() => setShowSerpLogs(false)}
-            selectedKeywordIds={selectedKeywordIds}
-          />
-        )}
+        <SerpLogsModal
+          show={showSerpLogs}
+          onHide={() => setShowSerpLogs(false)}
+          selectedKeywordIds={selectedKeywordIds.length > 0 ? selectedKeywordIds : null}
+          adGroupId={selectedKeywordIds.length === 0 && selectedAdGroup ? selectedAdGroup.id : null}
+        />
+      )}
       
       {showAddNewOutput && (
         <AddNewOutputModal

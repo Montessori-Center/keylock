@@ -409,7 +409,6 @@ const SerpLogsModal = ({ show, onHide, selectedKeywordIds = null, adGroupId = nu
                         <div className="mb-1">
                           <strong style={{ fontSize: '0.9rem' }}>Локация:</strong>
                           <div className="mb-1">
-                              <strong style={{ fontSize: '0.9rem' }}>Локация:</strong>
                               <div style={{ fontSize: '0.85rem', color: '#666' }}>
                                 {selectedLog.location_name || `Location code: ${selectedLog.location_code}`}
                               </div>
@@ -876,7 +875,7 @@ const renderOrganicOnly = (log) => {
         ) : (
           <>
             {isFiltered && (
-              <Alert variant="info" className="d-flex justify-content-between align-items-center">
+                <Alert variant="info" className="d-flex justify-content-between align-items-center">
                 <div>
                   <strong>Фильтр активен:</strong> {adGroupId ? 
                     'Показаны анализы для выбранной группы объявлений' :

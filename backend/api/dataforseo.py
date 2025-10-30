@@ -1261,9 +1261,9 @@ def recalculate_school_percentages():
                 has_maps = log.get('has_maps', False)
                 
                 if has_ads or has_maps:
-                    intent_type = 'Коммерческий' if school_percentage >= 60 else 'Информационный'
+                    intent_type = 'Коммерческий' if school_percentage >= 50 else 'Информационный'
                 else:
-                    intent_type = 'Коммерческий' if school_percentage >= 70 else 'Информационный'
+                    intent_type = 'Коммерческий' if school_percentage >= 60 else 'Информационный'
                 
                 has_school_sites = school_sites_count > 0
                 
@@ -1938,10 +1938,10 @@ def parse_serp_response(
         # - 70% школ, если НЕТ ни рекламы, ни карт
         if has_ads or has_google_maps:
             # Есть реклама или карты - порог 60%
-            intent_type = 'Коммерческий' if school_percentage >= 60 else 'Информационный'
+            intent_type = 'Коммерческий' if school_percentage >= 50 else 'Информационный'
         else:
             # Нет ни рекламы, ни карт - порог 70%
-            intent_type = 'Коммерческий' if school_percentage >= 70 else 'Информационный'
+            intent_type = 'Коммерческий' if school_percentage >= 60 else 'Информационный'
         
         # ИТОГИ
         log_print(f"\n{'=' * 70}")
