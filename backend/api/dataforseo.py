@@ -477,21 +477,23 @@ def apply_serp_analysis():
     try:
         data = request.json
         keyword_ids = data.get('keyword_ids', [])
+        skip_analyzed = data.get('skip_analyzed', True)  # ✅ ДОБАВЛЕНО
         task_id = data.get('task_id') or str(uuid.uuid4())
         
         log_print(f"\n{'='*50}")
         log_print(f"🚀 SERP Analysis started: task_id={task_id}")
         log_print(f"   Keywords: {len(keyword_ids)}")
+        log_print(f"   Skip analyzed: {skip_analyzed}")  # ✅ ДОБАВЛЕНО
         log_print(f"{'='*50}")
         
         if not keyword_ids:
             return jsonify({'success': False, 'error': 'No keywords selected'}), 400
-            
+        
+        # ✅ ДОБАВЛЕНО: Фильтруем проанализированные слова
         connection = get_db_connection()
         cursor = connection.cursor()
         
         if skip_analyzed:
-            # Получаем только слова БЕЗ анализа (last_serp_check IS NULL)
             placeholders = ','.join(['%s'] * len(keyword_ids))
             cursor.execute(f"""
                 SELECT id FROM keywords 
@@ -517,15 +519,14 @@ def apply_serp_analysis():
                     'cost': 0
                 }), 200
             
-            # Заменяем список на отфильтрованный
             keyword_ids = unanalyzed_keywords
             log_print(f"✅ К анализу: {len(keyword_ids)} слов (пропущено: {skipped_count})")
         
         cursor.close()
+        connection.close()  # ✅ ДОБАВЛЕНО: Закрываем connection
         
-        # ИЗМЕНЕНО: Для 1 слова - синхронно без прогресса, для 2+ - Task-версия
+        # ИЗМЕНЕНО: Для 1 слова - синхронно, для 2+ - Task-версия
         if len(keyword_ids) == 1:
-            # Live-анализ для одного слова (быстро, без модалки)
             try:
                 result = process_serp_sync(task_id, keyword_ids, data)
                 return jsonify(result), 200
@@ -536,10 +537,9 @@ def apply_serp_analysis():
                     'error': f'SERP analysis failed: {str(e)}'
                 }), 500
         else:
-            # Task-версия для 2+ слов (с прогрессом через SSE)
+            # Task-версия для 2+ слов
             import threading
             
-            # Инициализируем прогресс
             update_progress(task_id, 0, len(keyword_ids), '', 'processing')
             
             thread = threading.Thread(

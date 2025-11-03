@@ -61,7 +61,7 @@ const ApplySerpModal = ({ show, onHide, onApply, selectedKeywords }) => {
           se_domain: defaultLocation.se_domain
         }));
       }
-    }, [locations]);
+    }, [locations, params.location_code]);
     
     useEffect(() => {
       if (languages.length > 0 && !params.language_code) {
@@ -72,7 +72,7 @@ const ApplySerpModal = ({ show, onHide, onApply, selectedKeywords }) => {
           language_name: defaultLanguage.name
         }));
       }
-    }, [languages]);
+    }, [languages, params.language_code]);
 
   const loadLocations = async () => {
     try {
