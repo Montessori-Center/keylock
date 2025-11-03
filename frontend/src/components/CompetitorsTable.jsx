@@ -234,31 +234,6 @@ const CompetitorsTable = ({
     }
   };
 
-  const handleAfterSelectionEnd = (row, column, row2, column2) => {
-    if (column === 0) return;
-    
-    const hot = hotTableRef.current?.hotInstance;
-    if (!hot) return;
-
-    const newSelectedIds = [];
-    for (let i = Math.min(row, row2); i <= Math.max(row, row2); i++) {
-      const rowData = hot.getDataAtRow(i);
-      if (rowData && rowData[1]) {
-        newSelectedIds.push(rowData[1]);
-      }
-    }
-
-    if (newSelectedIds.length > 0) {
-      const updatedData = tableData.map(item => ({
-        ...item,
-        selected: newSelectedIds.includes(item.id)
-      }));
-      
-      hot.loadData(updatedData);
-      onSelectionChange(newSelectedIds);
-    }
-  };
-
   useEffect(() => {
     if (!hotTableRef.current?.hotInstance) return;
   
@@ -310,13 +285,14 @@ const CompetitorsTable = ({
         const newSelectedIds = Array.from(newSelectedSet);
         onSelectionChange(newSelectedIds);
   
-        // ✅ ОПТИМИЗАЦИЯ: Обновляем данные без полной перезагрузки
-        const updatedData = tableData.map(row => ({
-          ...row,
-          selected: newSelectedSet.has(row.id)
-        }));
-        
-        instance.loadData(updatedData);
+        instance.batch(() => {
+          for (let i = startRow; i <= endRow; i++) {
+            if (tableData[i]) {
+              const visualRowIndex = instance.toVisualRow(i);
+              instance.setDataAtRowProp(visualRowIndex, 'selected', shouldSelect);
+            }
+          }
+        });
         
         return;
       }
@@ -332,6 +308,27 @@ const CompetitorsTable = ({
       tableElement.removeEventListener('mousedown', handleMouseDown, true);
     };
   }, [tableData, selectedIds, onSelectionChange]);
+  
+  // Синхронизация внешних изменений selectedIds с таблицей
+  useEffect(() => {
+    if (!hotTableRef.current?.hotInstance || tableData.length === 0) return;
+    
+    const instance = hotTableRef.current.hotInstance;
+    const selectedSet = new Set(selectedIds);
+    
+    instance.batch(() => {
+      tableData.forEach((row, physicalIdx) => {
+        const shouldBeSelected = selectedSet.has(row.id);
+        const currentlySelected = row.selected;
+        
+        if (shouldBeSelected !== currentlySelected) {
+          const visualIdx = instance.toVisualRow(physicalIdx);
+          instance.setDataAtRowProp(visualIdx, 'selected', shouldBeSelected);
+        }
+      });
+    });
+    
+  }, [selectedIds]);
 
   return (
     <div style={{ width: '100%', height: '100%', overflow: 'hidden' }}>

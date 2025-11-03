@@ -136,13 +136,15 @@ const KeywordsTable = ({
         const newSelectedIds = Array.from(newSelectedSet);
         onSelectionChange(newSelectedIds);
   
-        // ✅ ОПТИМИЗАЦИЯ: Обновляем данные без полной перезагрузки
-        const updatedData = tableData.map(row => ({
-          ...row,
-          selected: newSelectedSet.has(row.id)
-        }));
-        
-        instance.loadData(updatedData);
+        // ✅ НОВЫЙ КОД: Обновляем чекбоксы БЕЗ loadData
+        instance.batch(() => {
+          for (let i = startRow; i <= endRow; i++) {
+            if (tableData[i]) {
+              const visualRowIndex = instance.toVisualRow(i);
+              instance.setDataAtRowProp(visualRowIndex, 'selected', shouldSelect);
+            }
+          }
+        });
         
         return;
       }
@@ -337,6 +339,28 @@ const KeywordsTable = ({
     
     console.log('📊 Updated visible columns:', newColumns.map(c => c.data));
   }, [visibleColumns, columnWidths]);
+  
+  // Синхронизация внешних изменений selectedIds с таблицей
+  useEffect(() => {
+    if (!hotTableRef.current?.hotInstance || tableData.length === 0) return;
+    
+    const instance = hotTableRef.current.hotInstance;
+    const selectedSet = new Set(selectedIds);
+    
+    // ✅ ОПТИМИЗАЦИЯ: Обновляем только изменившиеся чекбоксы
+    instance.batch(() => {
+      tableData.forEach((row, physicalIdx) => {
+        const shouldBeSelected = selectedSet.has(row.id);
+        const currentlySelected = row.selected;
+        
+        if (shouldBeSelected !== currentlySelected) {
+          const visualIdx = instance.toVisualRow(physicalIdx);
+          instance.setDataAtRowProp(visualIdx, 'selected', shouldBeSelected);
+        }
+      });
+    });
+    
+  }, [selectedIds]); // ✅ Зависимость только от selectedIds
 
   // ✅ ИСПРАВЛЕНО: Обработка обычных изменений с учётом сортировки
     // ✅ ОПТИМИЗИРОВАНО: Обработка изменений с минимальными вызовами toPhysicalRow
