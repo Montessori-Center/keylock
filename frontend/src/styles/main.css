@@ -655,7 +655,6 @@ body {
 .competitors-actions {
   display: flex;
   gap: 10px;
-  margin-bottom: 0 !important;
   flex-wrap: wrap;
 }
 
