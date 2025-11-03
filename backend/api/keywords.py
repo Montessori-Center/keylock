@@ -1026,3 +1026,150 @@ def create_adgroup():
     finally:
         if connection:
             connection.close()
+            
+@keywords_bp.route('/update-campaign/<int:campaign_id>', methods=['PUT'])
+def update_campaign(campaign_id):
+    """Обновление кампании"""
+    connection = None
+    try:
+        data = request.json
+        name = data.get('name', '').strip()
+        
+        if not name:
+            return jsonify({'success': False, 'error': 'Name is required'}), 400
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # Проверка существования кампании
+        cursor.execute("SELECT id FROM campaigns WHERE id = %s", (campaign_id,))
+        if not cursor.fetchone():
+            return jsonify({'success': False, 'error': 'Campaign not found'}), 404
+        
+        # Проверка уникальности имени (кроме текущей кампании)
+        cursor.execute("SELECT id FROM campaigns WHERE name = %s AND id != %s", (name, campaign_id))
+        if cursor.fetchone():
+            return jsonify({'success': False, 'error': 'Campaign with this name already exists'}), 400
+        
+        # Обновление кампании
+        cursor.execute("UPDATE campaigns SET name = %s WHERE id = %s", (name, campaign_id))
+        connection.commit()
+        cursor.close()
+        
+        return jsonify({'success': True, 'message': 'Campaign updated successfully'})
+        
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        print(f"Error in update_campaign: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if connection:
+            connection.close()
+
+
+@keywords_bp.route('/delete-campaign/<int:campaign_id>', methods=['DELETE'])
+def delete_campaign(campaign_id):
+    """Удаление кампании"""
+    connection = None
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # Проверка существования кампании
+        cursor.execute("SELECT id FROM campaigns WHERE id = %s", (campaign_id,))
+        if not cursor.fetchone():
+            return jsonify({'success': False, 'error': 'Campaign not found'}), 404
+        
+        # Удаление кампании (каскадно удалятся группы и ключевые слова благодаря ON DELETE CASCADE)
+        cursor.execute("DELETE FROM campaigns WHERE id = %s", (campaign_id,))
+        connection.commit()
+        cursor.close()
+        
+        return jsonify({'success': True, 'message': 'Campaign deleted successfully'})
+        
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        print(f"Error in delete_campaign: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if connection:
+            connection.close()
+
+
+@keywords_bp.route('/update-adgroup/<int:adgroup_id>', methods=['PUT'])
+def update_adgroup(adgroup_id):
+    """Обновление группы объявлений"""
+    connection = None
+    try:
+        data = request.json
+        name = data.get('name', '').strip()
+        
+        if not name:
+            return jsonify({'success': False, 'error': 'Name is required'}), 400
+        
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # Проверка существования группы
+        cursor.execute("SELECT campaign_id FROM ad_groups WHERE id = %s", (adgroup_id,))
+        result = cursor.fetchone()
+        if not result:
+            return jsonify({'success': False, 'error': 'Ad group not found'}), 404
+        
+        campaign_id = result['campaign_id']
+        
+        # Проверка уникальности имени в рамках кампании (кроме текущей группы)
+        cursor.execute("""
+            SELECT id FROM ad_groups 
+            WHERE campaign_id = %s AND name = %s AND id != %s
+        """, (campaign_id, name, adgroup_id))
+        if cursor.fetchone():
+            return jsonify({'success': False, 'error': 'Ad group with this name already exists in this campaign'}), 400
+        
+        # Обновление группы
+        cursor.execute("UPDATE ad_groups SET name = %s WHERE id = %s", (name, adgroup_id))
+        connection.commit()
+        cursor.close()
+        
+        return jsonify({'success': True, 'message': 'Ad group updated successfully'})
+        
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        print(f"Error in update_adgroup: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if connection:
+            connection.close()
+
+
+@keywords_bp.route('/delete-adgroup/<int:adgroup_id>', methods=['DELETE'])
+def delete_adgroup(adgroup_id):
+    """Удаление группы объявлений"""
+    connection = None
+    try:
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        # Проверка существования группы
+        cursor.execute("SELECT id FROM ad_groups WHERE id = %s", (adgroup_id,))
+        if not cursor.fetchone():
+            return jsonify({'success': False, 'error': 'Ad group not found'}), 404
+        
+        # Удаление группы (каскадно удалятся ключевые слова благодаря ON DELETE CASCADE)
+        cursor.execute("DELETE FROM ad_groups WHERE id = %s", (adgroup_id,))
+        connection.commit()
+        cursor.close()
+        
+        return jsonify({'success': True, 'message': 'Ad group deleted successfully'})
+        
+    except Exception as e:
+        if connection:
+            connection.rollback()
+        print(f"Error in delete_adgroup: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        if connection:
+            connection.close()

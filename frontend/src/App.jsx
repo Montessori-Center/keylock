@@ -15,7 +15,7 @@ import ChangeFieldModal from './components/Modals/ChangeFieldModal';
 import TrashModal from './components/Modals/TrashModal';
 import SerpProgressModal from './components/Modals/SerpProgressModal';
 import LiveProgressModal from './components/Modals/LiveProgressModal';
-import CreateCampaignModal from './components/Modals/CreateCampaignModal';
+import CreateCampaignModal from './components/Modals/ManageCampaignsModal';
 import CompetitorsView from './components/CompetitorsView';
 import api from './services/api';
 import { toast } from 'react-toastify';
@@ -47,7 +47,7 @@ function App() {
   const [showChangeField, setShowChangeField] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
   const [showSerpLogs, setShowSerpLogs] = useState(false);
-  const [showCreateCampaign, setShowCreateCampaign] = useState(false);
+  const [showManageCampaignsModal, setShowManageCampaignsModal] = useState(false);
   const [serpProgress, setSerpProgress] = useState({
     show: false, 
     current: 0, 
@@ -306,8 +306,9 @@ function App() {
     }
   };
   
-  const handleCreateObject = async (data) => {
-      try {
+  const handleManageCampaigns = async (data) => {
+    try {
+      if (data.action === 'create') {
         if (data.type === 'campaign') {
           const response = await api.createCampaign({ name: data.name });
           if (response.success) {
@@ -319,7 +320,7 @@ function App() {
         } else if (data.type === 'adgroup') {
           const response = await api.createAdGroup({
             name: data.name,
-            campaign_id: data.parentCampaignId
+            campaign_id: data.campaignId
           });
           if (response.success) {
             toast.success('Группа объявлений создана');
@@ -333,11 +334,57 @@ function App() {
             toast.error(response.error || 'Ошибка создания группы');
           }
         }
-      } catch (error) {
-        console.error('Error creating object:', error);
-        toast.error('Ошибка создания объекта');
+      } else if (data.action === 'edit') {
+        if (data.type === 'campaign') {
+          const response = await api.updateCampaign(data.id, { name: data.name });
+          if (response.success) {
+            toast.success('Кампания обновлена');
+            await loadCampaigns();
+          } else {
+            toast.error(response.error || 'Ошибка обновления кампании');
+          }
+        } else if (data.type === 'adgroup') {
+          const response = await api.updateAdGroup(data.id, { name: data.name });
+          if (response.success) {
+            toast.success('Группа объявлений обновлена');
+            await loadCampaigns();
+          } else {
+            toast.error(response.error || 'Ошибка обновления группы');
+          }
+        }
+      } else if (data.action === 'delete') {
+        if (data.type === 'campaign') {
+          const response = await api.deleteCampaign(data.id);
+          if (response.success) {
+            toast.success('Кампания удалена');
+            if (selectedCampaign?.id === data.id) {
+              setSelectedCampaign(null);
+              setSelectedAdGroup(null);
+              setKeywords([]);
+            }
+            await loadCampaigns();
+          } else {
+            toast.error(response.error || 'Ошибка удаления кампании');
+          }
+        } else if (data.type === 'adgroup') {
+          const response = await api.deleteAdGroup(data.id);
+          if (response.success) {
+            toast.success('Группа объявлений удалена');
+            if (selectedAdGroup?.id === data.id) {
+              setSelectedAdGroup(null);
+              setKeywords([]);
+            }
+            await loadCampaigns();
+          } else {
+            toast.error(response.error || 'Ошибка удаления группы');
+          }
+        }
       }
-    };
+    } catch (error) {
+      console.error('Error managing campaigns:', error);
+      toast.error('Ошибка операции');
+    }
+  };
 
   const handleAddKeywords = async (keywordsText) => {
     if (!selectedAdGroup) {
@@ -775,7 +822,7 @@ function App() {
           selectedAdGroup={selectedAdGroup}
           onSelectAdGroup={handleAdGroupSelect}
           onOpenCompetitors={() => setShowCompetitors(true)}
-          onCreateClick={() => setShowCreateCampaign(true)}
+          onCreateClick={() => setShowManageCampaignsModal(true)}
         />
         
         <div className={`content-area ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
@@ -984,11 +1031,11 @@ function App() {
       
       {showCreateCampaign && (
           <CreateCampaignModal
-            show={showCreateCampaign}
-            onHide={() => setShowCreateCampaign(false)}
-            onSubmit={handleCreateObject}
-            campaigns={campaigns}
-          />
+              show={showCreateModal}
+              onHide={() => setShowCreateModal(false)}
+              onSubmit={handleCreateObject}
+              campaigns={campaigns}
+            />
         )}
       
       {showTrash && (

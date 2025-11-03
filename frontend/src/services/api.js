@@ -308,6 +308,42 @@ const api = {
     const response = await axios.post(`${API_BASE_URL}/competitors/accept-changes`);
     return response.data;
   },
+  
+  // Обновление кампании
+  updateCampaign: async (campaignId, data) => {
+    const response = await fetch(`${API_BASE_URL}/update-campaign/${campaignId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    return response.json();
+  },
+
+  // Удаление кампании
+  deleteCampaign: async (campaignId) => {
+    const response = await fetch(`${API_BASE_URL}/delete-campaign/${campaignId}`, {
+      method: 'DELETE'
+    });
+    return response.json();
+  },
+
+  // Обновление группы объявлений
+  updateAdGroup: async (adGroupId, data) => {
+    const response = await fetch(`${API_BASE_URL}/update-adgroup/${adGroupId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    return response.json();
+  },
+
+  // Удаление группы объявлений
+  deleteAdGroup: async (adGroupId) => {
+    const response = await fetch(`${API_BASE_URL}/delete-adgroup/${adGroupId}`, {
+      method: 'DELETE'
+    });
+    return response.json();
+  },
 };
 
 export default api;
