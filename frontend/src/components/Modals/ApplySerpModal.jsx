@@ -15,7 +15,8 @@ const ApplySerpModal = ({ show, onHide, onApply, selectedKeywords }) => {
       calculate_rectangles: false,
       browser_screen_width: 1920,
       browser_screen_height: 1080,
-      se_domain: ''
+      se_domain: '',
+      skip_analyzed: true
     });
 
   // Список локаций загружается из БД
@@ -301,6 +302,21 @@ const ApplySerpModal = ({ show, onHide, onApply, selectedKeywords }) => {
             </Col>
           </Row>
 
+          <Form.Group className="mb-3">
+            <Form.Check
+              type="checkbox"
+              label="Пропускать проанализированные ключевые слова"
+              checked={params.skip_analyzed}
+              onChange={(e) => setParams(prev => ({ 
+                ...prev, 
+                skip_analyzed: e.target.checked 
+              }))}
+            />
+            <Form.Text className="text-muted">
+              Слова с уже выполненным SERP-анализом будут пропущены (не войдут в запрос к API)
+            </Form.Text>
+          </Form.Group>
+          
           <Form.Group className="mb-3">
             <Form.Check
               type="checkbox"

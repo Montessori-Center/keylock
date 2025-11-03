@@ -85,89 +85,79 @@ const KeywordsTable = ({
     },
   };
 
-  // ✅ ИСПРАВЛЕНО: Перехватываем клики по чекбоксам с преобразованием индексов
-    useEffect(() => {
-      if (!hotTableRef.current?.hotInstance) return;
-    
-      const handleMouseDown = (e) => {
-        // Проверяем, что клик по чекбоксу
-        const checkbox = e.target.closest('input[type="checkbox"]');
-        if (!checkbox) return;
-    
-        // Проверяем, что это чекбокс из нашей таблицы
-        const td = checkbox.closest('td');
-        if (!td) return;
-    
-        const instance = hotTableRef.current.hotInstance;
-        const coords = instance.getCoords(td);
+  useEffect(() => {
+    if (!hotTableRef.current?.hotInstance) return;
+  
+    const handleMouseDown = (e) => {
+      const checkbox = e.target.closest('input[type="checkbox"]');
+      if (!checkbox) return;
+  
+      const td = checkbox.closest('td');
+      if (!td) return;
+  
+      const instance = hotTableRef.current.hotInstance;
+      const coords = instance.getCoords(td);
+      
+      if (!coords || coords.col !== 0) return;
+  
+      const visualRow = coords.row;
+      const physicalRow = instance.toPhysicalRow(visualRow);
+  
+      // ✅ SHIFT-ВЫДЕЛЕНИЕ
+      if (e.shiftKey && lastClickedRowRef.current !== null) {
+        e.preventDefault();
+        e.stopPropagation();
+  
+        const visualStartRow = lastClickedRowRef.current;
+        const physicalStartRow = instance.toPhysicalRow(visualStartRow);
         
-        if (!coords || coords.col !== 0) return; // Только первая колонка (чекбоксы)
-    
-        const visualRow = coords.row;  // ✅ Визуальный индекс
-        const physicalRow = instance.toPhysicalRow(visualRow);  // ✅ Физический индекс
-    
-        // ✅ SHIFT-ВЫДЕЛЕНИЕ
-        if (e.shiftKey && lastClickedRowRef.current !== null) {
-          e.preventDefault();
-          e.stopPropagation();
-    
-          // ✅ Преобразуем оба индекса в физические
-          const visualStartRow = lastClickedRowRef.current;
-          const physicalStartRow = instance.toPhysicalRow(visualStartRow);
-          
-          const startRow = Math.min(physicalStartRow, physicalRow);
-          const endRow = Math.max(physicalStartRow, physicalRow);
-    
-          console.log(`✅ Shift-click: visual [${Math.min(visualStartRow, visualRow)}-${Math.max(visualStartRow, visualRow)}] -> physical [${startRow}-${endRow}]`);
-    
-          // Определяем, выделяем или снимаем выделение
-          const shouldSelect = !checkbox.checked;
-    
-          // Собираем ID для выделения используя ФИЗИЧЕСКИЕ индексы
-          const rangeIds = [];
-          for (let i = startRow; i <= endRow; i++) {
-            if (tableData[i]) {
-              rangeIds.push(tableData[i].id);
-            }
+        const startRow = Math.min(physicalStartRow, physicalRow);
+        const endRow = Math.max(physicalStartRow, physicalRow);
+  
+        const shouldSelect = !checkbox.checked;
+  
+        // ✅ ОПТИМИЗАЦИЯ: Собираем ID используя прямой доступ к массиву
+        const rangeIds = [];
+        for (let i = startRow; i <= endRow; i++) {
+          if (tableData[i]) {
+            rangeIds.push(tableData[i].id);
           }
-    
-          let newSelectedIds;
-          if (shouldSelect) {
-            // Добавляем все ID из диапазона
-            newSelectedIds = [...new Set([...selectedIds, ...rangeIds])];
-          } else {
-            // Убираем все ID из диапазона
-            newSelectedIds = selectedIds.filter(id => !rangeIds.includes(id));
-          }
-    
-          // Обновляем состояние
-          onSelectionChange(newSelectedIds);
-    
-          // Обновляем чекбоксы в таблице используя ID, а не индексы
-          const newData = tableData.map(row => ({
-            ...row,
-            selected: newSelectedIds.includes(row.id)
-          }));
-          
-          instance.loadData(newData);
-          
-          return;
         }
-    
-        // ✅ ОБЫЧНЫЙ КЛИК - используем физический индекс
-        lastClickedRowRef.current = visualRow;  // Сохраняем визуальный для следующего shift-клика
+  
+        // ✅ ОПТИМИЗАЦИЯ: Используем Set для быстрых операций
+        const newSelectedSet = new Set(selectedIds);
         
-        // Обработка обычного клика - здесь можно добавить дополнительную логику если нужно
-        // Но основная обработка идёт через handleAfterChange
-      };
-    
-      const tableElement = hotTableRef.current.hotInstance.rootElement;
-      tableElement.addEventListener('mousedown', handleMouseDown, true);
-    
-      return () => {
-        tableElement.removeEventListener('mousedown', handleMouseDown, true);
-      };
-    }, [tableData, selectedIds, onSelectionChange]);
+        if (shouldSelect) {
+          rangeIds.forEach(id => newSelectedSet.add(id));
+        } else {
+          rangeIds.forEach(id => newSelectedSet.delete(id));
+        }
+  
+        const newSelectedIds = Array.from(newSelectedSet);
+        onSelectionChange(newSelectedIds);
+  
+        // ✅ ОПТИМИЗАЦИЯ: Обновляем данные без полной перезагрузки
+        const updatedData = tableData.map(row => ({
+          ...row,
+          selected: newSelectedSet.has(row.id)
+        }));
+        
+        instance.loadData(updatedData);
+        
+        return;
+      }
+  
+      // ✅ ОБЫЧНЫЙ КЛИК
+      lastClickedRowRef.current = visualRow;
+    };
+  
+    const tableElement = hotTableRef.current.hotInstance.rootElement;
+    tableElement.addEventListener('mousedown', handleMouseDown, true);
+  
+    return () => {
+      tableElement.removeEventListener('mousedown', handleMouseDown, true);
+    };
+  }, [tableData, selectedIds, onSelectionChange]);
 
   // Загрузка сохраненных ширин столбцов при монтировании
   useEffect(() => {
@@ -349,41 +339,43 @@ const KeywordsTable = ({
   }, [visibleColumns, columnWidths]);
 
   // ✅ ИСПРАВЛЕНО: Обработка обычных изменений с учётом сортировки
-    const handleAfterChange = (changes, source) => {
-      if (source === 'loadData' || !changes) return;
-      
-      const checkboxChanges = changes.filter(([row, prop]) => prop === 'selected');
-      if (checkboxChanges.length > 0) {
-        const instance = hotTableRef.current?.hotInstance;
-        if (!instance) return;
+    // ✅ ОПТИМИЗИРОВАНО: Обработка изменений с минимальными вызовами toPhysicalRow
+  const handleAfterChange = (changes, source) => {
+    if (source === 'loadData' || !changes) return;
     
-        const newSelectedIds = [...selectedIds];  // Начинаем с текущих выделенных
-        
-        checkboxChanges.forEach(([visualRow, prop, oldValue, newValue]) => {
-          // ✅ Преобразуем визуальный индекс в физический
-          const physicalRow = instance.toPhysicalRow(visualRow);
-          const rowData = tableData[physicalRow];
-          
-          if (rowData) {
-            const rowId = rowData.id;
-            
-            if (newValue && !newSelectedIds.includes(rowId)) {
-              newSelectedIds.push(rowId);
-            } else if (!newValue && newSelectedIds.includes(rowId)) {
-              const index = newSelectedIds.indexOf(rowId);
-              newSelectedIds.splice(index, 1);
-            }
-          }
-        });
-        
-        onSelectionChange(newSelectedIds);
-      }
+    const checkboxChanges = changes.filter(([row, prop]) => prop === 'selected');
+    if (checkboxChanges.length > 0) {
+      const instance = hotTableRef.current?.hotInstance;
+      if (!instance) return;
+
+      // ✅ ОПТИМИЗАЦИЯ: Создаём Map для быстрого доступа по физическому индексу
+      const rowIdMap = new Map(tableData.map((row, idx) => [idx, row.id]));
       
-      const dataChanges = changes.filter(([row, prop]) => prop !== 'selected');
-      if (dataChanges.length > 0 && onDataChange) {
-        onDataChange(dataChanges);
-      }
-    };
+      const newSelectedIds = new Set(selectedIds); // Используем Set для быстрого поиска
+      
+      checkboxChanges.forEach(([visualRow, prop, oldValue, newValue]) => {
+        // ✅ ОДИН РАЗ преобразуем визуальный в физический
+        const physicalRow = instance.toPhysicalRow(visualRow);
+        const rowId = rowIdMap.get(physicalRow);
+        
+        if (rowId) {
+          if (newValue) {
+            newSelectedIds.add(rowId);
+          } else {
+            newSelectedIds.delete(rowId);
+          }
+        }
+      });
+      
+      // Конвертируем Set обратно в Array
+      onSelectionChange(Array.from(newSelectedIds));
+    }
+    
+    const dataChanges = changes.filter(([row, prop]) => prop !== 'selected');
+    if (dataChanges.length > 0 && onDataChange) {
+      onDataChange(dataChanges);
+    }
+  };
 
   if (loading) {
     return <div className="loading">Загрузка данных...</div>;

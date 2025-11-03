@@ -486,6 +486,42 @@ def apply_serp_analysis():
         
         if not keyword_ids:
             return jsonify({'success': False, 'error': 'No keywords selected'}), 400
+            
+        connection = get_db_connection()
+        cursor = connection.cursor()
+        
+        if skip_analyzed:
+            # Получаем только слова БЕЗ анализа (last_serp_check IS NULL)
+            placeholders = ','.join(['%s'] * len(keyword_ids))
+            cursor.execute(f"""
+                SELECT id FROM keywords 
+                WHERE id IN ({placeholders}) 
+                AND last_serp_check IS NULL
+            """, keyword_ids)
+            
+            unanalyzed_keywords = [row['id'] for row in cursor.fetchall()]
+            skipped_count = len(keyword_ids) - len(unanalyzed_keywords)
+            
+            if skipped_count > 0:
+                log_print(f"⏭️  Пропущено {skipped_count} проанализированных слов")
+            
+            if len(unanalyzed_keywords) == 0:
+                cursor.close()
+                connection.close()
+                return jsonify({
+                    'success': True,
+                    'message': f'Все выбранные слова ({len(keyword_ids)}) уже проанализированы. Анализ не требуется.',
+                    'updated': 0,
+                    'total': 0,
+                    'skipped': skipped_count,
+                    'cost': 0
+                }), 200
+            
+            # Заменяем список на отфильтрованный
+            keyword_ids = unanalyzed_keywords
+            log_print(f"✅ К анализу: {len(keyword_ids)} слов (пропущено: {skipped_count})")
+        
+        cursor.close()
         
         # ИЗМЕНЕНО: Для 1 слова - синхронно без прогресса, для 2+ - Task-версия
         if len(keyword_ids) == 1:
