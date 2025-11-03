@@ -103,23 +103,24 @@ const KeywordsTable = ({
       const visualRow = coords.row;
       const physicalRow = instance.toPhysicalRow(visualRow);
   
-      // ✅ SHIFT-ВЫДЕЛЕНИЕ - используем сохранённый физический индекс
       if (e.shiftKey && lastClickedRowRef.current !== null) {
         e.preventDefault();
         e.stopPropagation();
 
-        const physicalStartRow = lastClickedRowRef.current; // Уже физический!
+        const visualStartRow = lastClickedRowRef.current; // Визуальный индекс!
         
-        const startRow = Math.min(physicalStartRow, physicalRow);
-        const endRow = Math.max(physicalStartRow, physicalRow);
+        // Определяем визуальный диапазон
+        const visualStart = Math.min(visualStartRow, visualRow);
+        const visualEnd = Math.max(visualStartRow, visualRow);
   
         const shouldSelect = !checkbox.checked;
   
-        // ✅ ОПТИМИЗАЦИЯ: Собираем ID используя прямой доступ к массиву
+        // ✅ Собираем ID строк в ВИЗУАЛЬНОМ диапазоне
         const rangeIds = [];
-        for (let i = startRow; i <= endRow; i++) {
-          if (tableData[i]) {
-            rangeIds.push(tableData[i].id);
+        for (let visualIdx = visualStart; visualIdx <= visualEnd; visualIdx++) {
+          const physicalIdx = instance.toPhysicalRow(visualIdx);
+          if (tableData[physicalIdx]) {
+            rangeIds.push(tableData[physicalIdx].id);
           }
         }
   
@@ -139,8 +140,8 @@ const KeywordsTable = ({
         return;
       }
   
-      // ✅ ОБЫЧНЫЙ КЛИК - сохраняем ФИЗИЧЕСКИЙ индекс
-      lastClickedRowRef.current = physicalRow;
+      // ✅ ОБЫЧНЫЙ КЛИК - сохраняем ВИЗУАЛЬНЫЙ индекс
+      lastClickedRowRef.current = visualRow;
     };
 
     const tableElement = hotTableRef.current.hotInstance.rootElement;
