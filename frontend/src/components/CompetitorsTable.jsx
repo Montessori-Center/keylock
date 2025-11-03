@@ -205,13 +205,11 @@ const CompetitorsTable = ({
       const instance = hotTableRef.current?.hotInstance;
       if (!instance) return;
 
-      // ✅ ОПТИМИЗАЦИЯ: Создаём Map для быстрого доступа по физическому индексу
+      // ✅ ОПТИМИЗАЦИЯ: Создаём Map ОДИН РАЗ
       const rowIdMap = new Map(tableData.map((row, idx) => [idx, row.id]));
-      
-      const newSelectedIds = new Set(selectedIds); // Используем Set для быстрого поиска
+      const newSelectedIds = new Set(selectedIds);
       
       checkboxChanges.forEach(([visualRow, prop, oldValue, newValue]) => {
-        // ✅ ОДИН РАЗ преобразуем визуальный в физический
         const physicalRow = instance.toPhysicalRow(visualRow);
         const rowId = rowIdMap.get(physicalRow);
         
@@ -224,8 +222,13 @@ const CompetitorsTable = ({
         }
       });
       
-      // Конвертируем Set обратно в Array
-      onSelectionChange(Array.from(newSelectedIds));
+      // ✅ Обновляем состояние только если изменилось
+      const newArray = Array.from(newSelectedIds);
+      if (newArray.length !== selectedIds.length || 
+          !selectedIds.every(id => newSelectedIds.has(id))) {
+        onSelectionChange(newArray);
+      }
+      return; // Не обрабатываем dataChanges для чекбоксов
     }
     
     const dataChanges = changes.filter(([row, prop]) => prop !== 'selected');
@@ -250,26 +253,26 @@ const CompetitorsTable = ({
       if (!coords || coords.col !== 0) return;
   
       const visualRow = coords.row;
-      const physicalRow = instance.toPhysicalRow(visualRow);
   
-      // ✅ SHIFT-ВЫДЕЛЕНИЕ
+      // ✅ SHIFT-ВЫДЕЛЕНИЕ - работаем с ВИЗУАЛЬНЫМИ индексами
       if (e.shiftKey && lastClickedRowRef.current !== null) {
         e.preventDefault();
         e.stopPropagation();
-  
-        const visualStartRow = lastClickedRowRef.current;
-        const physicalStartRow = instance.toPhysicalRow(visualStartRow);
+
+        const visualStartRow = lastClickedRowRef.current; // Визуальный индекс!
         
-        const startRow = Math.min(physicalStartRow, physicalRow);
-        const endRow = Math.max(physicalStartRow, physicalRow);
+        // Определяем визуальный диапазон
+        const visualStart = Math.min(visualStartRow, visualRow);
+        const visualEnd = Math.max(visualStartRow, visualRow);
   
         const shouldSelect = !checkbox.checked;
   
-        // ✅ ОПТИМИЗАЦИЯ: Собираем ID используя прямой доступ к массиву
+        // ✅ Собираем ID строк в ВИЗУАЛЬНОМ диапазоне
         const rangeIds = [];
-        for (let i = startRow; i <= endRow; i++) {
-          if (tableData[i]) {
-            rangeIds.push(tableData[i].id);
+        for (let visualIdx = visualStart; visualIdx <= visualEnd; visualIdx++) {
+          const physicalIdx = instance.toPhysicalRow(visualIdx);
+          if (tableData[physicalIdx]) {
+            rangeIds.push(tableData[physicalIdx].id);
           }
         }
   
@@ -284,20 +287,12 @@ const CompetitorsTable = ({
   
         const newSelectedIds = Array.from(newSelectedSet);
         onSelectionChange(newSelectedIds);
-  
-        instance.batch(() => {
-          for (let i = startRow; i <= endRow; i++) {
-            if (tableData[i]) {
-              const visualRowIndex = instance.toVisualRow(i);
-              instance.setDataAtRowProp(visualRowIndex, 'selected', shouldSelect);
-            }
-          }
-        });
         
+        // Чекбоксы обновятся автоматически через пересоздание tableData
         return;
       }
   
-      // ✅ ОБЫЧНЫЙ КЛИК
+      // ✅ ОБЫЧНЫЙ КЛИК - сохраняем ВИЗУАЛЬНЫЙ индекс
       lastClickedRowRef.current = visualRow;
     };
   
@@ -308,27 +303,6 @@ const CompetitorsTable = ({
       tableElement.removeEventListener('mousedown', handleMouseDown, true);
     };
   }, [tableData, selectedIds, onSelectionChange]);
-  
-  // Синхронизация внешних изменений selectedIds с таблицей
-  useEffect(() => {
-    if (!hotTableRef.current?.hotInstance || tableData.length === 0) return;
-    
-    const instance = hotTableRef.current.hotInstance;
-    const selectedSet = new Set(selectedIds);
-    
-    instance.batch(() => {
-      tableData.forEach((row, physicalIdx) => {
-        const shouldBeSelected = selectedSet.has(row.id);
-        const currentlySelected = row.selected;
-        
-        if (shouldBeSelected !== currentlySelected) {
-          const visualIdx = instance.toVisualRow(physicalIdx);
-          instance.setDataAtRowProp(visualIdx, 'selected', shouldBeSelected);
-        }
-      });
-    });
-    
-  }, [selectedIds]);
 
   return (
     <div style={{ width: '100%', height: '100%', overflow: 'hidden' }}>
@@ -349,7 +323,6 @@ const CompetitorsTable = ({
           stretchH="all"
           manualColumnResize={true}
           afterChange={handleAfterChange}
-          afterSelectionEnd={handleAfterSelectionEnd}
           afterColumnResize={handleAfterColumnResize}
           contextMenu={true}
           selectionMode="range"

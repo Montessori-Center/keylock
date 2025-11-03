@@ -385,7 +385,6 @@ const KeywordsTable = ({
         columns={visibleColumnsConfig}
         colHeaders={true}
         rowHeaders={false}
-        height="calc(100vh - 300px)"
         width="100%"
         stretchH="all"
         autoWrapRow={true}
