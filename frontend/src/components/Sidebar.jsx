@@ -158,7 +158,7 @@ const Sidebar = ({
                 className="create-btn" 
                 onClick={onCreateClick}
               >
-                + Создать
+                Управление кампаниями
               </button>
             </div>
           </div>

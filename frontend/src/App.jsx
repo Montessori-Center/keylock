@@ -15,7 +15,7 @@ import ChangeFieldModal from './components/Modals/ChangeFieldModal';
 import TrashModal from './components/Modals/TrashModal';
 import SerpProgressModal from './components/Modals/SerpProgressModal';
 import LiveProgressModal from './components/Modals/LiveProgressModal';
-import CreateCampaignModal from './components/Modals/ManageCampaignsModal';
+import ManageCampaignsModal from './components/Modals/ManageCampaignsModal';
 import CompetitorsView from './components/CompetitorsView';
 import api from './services/api';
 import { toast } from 'react-toastify';
@@ -1029,14 +1029,12 @@ function App() {
         keyword={liveProgress.keyword}
       />
       
-      {showCreateCampaign && (
-          <CreateCampaignModal
-              show={showCreateModal}
-              onHide={() => setShowCreateModal(false)}
-              onSubmit={handleCreateObject}
-              campaigns={campaigns}
-            />
-        )}
+      <ManageCampaignsModal
+          show={showManageCampaignsModal}
+          onHide={() => setShowManageCampaignsModal(false)}
+          campaigns={campaigns}
+          onUpdate={handleManageCampaigns}
+        />
       
       {showTrash && (
         <TrashModal
