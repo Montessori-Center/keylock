@@ -142,22 +142,41 @@ const CompetitorsTable = ({
   }, [columnWidths, getColumns]);
 
   // Преобразуем данные конкурентов в формат таблицы
-  useEffect(() => {
-    if (competitors && competitors.length > 0) {
-      const data = competitors.map(comp => ({
-        selected: selectedIds.includes(comp.id),
-        id: comp.id,
-        domain: comp.domain,
-        org_type: comp.org_type || 'Школа',
-        competitiveness: comp.competitiveness || 0,
-        notes: comp.notes || '',
-        is_new: comp.is_new || false
-      }));
-      setTableData(data);
-    } else {
-      setTableData([]);
-    }
-  }, [competitors, selectedIds]);
+    useEffect(() => {
+      if (competitors && competitors.length > 0) {
+        const data = competitors.map(comp => ({
+          selected: selectedIds.includes(comp.id),
+          id: comp.id,
+          domain: comp.domain,
+          org_type: comp.org_type || 'Школа',
+          competitiveness: comp.competitiveness || 0,
+          notes: comp.notes || '',
+          is_new: comp.is_new || false
+        }));
+        
+        // ✅ Обновляем данные БЕЗ пересоздания таблицы (сохраняет сортировку)
+        if (hotTableRef.current?.hotInstance && tableData.length > 0) {
+          const instance = hotTableRef.current.hotInstance;
+          
+          // Обновляем только изменившиеся строки
+          instance.batch(() => {
+            data.forEach((newRow, idx) => {
+              const oldRow = tableData[idx];
+              if (oldRow && JSON.stringify(oldRow) !== JSON.stringify(newRow)) {
+                // Обновляем через физический индекс
+                Object.keys(newRow).forEach(key => {
+                  instance.setDataAtRowProp(idx, key, newRow[key]);
+                });
+              }
+            });
+          });
+        }
+        
+        setTableData(data);
+      } else {
+        setTableData([]);
+      }
+    }, [competitors, selectedIds]);
 
   // ✅ Применение стилей для новых записей
   useEffect(() => {

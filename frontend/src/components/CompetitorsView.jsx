@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import CompetitorsTable from './CompetitorsTable';
 import AddCompetitorModal from './Modals/AddCompetitorModal';
 import ChangeFieldCompetitorModal from './Modals/ChangeFieldCompetitorModal';
-import ApplyFiltersModal from './Modals/ApplyFiltersModal';
+import CompetitorsFiltersModal from './Modals/CompetitorsFiltersModal';
 import api from '../services/api';
 import { toast } from 'react-toastify';
 
@@ -73,21 +73,31 @@ const CompetitorsView = ({ onClose }) => {
   };
 
   const handleDataChange = async (id, field, value) => {
-    try {
-      const response = await api.updateCompetitor(id, field, value);
-      
-      if (response.success) {
-        toast.success('Данные обновлены');
-        loadCompetitors();
-        loadStats();
-      } else {
-        toast.error(response.error || 'Ошибка обновления');
+      try {
+        const response = await api.updateCompetitor(id, field, value);
+        
+        if (response.success) {
+          // ✅ Локальное обновление данных БЕЗ перезагрузки страницы
+          setCompetitors(prevCompetitors => 
+            prevCompetitors.map(comp => 
+              comp.id === id 
+                ? { ...comp, [field]: value, is_new: false } // Снимаем флаг is_new при изменении
+                : comp
+            )
+          );
+          
+          // Обновляем статистику
+          loadStats();
+          
+          toast.success('Данные обновлены');
+        } else {
+          toast.error(response.error || 'Ошибка обновления');
+        }
+      } catch (error) {
+        console.error('Error updating competitor:', error);
+        toast.error('Ошибка при сохранении');
       }
-    } catch (error) {
-      console.error('Error updating competitor:', error);
-      toast.error('Ошибка при сохранении');
-    }
-  };
+    };
 
   const handleDelete = async () => {
     if (selectedIds.length === 0) {
@@ -288,10 +298,15 @@ const CompetitorsView = ({ onClose }) => {
         selectedCount={selectedIds.length}
       />
 
-      <ApplyFiltersModal
-        show={showFiltersModal}
-        onHide={() => setShowFiltersModal(false)}
-      />
+      <CompetitorsFiltersModal
+          show={showFiltersModal}
+          onHide={() => setShowFiltersModal(false)}
+          competitors={competitors}
+          onApply={(filteredIds) => {
+            setSelectedIds(filteredIds);
+            toast.success(`Фильтры применены. Выбрано: ${filteredIds.length}`);
+          }}
+        />
     </div>
   );
 };
